@@ -18,7 +18,7 @@ import (
 // If the auth is authorized, it is also authenticated. Authorization is more expensive
 // than authentication as lookups must be performed.
 type Authorizer interface {
-	AuthorizeMessage(ctx context.Context, m proto.Message, userId *commonpb.UserId, authField **commonpb.Auth) error
+	Authorize(ctx context.Context, m proto.Message, userId *commonpb.UserId, authField **commonpb.Auth) error
 }
 
 // Authenticator authenticates a message with the provided auth.
