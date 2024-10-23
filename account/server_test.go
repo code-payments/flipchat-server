@@ -22,7 +22,7 @@ func TestServer(t *testing.T) {
 	server := NewServer(
 		zap.Must(zap.NewDevelopment()),
 		store,
-		auth.NewVerifier(),
+		auth.NewKeyPairAuthenticator(),
 	)
 
 	cc := testutil.RunGRPCServer(t, testutil.WithService(func(s *grpc.Server) {

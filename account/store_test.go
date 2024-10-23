@@ -43,10 +43,18 @@ func TestStore(t *testing.T) {
 	require.NoError(t, protoutil.SliceEqualError(actual, keyPairs))
 
 	for i := range keyPairs {
+		authorized, err := store.IsAuthorized(ctx, user, keyPairs[i])
+		require.NoError(t, err)
+		require.True(t, authorized)
+
 		require.NoError(t, store.RemoveKey(ctx, user, keyPairs[i]))
 
 		_, err = store.GetUserId(ctx, keyPairs[i])
 		require.ErrorIs(t, err, ErrNotFound)
+
+		authorized, err = store.IsAuthorized(ctx, user, keyPairs[i])
+		require.NoError(t, err)
+		require.False(t, authorized)
 
 		require.NoError(t, store.RemoveKey(ctx, user, keyPairs[i]))
 	}

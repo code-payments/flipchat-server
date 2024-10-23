@@ -20,12 +20,12 @@ const loginWindow = 5 * time.Minute
 type Server struct {
 	log      *zap.Logger
 	store    Store
-	verifier auth.Verifier
+	verifier auth.Authenticator
 
 	accountpb.UnimplementedAccountServer
 }
 
-func NewServer(log *zap.Logger, store Store, verifier auth.Verifier) *Server {
+func NewServer(log *zap.Logger, store Store, verifier auth.Authenticator) *Server {
 	return &Server{
 		log:      log,
 		store:    store,

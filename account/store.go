@@ -1,6 +1,7 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"slices"
@@ -29,6 +30,9 @@ type Store interface {
 	//
 	// It is idempotent, and does not return an error if the user does not exist.
 	RemoveKey(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) error
+
+	// IsAuthorized returns whether or not a pubKey is authorized to perform actions on behalf of the user.
+	IsAuthorized(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (bool, error)
 }
 
 type memory struct {
@@ -101,4 +105,22 @@ func (m *memory) RemoveKey(_ context.Context, userID *commonpb.UserId, pubKey *c
 	m.users[string(userID.Value)] = keys
 
 	return nil
+}
+
+func (m *memory) IsAuthorized(_ context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (bool, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	keys, ok := m.users[string(userID.Value)]
+	if !ok {
+		return false, nil
+	}
+
+	for _, key := range keys {
+		if bytes.Equal([]byte(key), pubKey.Value) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
