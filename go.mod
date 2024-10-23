@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/code-payments/code-protobuf-api v1.19.0
 	github.com/code-payments/code-server v1.10.20
-	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241017152140-c8a874b70b78
+	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241021224548-f8d7458da646
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/stretchr/testify v1.8.4
