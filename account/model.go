@@ -3,14 +3,14 @@ package account
 import (
 	"crypto/ed25519"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 )
 
-func MustGenerateUserId() *commonpb.UserId {
+func MustGenerateUserID() *commonpb.UserId {
 	id, err := GenerateUserId()
 	if err != nil {
 		panic(fmt.Sprintf("failed to generate user id: %v", err))

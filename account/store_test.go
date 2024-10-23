@@ -16,7 +16,7 @@ func TestStore(t *testing.T) {
 	store := NewInMemory()
 	ctx := context.Background()
 
-	user := MustGenerateUserId()
+	user := MustGenerateUserID()
 	keyPairs := make([]*commonpb.PublicKey, 100)
 	for i := range keyPairs {
 		keyPairs[i] = MustGenerateKeyPair().Proto()
@@ -33,7 +33,7 @@ func TestStore(t *testing.T) {
 		require.True(t, proto.Equal(user, actual))
 
 		// Cannot rebind without revoking first
-		actual, err = store.Bind(ctx, MustGenerateUserId(), keyPairs[i])
+		actual, err = store.Bind(ctx, MustGenerateUserID(), keyPairs[i])
 		require.NoError(t, err)
 		require.True(t, proto.Equal(user, actual))
 	}

@@ -21,13 +21,13 @@ func TestAuthorizer(t *testing.T) {
 
 	authz := NewAuthorizer(store, authn)
 
-	userID := MustGenerateUserId()
+	userID := MustGenerateUserID()
 	signer := MustGenerateKeyPair()
 
 	t.Run("UserNotFound", func(t *testing.T) {
 		newKeyPair := MustGenerateKeyPair()
 		req := &accountpb.AuthorizePublicKeyRequest{
-			UserId:    MustGenerateUserId(),
+			UserId:    MustGenerateUserID(),
 			PublicKey: newKeyPair.Proto(),
 			Signature: nil,
 			Auth:      nil,
