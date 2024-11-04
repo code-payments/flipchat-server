@@ -2,11 +2,13 @@ package auth
 
 import (
 	"context"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	codecommonpb "github.com/code-payments/code-protobuf-api/generated/go/common/v1"
+
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
 	auth2 "github.com/code-payments/code-server/pkg/code/auth"
@@ -18,7 +20,7 @@ import (
 // If the auth is authorized, it is also authenticated. Authorization is more expensive
 // than authentication as lookups must be performed.
 type Authorizer interface {
-	Authorize(ctx context.Context, m proto.Message, userId *commonpb.UserId, authField **commonpb.Auth) error
+	Authorize(ctx context.Context, m proto.Message, authField **commonpb.Auth) (*commonpb.UserId, error)
 }
 
 // Authenticator authenticates a message with the provided auth.

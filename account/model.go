@@ -18,6 +18,7 @@ func MustGenerateUserID() *commonpb.UserId {
 
 	return id
 }
+
 func GenerateUserId() (*commonpb.UserId, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
@@ -25,6 +26,15 @@ func GenerateUserId() (*commonpb.UserId, error) {
 	}
 
 	return &commonpb.UserId{Value: id[:]}, nil
+}
+
+func UserIDString(userID *commonpb.UserId) string {
+	id, err := uuid.FromBytes(userID.GetValue())
+	if err != nil {
+		return fmt.Sprintf("invalid (%v)", err)
+	}
+
+	return id.String()
 }
 
 type KeyPair struct {

@@ -1,0 +1,246 @@
+package chat
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"slices"
+	"sync"
+
+	"google.golang.org/protobuf/proto"
+
+	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	"github.com/code-payments/flipchat-server/query"
+)
+
+type InMemoryStore struct {
+	mu       sync.RWMutex
+	chats    map[string]*chatpb.Metadata
+	members  map[string][]*Member
+	nextRoom uint64
+
+	// Indexes
+	ids           map[uint64]string
+	chatsByMember map[string][]string
+}
+
+func NewMemory() Store {
+	return &InMemoryStore{
+		chats:         map[string]*chatpb.Metadata{},
+		members:       map[string][]*Member{},
+		nextRoom:      1,
+		ids:           map[uint64]string{},
+		chatsByMember: map[string][]string{},
+	}
+}
+
+func (s *InMemoryStore) GetChatID(_ context.Context, roomID uint64) (*commonpb.ChatId, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	idString, ok := s.ids[roomID]
+	if !ok {
+		return nil, ErrChatNotFound
+	}
+
+	return &commonpb.ChatId{Value: []byte(idString)}, nil
+}
+
+func (s *InMemoryStore) GetChatMetadata(_ context.Context, chatID *commonpb.ChatId) (*chatpb.Metadata, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	md, ok := s.chats[string(chatID.Value)]
+	if !ok {
+		return nil, ErrChatNotFound
+	}
+
+	return proto.Clone(md).(*chatpb.Metadata), nil
+}
+
+func (s *InMemoryStore) GetChatsForUser(_ context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	chatIDStrings := s.chatsByMember[string(userID.Value)]
+
+	var chatIDs []*commonpb.ChatId
+	for _, chatIDString := range chatIDStrings {
+		chatIDs = append(chatIDs, &commonpb.ChatId{Value: []byte(chatIDString)})
+	}
+
+	queryOpts := query.DefaultOptions()
+	for _, o := range opts {
+		o(&queryOpts)
+	}
+
+	slices.SortFunc(chatIDs, func(a, b *commonpb.ChatId) int {
+		if queryOpts.Order == commonpb.QueryOptions_ASC {
+			return bytes.Compare(a.GetValue(), b.GetValue())
+		} else {
+			return -1 * bytes.Compare(a.GetValue(), b.GetValue())
+		}
+	})
+
+	if queryOpts.Token != nil {
+		for i := range chatIDs {
+			cmp := bytes.Compare(chatIDs[i].GetValue(), queryOpts.Token.GetValue())
+			if queryOpts.Order == commonpb.QueryOptions_DESC {
+				cmp *= -1
+			}
+			if cmp <= 0 {
+				continue
+			} else {
+				chatIDs = chatIDs[i:]
+				break
+			}
+		}
+	}
+
+	if queryOpts.Limit > 0 {
+		chatIDs = chatIDs[:min(queryOpts.Limit, len(chatIDs))]
+	}
+
+	return chatIDs, nil
+}
+
+func (s *InMemoryStore) GetMembers(_ context.Context, chatID *commonpb.ChatId) ([]*Member, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	members := s.members[string(chatID.Value)]
+
+	result := make([]*Member, 0, len(members))
+	for _, member := range members {
+		result = append(result, member.Clone())
+	}
+
+	return result, nil
+}
+
+func (s *InMemoryStore) GetMember(_ context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (*Member, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	members := s.members[string(chatID.Value)]
+	for _, member := range members {
+		if bytes.Equal(member.UserID.Value, userID.Value) {
+			return member.Clone(), nil
+		}
+	}
+
+	return nil, ErrMemberNotFound
+}
+
+func (s *InMemoryStore) IsMember(_ context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	members := s.members[string(chatID.Value)]
+	for _, member := range members {
+		if bytes.Equal(member.UserID.Value, userID.Value) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (s *InMemoryStore) CreateChat(_ context.Context, md *chatpb.Metadata) (*chatpb.Metadata, error) {
+	if md.ChatId == nil {
+		return nil, fmt.Errorf("must provide chat id")
+	}
+	if md.RoomNumber != 0 {
+		return nil, errors.New("cannot create chat with room number")
+	}
+
+	md.IsMuted = false
+	md.NumUnread = 0
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if existing, exists := s.chats[string(md.ChatId.Value)]; exists {
+		return proto.Clone(existing).(*chatpb.Metadata), ErrChatExists
+	}
+
+	md.RoomNumber = s.nextRoom
+	s.nextRoom++
+
+	s.chats[string(md.ChatId.Value)] = proto.Clone(md).(*chatpb.Metadata)
+	s.ids[md.RoomNumber] = string(md.ChatId.Value)
+
+	return md, nil
+}
+
+func (s *InMemoryStore) AddMember(_ context.Context, chatID *commonpb.ChatId, member Member) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.chats[string(chatID.Value)]; !exists {
+		return ErrChatNotFound
+	}
+
+	members := s.members[string(chatID.Value)]
+	for _, m := range members {
+		if bytes.Equal(m.UserID.Value, member.UserID.Value) {
+			return nil
+		}
+	}
+
+	members = append(members, member.Clone())
+	slices.SortFunc(members, func(a, b *Member) int {
+		return bytes.Compare(a.UserID.Value, b.UserID.Value)
+	})
+
+	s.members[string(chatID.Value)] = members
+	s.chatsByMember[string(member.UserID.Value)] = append(s.chatsByMember[string(member.UserID.Value)], string(chatID.Value))
+
+	return nil
+}
+
+func (s *InMemoryStore) RemoveMember(_ context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	members := s.members[string(chatID.Value)]
+	for i, m := range members {
+		if bytes.Equal(m.UserID.Value, member.Value) {
+			s.members[string(chatID.Value)] = slices.Delete(members, i, i+1)
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func (s *InMemoryStore) SetMuteState(_ context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isMuted bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	members := s.members[string(chatID.Value)]
+	for _, m := range members {
+		if bytes.Equal(m.UserID.Value, member.Value) {
+			m.IsMuted = isMuted
+			return nil
+		}
+	}
+
+	return ErrMemberNotFound
+}
+
+func (s *InMemoryStore) GetMuteState(_ context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	members := s.members[string(chatID.Value)]
+	for _, m := range members {
+		if bytes.Equal(m.UserID.Value, member.Value) {
+			return m.IsMuted, nil
+		}
+	}
+
+	return false, ErrMemberNotFound
+}

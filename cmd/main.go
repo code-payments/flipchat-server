@@ -2,17 +2,15 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"fmt"
 	"log"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	"github.com/code-payments/flipchat-server/account"
 )
 
 func main() {
@@ -21,25 +19,28 @@ func main() {
 		log.Fatal("Failed to create connection:", err)
 	}
 
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		log.Fatal("Failed to generate key:", err)
-	}
+	keyPair := account.MustGenerateKeyPair()
 
-	req := &accountpb.RegisterRequest{
+	register := &accountpb.RegisterRequest{
 		DisplayName: "test",
-		PublicKey:   &commonpb.PublicKey{Value: pub[:]},
+		PublicKey:   keyPair.Proto(),
 	}
-	reqBytes, err := proto.Marshal(req)
-	if err != nil {
-		log.Fatal("Failed to marshal request:", err)
+	if err := keyPair.Sign(register, &register.Signature); err != nil {
+		log.Fatal("failed to sign:", err)
 	}
 
-	sig := ed25519.Sign(priv, reqBytes)
-	req.Signature = &commonpb.Signature{Value: sig[:]}
+	login := &accountpb.LoginRequest{
+		Timestamp: timestamppb.Now(),
+	}
+	if err := keyPair.Auth(login, &login.Auth); err != nil {
+		log.Fatal("failed to sign:", err)
+	}
 
 	client := accountpb.NewAccountClient(cc)
-	resp, err := client.Register(context.Background(), req)
+	resp, err := client.Register(context.Background(), register)
+	fmt.Println("Register Result:", resp, err)
 
-	fmt.Println("Result:", resp, err)
+	le, err := client.Login(context.Background(), login)
+	fmt.Println("Login Result:", le, err)
+
 }

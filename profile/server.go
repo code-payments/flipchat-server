@@ -42,11 +42,12 @@ func (s *Server) GetProfile(ctx context.Context, req *profilepb.GetProfileReques
 }
 
 func (s *Server) SetDisplayName(ctx context.Context, req *profilepb.SetDisplayNameRequest) (*profilepb.SetDisplayNameResponse, error) {
-	if err := s.authz.Authorize(ctx, req, req.UserId, &req.Auth); err != nil {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := s.store.SetDisplayName(ctx, req.UserId, req.DisplayName); err != nil {
+	if err := s.store.SetDisplayName(ctx, userID, req.DisplayName); err != nil {
 		if errors.Is(err, ErrInvalidDisplayName) {
 			s.log.Info("Invalid display name", zap.String("display_name", req.DisplayName))
 			return nil, status.Error(codes.InvalidArgument, "invalid display name")

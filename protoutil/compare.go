@@ -2,6 +2,7 @@ package protoutil
 
 import (
 	"fmt"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -21,8 +22,16 @@ func SliceEqualError[T proto.Message](a, b []T) error {
 
 func ProtoEqualError(a, b proto.Message) error {
 	if !proto.Equal(a, b) {
-		return fmt.Errorf("%v != %v", a, b)
+		return fmt.Errorf("expected: %v\nactual: %v\n", a, b)
 	}
 
 	return nil
+}
+
+func SliceClone[T proto.Message](src []T) []T {
+	cloned := make([]T, len(src))
+	for i := range src {
+		cloned[i] = proto.Clone(src[i]).(T)
+	}
+	return cloned
 }
