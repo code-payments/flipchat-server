@@ -9,6 +9,7 @@ import (
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
+	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 )
 
@@ -16,10 +17,10 @@ func TestStore(t *testing.T) {
 	store := NewInMemory()
 	ctx := context.Background()
 
-	user := MustGenerateUserID()
+	user := model.MustGenerateUserID()
 	keyPairs := make([]*commonpb.PublicKey, 100)
 	for i := range keyPairs {
-		keyPairs[i] = MustGenerateKeyPair().Proto()
+		keyPairs[i] = model.MustGenerateKeyPair().Proto()
 
 		_, err := store.GetUserId(ctx, keyPairs[i])
 		require.ErrorIs(t, err, ErrNotFound)
@@ -33,7 +34,7 @@ func TestStore(t *testing.T) {
 		require.True(t, proto.Equal(user, actual))
 
 		// Cannot rebind without revoking first
-		actual, err = store.Bind(ctx, MustGenerateUserID(), keyPairs[i])
+		actual, err = store.Bind(ctx, model.MustGenerateUserID(), keyPairs[i])
 		require.NoError(t, err)
 		require.True(t, proto.Equal(user, actual))
 	}

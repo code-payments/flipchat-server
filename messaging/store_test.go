@@ -11,7 +11,7 @@ import (
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
-	"github.com/code-payments/flipchat-server/account"
+
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 )
@@ -20,7 +20,7 @@ func TestPointerStore(t *testing.T) {
 	s := NewMemory()
 	ctx := context.Background()
 	chatID := model.MustGenerateChatID()
-	userID := account.MustGenerateUserID()
+	userID := model.MustGenerateUserID()
 
 	t.Run("Empty", func(t *testing.T) {
 		ptrs, err := s.GetAllPointers(ctx, chatID)
@@ -92,14 +92,14 @@ func TestMessageStore(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, messages)
 
-		unread, err := s.CountUnread(ctx, chatID, account.MustGenerateUserID(), nil)
+		unread, err := s.CountUnread(ctx, chatID, model.MustGenerateUserID(), nil)
 		require.NoError(t, err)
 		require.Zero(t, unread)
 	})
 
 	var users []*commonpb.UserId
 	for range 2 {
-		users = append(users, account.MustGenerateUserID())
+		users = append(users, model.MustGenerateUserID())
 	}
 
 	var messages []*messagingpb.Message

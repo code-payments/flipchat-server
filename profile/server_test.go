@@ -11,16 +11,15 @@ import (
 	"google.golang.org/grpc/status"
 
 	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
+	"github.com/code-payments/flipchat-server/model"
 
-	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
 func TestServer(t *testing.T) {
-	accountStore := account.NewInMemory()
-	authz := account.NewAuthorizer(accountStore, auth.NewKeyPairAuthenticator())
+	authz := auth.NewStaticAuthorizer()
 
 	serv := NewServer(zap.Must(zap.NewDevelopment()), NewInMemory(), authz)
 	cc := testutil.RunGRPCServer(t, testutil.WithService(func(s *grpc.Server) {
@@ -28,8 +27,8 @@ func TestServer(t *testing.T) {
 	}))
 
 	client := profilepb.NewProfileClient(cc)
-	userID := account.MustGenerateUserID()
-	keyPair := account.MustGenerateKeyPair()
+	userID := model.MustGenerateUserID()
+	keyPair := model.MustGenerateKeyPair()
 
 	t.Run("No User", func(t *testing.T) {
 		get, err := client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
@@ -40,7 +39,6 @@ func TestServer(t *testing.T) {
 		require.Nil(t, get.UserProfile)
 
 		req := &profilepb.SetDisplayNameRequest{
-			UserId:      userID,
 			DisplayName: "my name",
 		}
 		require.NoError(t, keyPair.Auth(req, &req.Auth))
@@ -49,7 +47,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("Allowed", func(t *testing.T) {
-		_, _ = accountStore.Bind(context.Background(), userID, keyPair.Proto())
+		authz.Add(userID, keyPair)
 
 		// Binding of a user isn't sufficient, a profile must be set!
 		get, err := client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
@@ -60,7 +58,6 @@ func TestServer(t *testing.T) {
 		require.Nil(t, get.UserProfile)
 
 		req := &profilepb.SetDisplayNameRequest{
-			UserId:      userID,
 			DisplayName: "my name",
 		}
 		require.NoError(t, keyPair.Auth(req, &req.Auth))

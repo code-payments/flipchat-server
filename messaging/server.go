@@ -17,9 +17,9 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
-	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 )
 
@@ -90,7 +90,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 
 	log := s.log.With(
 		zap.String("chat_id", base64.StdEncoding.EncodeToString(params.ChatId.Value)),
-		zap.String("user_id", account.UserIDString(userID)),
+		zap.String("user_id", model.UserIDString(userID)),
 	)
 
 	// TODO: ChatMember verifier
@@ -298,7 +298,7 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 
 func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, stream event.Stream[*event.ChatEvent]) {
 	log := s.log.With(
-		zap.String("user_id", account.UserIDString(userID)),
+		zap.String("user_id", model.UserIDString(userID)),
 		zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)),
 	)
 

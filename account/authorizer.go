@@ -28,29 +28,6 @@ func NewAuthorizer(log *zap.Logger, store Store, authn auth.Authenticator) *Auth
 	}
 }
 
-func (a *Authorizer) AuthorizeWithUser(ctx context.Context, m proto.Message, userId *commonpb.UserId, authField **commonpb.Auth) error {
-	authMessage := *authField
-	*authField = nil
-
-	defer func() {
-		*authField = authMessage
-	}()
-
-	if err := a.authn.Verify(ctx, m, authMessage); err != nil {
-		return err
-	}
-
-	ok, err := a.store.IsAuthorized(ctx, userId, authMessage.GetKeyPair().GetPubKey())
-	if err != nil {
-		return status.Error(codes.Internal, "failed to authorize")
-	}
-
-	if !ok {
-		return status.Error(codes.PermissionDenied, "permission denied")
-	}
-
-	return nil
-}
 func (a *Authorizer) Authorize(ctx context.Context, m proto.Message, authField **commonpb.Auth) (*commonpb.UserId, error) {
 	authMessage := *authField
 	*authField = nil

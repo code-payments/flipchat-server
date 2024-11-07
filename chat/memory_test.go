@@ -11,7 +11,7 @@ import (
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	"github.com/code-payments/flipchat-server/account"
+
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/query"
@@ -52,7 +52,7 @@ func TestInMemoryStore_Metadata(t *testing.T) {
 func TestInMemoryStore_GetAllChatsForUser(t *testing.T) {
 	store := NewMemory()
 
-	memberID := account.MustGenerateUserID()
+	memberID := model.MustGenerateUserID()
 
 	chatIDs, err := store.GetChatsForUser(context.Background(), memberID)
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestInMemoryStore_GetAllChatsForUser(t *testing.T) {
 func TestInMemoryStore_GetAllChatsForUser_Pagination(t *testing.T) {
 	store := NewMemory()
 
-	memberID := account.MustGenerateUserID()
+	memberID := model.MustGenerateUserID()
 
 	// Create 10 chats
 	var chatIDs []*commonpb.ChatId
@@ -167,8 +167,8 @@ func TestInMemoryStore_GetChatMembers(t *testing.T) {
 	var expectedMembers []*Member
 	for i := 0; i < 10; i++ {
 		member := &Member{
-			UserID:  account.MustGenerateUserID(),
-			AddedBy: account.MustGenerateUserID(),
+			UserID:  model.MustGenerateUserID(),
+			AddedBy: model.MustGenerateUserID(),
 			IsMuted: i%2 == 0,
 		}
 
@@ -200,7 +200,7 @@ func TestInMemoryStore_IsChatMember(t *testing.T) {
 	store := NewMemory()
 
 	chatID := model.MustGenerateChatID()
-	memberID := account.MustGenerateUserID()
+	memberID := model.MustGenerateUserID()
 
 	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
 		ChatId: chatID,
@@ -225,7 +225,7 @@ func TestInMemoryStore_SetChatMuteState(t *testing.T) {
 	store := NewMemory()
 
 	chatID := model.MustGenerateChatID()
-	memberID := account.MustGenerateUserID()
+	memberID := model.MustGenerateUserID()
 
 	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
 		ChatId: chatID,
@@ -260,8 +260,8 @@ func TestInMemoryStore_JoinLeave(t *testing.T) {
 	require.NoError(t, err)
 
 	member := Member{
-		UserID:  account.MustGenerateUserID(),
-		AddedBy: account.MustGenerateUserID(),
+		UserID:  model.MustGenerateUserID(),
+		AddedBy: model.MustGenerateUserID(),
 	}
 
 	require.NoError(t, store.AddMember(context.Background(), chatID, member))
@@ -291,8 +291,8 @@ func TestInMemoryStore_AddRemove(t *testing.T) {
 	var members []*Member
 	for range 10 {
 		member := Member{
-			UserID:  account.MustGenerateUserID(),
-			AddedBy: account.MustGenerateUserID(),
+			UserID:  model.MustGenerateUserID(),
+			AddedBy: model.MustGenerateUserID(),
 		}
 
 		require.NoError(t, store.AddMember(context.Background(), chatID, member))

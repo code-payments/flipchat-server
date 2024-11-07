@@ -24,6 +24,9 @@ import (
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
+type testAuthn struct {
+}
+
 func TestServerHappy(t *testing.T) {
 	log := zap.Must(zap.NewDevelopment())
 	accountStore := account.NewInMemory()
@@ -51,8 +54,8 @@ func TestServerHappy(t *testing.T) {
 	client := messagingpb.NewMessagingClient(cc)
 
 	chatID := model.MustGenerateChatID()
-	userID := account.MustGenerateUserID()
-	keyPair := account.MustGenerateKeyPair()
+	userID := model.MustGenerateUserID()
+	keyPair := model.MustGenerateKeyPair()
 	_, _ = accountStore.Bind(ctx, userID, keyPair.Proto())
 
 	streamParams := &messagingpb.StreamMessagesRequest_Params{ChatId: chatID}
@@ -202,8 +205,8 @@ func TestServerDuplicateStreams(t *testing.T) {
 	client := messagingpb.NewMessagingClient(cc)
 
 	chatID := model.MustGenerateChatID()
-	userID := account.MustGenerateUserID()
-	keyPair := account.MustGenerateKeyPair()
+	userID := model.MustGenerateUserID()
+	keyPair := model.MustGenerateKeyPair()
 	_, _ = accountStore.Bind(ctx, userID, keyPair.Proto())
 
 	streamParams := &messagingpb.StreamMessagesRequest_Params{ChatId: chatID}

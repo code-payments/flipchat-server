@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 
+	auth2 "github.com/code-payments/code-server/pkg/code/auth"
+	"github.com/code-payments/code-server/pkg/code/common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -10,9 +12,7 @@ import (
 	codecommonpb "github.com/code-payments/code-protobuf-api/generated/go/common/v1"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-
-	auth2 "github.com/code-payments/code-server/pkg/code/auth"
-	"github.com/code-payments/code-server/pkg/code/common"
+	"github.com/code-payments/flipchat-server/model"
 )
 
 // Authorizer authorizes an action for a UserId with the given auth.
@@ -21,6 +21,43 @@ import (
 // than authentication as lookups must be performed.
 type Authorizer interface {
 	Authorize(ctx context.Context, m proto.Message, authField **commonpb.Auth) (*commonpb.UserId, error)
+}
+
+type StaticAuthorizer struct {
+	auth Authenticator
+
+	keyPairs map[string]string
+}
+
+func NewStaticAuthorizer() *StaticAuthorizer {
+	return &StaticAuthorizer{
+		auth:     NewKeyPairAuthenticator(),
+		keyPairs: make(map[string]string),
+	}
+}
+
+func (a *StaticAuthorizer) Authorize(ctx context.Context, m proto.Message, authField **commonpb.Auth) (*commonpb.UserId, error) {
+	authMessage := *authField
+	*authField = nil
+
+	defer func() {
+		*authField = authMessage
+	}()
+
+	if err := a.auth.Verify(ctx, m, authMessage); err != nil {
+		return nil, err
+	}
+
+	userID, ok := a.keyPairs[string(authMessage.GetKeyPair().GetPubKey().GetValue())]
+	if !ok {
+		return nil, status.Error(codes.PermissionDenied, "permission denied")
+	}
+
+	return &commonpb.UserId{Value: []byte(userID)}, nil
+}
+
+func (a *StaticAuthorizer) Add(userID *commonpb.UserId, pair model.KeyPair) {
+	a.keyPairs[string(pair.Public())] = string(userID.GetValue())
 }
 
 // Authenticator authenticates a message with the provided auth.

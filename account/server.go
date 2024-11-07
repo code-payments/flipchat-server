@@ -12,9 +12,10 @@ import (
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	"github.com/code-payments/flipchat-server/profile"
 
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/profile"
 )
 
 const loginWindow = 5 * time.Minute
@@ -54,7 +55,7 @@ func (s *Server) Register(ctx context.Context, req *accountpb.RegisterRequest) (
 		return nil, err
 	}
 
-	userID, err := GenerateUserId()
+	userID, err := model.GenerateUserId()
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate user id")
 	}

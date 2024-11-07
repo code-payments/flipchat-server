@@ -20,7 +20,6 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
-	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/messaging"
@@ -99,7 +98,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 		return err
 	}
 
-	log := s.log.With(zap.String("user_id", account.UserIDString(userID)))
+	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
 	userKey := string(userID.Value)
 
 	s.streamsMu.Lock()
@@ -217,7 +216,7 @@ func (s *Server) GetChats(ctx context.Context, req *chatpb.GetChatsRequest) (*ch
 		return nil, err
 	}
 
-	log := s.log.With(zap.String("user_id", account.UserIDString(userID)))
+	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
 
 	// TODO: Pagination, it's fine for now(!!)
 	chatIDs, err := s.chats.GetChatsForUser(ctx, userID)
@@ -317,7 +316,12 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 	}
 
 	for _, m := range users {
-		err = s.chats.AddMember(ctx, md.ChatId, Member{UserID: m, AddedBy: userID})
+		member := Member{UserID: m, AddedBy: userID}
+		if req.GetGroupChat() != nil && bytes.Equal(m.Value, userID.Value) {
+			member.IsHost = true
+		}
+
+		err = s.chats.AddMember(ctx, md.ChatId, member)
 		if errors.Is(err, ErrMemberExists) {
 			continue
 		} else if err != nil {
@@ -464,6 +468,7 @@ func (s *Server) getMetadataWithMembers(ctx context.Context, chatID *commonpb.Ch
 		mp := &chatpb.Member{
 			UserId: m.UserID,
 			IsSelf: bytes.Equal(m.UserID.Value, caller.Value),
+			IsHost: m.IsHost,
 		}
 
 		if mp.IsSelf {
@@ -491,7 +496,7 @@ func (s *Server) getMetadataWithMembers(ctx context.Context, chatID *commonpb.Ch
 }
 
 func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId, ss event.Stream[*event.ChatEvent]) {
-	log := s.log.With(zap.String("user_id", account.UserIDString(userID)))
+	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
 
 	chatIDs, err := s.chats.GetChatsForUser(ctx, userID)
 	if err != nil {

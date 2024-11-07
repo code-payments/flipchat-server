@@ -12,9 +12,10 @@ import (
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	"github.com/code-payments/flipchat-server/protoutil"
 
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/protoutil"
 )
 
 func TestAuthorizer(t *testing.T) {
@@ -24,13 +25,13 @@ func TestAuthorizer(t *testing.T) {
 
 	authz := NewAuthorizer(log, store, authn)
 
-	userID := MustGenerateUserID()
-	signer := MustGenerateKeyPair()
+	userID := model.MustGenerateUserID()
+	signer := model.MustGenerateKeyPair()
 
 	t.Run("UserNotFound", func(t *testing.T) {
-		newKeyPair := MustGenerateKeyPair()
+		newKeyPair := model.MustGenerateKeyPair()
 		req := &accountpb.AuthorizePublicKeyRequest{
-			UserId:    MustGenerateUserID(),
+			UserId:    model.MustGenerateUserID(),
 			PublicKey: newKeyPair.Proto(),
 			Signature: nil,
 			Auth:      nil,
@@ -47,7 +48,7 @@ func TestAuthorizer(t *testing.T) {
 		_, err := store.Bind(context.Background(), userID, signer.Proto())
 		require.NoError(t, err)
 
-		newKeyPair := MustGenerateKeyPair()
+		newKeyPair := model.MustGenerateKeyPair()
 		req := &accountpb.AuthorizePublicKeyRequest{
 			UserId:    userID,
 			PublicKey: newKeyPair.Proto(),
@@ -63,7 +64,7 @@ func TestAuthorizer(t *testing.T) {
 	})
 
 	t.Run("Unauthenticated - Missing", func(t *testing.T) {
-		newKeyPair := MustGenerateKeyPair()
+		newKeyPair := model.MustGenerateKeyPair()
 		req := &accountpb.AuthorizePublicKeyRequest{
 			UserId:    userID,
 			PublicKey: newKeyPair.Proto(),
@@ -77,7 +78,7 @@ func TestAuthorizer(t *testing.T) {
 	})
 
 	t.Run("Unauthenticated - Invalid", func(t *testing.T) {
-		newKeyPair := MustGenerateKeyPair()
+		newKeyPair := model.MustGenerateKeyPair()
 		req := &accountpb.AuthorizePublicKeyRequest{
 			UserId:    userID,
 			PublicKey: newKeyPair.Proto(),

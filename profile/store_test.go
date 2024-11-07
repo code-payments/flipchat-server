@@ -6,13 +6,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/model"
 )
 
 func TestStore(t *testing.T) {
 	s := NewInMemory()
 
-	userID := account.MustGenerateUserID()
+	userID := model.MustGenerateUserID()
 
 	_, err := s.GetProfile(context.Background(), userID)
 	require.ErrorIs(t, err, ErrNotFound)

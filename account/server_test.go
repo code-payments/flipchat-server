@@ -11,9 +11,10 @@ import (
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	"github.com/code-payments/flipchat-server/profile"
 
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
 )
@@ -36,11 +37,11 @@ func TestServer(t *testing.T) {
 	ctx := context.Background()
 	client := accountpb.NewAccountClient(cc)
 
-	var keys []KeyPair
+	var keys []model.KeyPair
 	var userId *commonpb.UserId
 
 	t.Run("Register", func(t *testing.T) {
-		keys = append(keys, MustGenerateKeyPair())
+		keys = append(keys, model.MustGenerateKeyPair())
 		req := &accountpb.RegisterRequest{
 			PublicKey:   keys[0].Proto(),
 			DisplayName: "hello!",
@@ -67,7 +68,7 @@ func TestServer(t *testing.T) {
 
 	t.Run("AuthorizePublicKey", func(t *testing.T) {
 		for i := 1; i < 10; i++ {
-			newPair := MustGenerateKeyPair()
+			newPair := model.MustGenerateKeyPair()
 			req := &accountpb.AuthorizePublicKeyRequest{
 				UserId:    userId,
 				PublicKey: newPair.Proto(),
@@ -111,7 +112,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("Cannot Remove Another Accounts Key", func(t *testing.T) {
-		other := MustGenerateKeyPair()
+		other := model.MustGenerateKeyPair()
 		register := &accountpb.RegisterRequest{
 			PublicKey:   other.Proto(),
 			DisplayName: "hello!",
@@ -135,7 +136,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("Cannot Remove Another Accounts Key Indirectly", func(t *testing.T) {
-		other := MustGenerateKeyPair()
+		other := model.MustGenerateKeyPair()
 		register := &accountpb.RegisterRequest{
 			PublicKey:   other.Proto(),
 			DisplayName: "hello!",

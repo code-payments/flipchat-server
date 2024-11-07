@@ -9,6 +9,7 @@ import (
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+
 	"github.com/code-payments/flipchat-server/query"
 )
 
@@ -23,6 +24,7 @@ type Member struct {
 	UserID  *commonpb.UserId
 	AddedBy *commonpb.UserId
 	IsMuted bool
+	IsHost  bool
 }
 
 func (m *Member) Validate() error {
@@ -38,6 +40,7 @@ func (m *Member) Clone() *Member {
 		UserID:  proto.Clone(m.UserID).(*commonpb.UserId),
 		AddedBy: proto.Clone(m.AddedBy).(*commonpb.UserId),
 		IsMuted: m.IsMuted,
+		IsHost:  m.IsHost,
 	}
 }
 

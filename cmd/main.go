@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
-	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/model"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 		log.Fatal("Failed to create connection:", err)
 	}
 
-	keyPair := account.MustGenerateKeyPair()
+	keyPair := model.MustGenerateKeyPair()
 
 	register := &accountpb.RegisterRequest{
 		DisplayName: "test",

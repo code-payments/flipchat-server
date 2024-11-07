@@ -33,8 +33,8 @@ func TestServer(t *testing.T) {
 	messageDB := messaging.NewMemory()
 	profiles := profile.NewInMemory()
 
-	userID := account.MustGenerateUserID()
-	keyPair := account.MustGenerateKeyPair()
+	userID := model.MustGenerateUserID()
+	keyPair := model.MustGenerateKeyPair()
 	_, _ = accounts.Bind(context.Background(), userID, keyPair.Proto())
 	_ = profiles.SetDisplayName(context.Background(), userID, "Self")
 	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
@@ -91,8 +91,8 @@ func TestServer(t *testing.T) {
 	t.Run("Start Group", func(t *testing.T) {
 		var otherUsers []*commonpb.UserId
 		for i := range 5 {
-			groupUserID := account.MustGenerateUserID()
-			_, _ = accounts.Bind(context.Background(), groupUserID, account.MustGenerateKeyPair().Proto())
+			groupUserID := model.MustGenerateUserID()
+			_, _ = accounts.Bind(context.Background(), groupUserID, model.MustGenerateKeyPair().Proto())
 			require.NoError(t, profiles.SetDisplayName(context.Background(), groupUserID, fmt.Sprintf("User-%d", i)))
 			otherUsers = append(otherUsers, groupUserID)
 		}
@@ -119,6 +119,7 @@ func TestServer(t *testing.T) {
 				DisplayName: "Self",
 			},
 			IsSelf: true,
+			IsHost: true,
 		}}
 
 		for i, groupUserID := range otherUsers {
@@ -179,8 +180,8 @@ func TestServer(t *testing.T) {
 		require.NoError(t, protoutil.ProtoEqualError(created.Chat, getAllResp.Chats[0]))
 
 		t.Run("Join and leave", func(t *testing.T) {
-			otherUser := account.MustGenerateUserID()
-			otherKeyPair := account.MustGenerateKeyPair()
+			otherUser := model.MustGenerateUserID()
+			otherKeyPair := model.MustGenerateKeyPair()
 			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
 
 			newExpectedMembers := protoutil.SliceClone(expectedMembers)
@@ -238,8 +239,8 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("Start Two Way", func(t *testing.T) {
-		otherUserID := account.MustGenerateUserID()
-		otherKeyPair := account.MustGenerateKeyPair()
+		otherUserID := model.MustGenerateUserID()
+		otherKeyPair := model.MustGenerateKeyPair()
 
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_TwoWayChat{

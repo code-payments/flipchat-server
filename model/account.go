@@ -1,4 +1,4 @@
-package account
+package model
 
 import (
 	"crypto/ed25519"
