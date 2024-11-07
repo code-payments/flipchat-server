@@ -103,11 +103,11 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 	userKey := string(userID.Value)
 
 	s.streamsMu.Lock()
-	if _, exists := s.streams[userKey]; exists {
-		s.streamsMu.Unlock()
+	if existing, exists := s.streams[userKey]; exists {
+		delete(s.streams, userKey)
+		existing.Close()
 
-		log.Warn("Existing stream detected on this server; aborting")
-		return status.Error(codes.Aborted, "stream already exists")
+		log.Info("Closed previous stream")
 	}
 
 	ss := event.NewProtoEventStream[*event.ChatEvent, *chatpb.StreamChatEventsResponse_EventBatch](

@@ -101,12 +101,13 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 	s.streamsMu.Lock()
 	chatStreams, exists := s.streams[chatKey]
 	if exists {
-		for _, existing := range chatStreams {
+		for i, existing := range chatStreams {
 			if existing.ID() == userKey {
-				s.streamsMu.Unlock()
+				chatStreams = slices.Delete(chatStreams, i, i+1)
 
-				log.Warn("Existing stream detected on this server; aborting")
-				return status.Error(codes.Aborted, "stream already exists")
+				existing.Close()
+				log.Info("Closed previous stream")
+				break
 			}
 		}
 	}

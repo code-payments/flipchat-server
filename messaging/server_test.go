@@ -174,3 +174,57 @@ func TestServerHappy(t *testing.T) {
 		}
 	})
 }
+
+func TestServerDuplicateStreams(t *testing.T) {
+	log := zap.Must(zap.NewDevelopment())
+	accountStore := account.NewInMemory()
+	authz := account.NewAuthorizer(log, accountStore, auth.NewKeyPairAuthenticator())
+	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
+		return id.Value
+	})
+
+	store := NewMemory()
+	serv := NewServer(
+		log,
+		authz,
+		store,
+		store,
+		bus,
+	)
+
+	cc := testutil.RunGRPCServer(t, testutil.WithService(func(s *grpc.Server) {
+		messagingpb.RegisterMessagingServer(s, serv)
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := messagingpb.NewMessagingClient(cc)
+
+	chatID := model.MustGenerateChatID()
+	userID := account.MustGenerateUserID()
+	keyPair := account.MustGenerateKeyPair()
+	_, _ = accountStore.Bind(ctx, userID, keyPair.Proto())
+
+	streamParams := &messagingpb.StreamMessagesRequest_Params{ChatId: chatID}
+	require.NoError(t, keyPair.Auth(streamParams, &streamParams.Auth))
+
+	streamA, err := client.StreamMessages(ctx)
+	require.NoError(t, err)
+
+	err = streamA.Send(&messagingpb.StreamMessagesRequest{Type: &messagingpb.StreamMessagesRequest_Params_{Params: streamParams}})
+	require.NoError(t, err)
+	_, err = streamA.Recv()
+	require.NoError(t, err)
+
+	streamB, err := client.StreamMessages(ctx)
+	require.NoError(t, err)
+
+	err = streamB.Send(&messagingpb.StreamMessagesRequest{Type: &messagingpb.StreamMessagesRequest_Params_{Params: streamParams}})
+	require.NoError(t, err)
+	_, err = streamB.Recv()
+	require.NoError(t, err)
+
+	_, err = streamA.Recv()
+	require.Equal(t, codes.Aborted, status.Code(err))
+}

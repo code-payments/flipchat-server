@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
@@ -283,4 +285,23 @@ func TestServer(t *testing.T) {
 		require.Len(t, resp.GetChats(), 2)
 	})
 
+	t.Run("Duplicate Streams", func(t *testing.T) {
+		streamA, err := client.StreamChatEvents(context.Background())
+		require.NoError(t, err)
+
+		params := &chatpb.StreamChatEventsRequest_Params{}
+		require.NoError(t, keyPair.Auth(params, &params.Auth))
+		err = streamA.Send(&chatpb.StreamChatEventsRequest{Type: &chatpb.StreamChatEventsRequest_Params_{Params: params}})
+		require.NoError(t, err)
+		_, _ = streamA.Recv() // Ping
+
+		streamB, err := client.StreamChatEvents(context.Background())
+		require.NoError(t, err)
+		err = streamB.Send(&chatpb.StreamChatEventsRequest{Type: &chatpb.StreamChatEventsRequest_Params_{Params: params}})
+		require.NoError(t, err)
+		_, _ = streamB.Recv() // Ping
+
+		_, err = streamA.Recv()
+		require.Equal(t, codes.Aborted, status.Code(err))
+	})
 }

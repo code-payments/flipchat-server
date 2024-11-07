@@ -11,6 +11,7 @@ import (
 type Stream[E any] interface {
 	ID() string
 	Notify(event E, timeout time.Duration) error
+	Close()
 }
 
 type ProtoEventStream[E any, P proto.Message] struct {
@@ -55,7 +56,7 @@ func (s *ProtoEventStream[E, P]) Notify(event E, timeout time.Duration) error {
 	case s.ch <- msg:
 	case <-time.After(timeout):
 		s.Unlock()
-		s.close()
+		s.Close()
 		return errors.New("timed out sending message to streamCh")
 	}
 
@@ -67,7 +68,7 @@ func (s *ProtoEventStream[E, P]) Channel() <-chan P {
 	return s.ch
 }
 
-func (s *ProtoEventStream[E, P]) close() {
+func (s *ProtoEventStream[E, P]) Close() {
 	s.Lock()
 	defer s.Unlock()
 
