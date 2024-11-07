@@ -6,7 +6,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/mr-tron/base58"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -260,6 +259,35 @@ func TestInMemoryStore_JoinLeave(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	member := Member{
+		UserID:  account.MustGenerateUserID(),
+		AddedBy: account.MustGenerateUserID(),
+	}
+
+	require.NoError(t, store.AddMember(context.Background(), chatID, member))
+
+	chats, err := store.GetChatsForUser(context.Background(), member.UserID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+
+	require.NoError(t, store.RemoveMember(context.Background(), chatID, member.UserID))
+
+	chats, err = store.GetChatsForUser(context.Background(), member.UserID)
+	require.NoError(t, err)
+	require.Empty(t, chats, 0)
+}
+
+func TestInMemoryStore_AddRemove(t *testing.T) {
+	store := NewMemory()
+
+	chatID := model.MustGenerateChatID()
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId: chatID,
+		Type:   chatpb.Metadata_GROUP,
+	})
+	require.NoError(t, err)
+
 	var members []*Member
 	for range 10 {
 		member := Member{
@@ -294,14 +322,4 @@ func TestInMemoryStore_JoinLeave(t *testing.T) {
 		require.NoError(t, protoutil.ProtoEqualError(members[i].UserID, actual[i].UserID))
 		require.NoError(t, protoutil.ProtoEqualError(members[i].AddedBy, actual[i].AddedBy))
 	}
-}
-
-func TestD(t *testing.T) {
-	raw, err := base58.Decode("V6ypBPZRfnZHbodkCisdio")
-	require.NoError(t, err)
-
-	raw2, err := base58.Decode("RDVYQEBFBZ5xnCTEQHSUKaw9")
-	require.NoError(t, err)
-
-	require.Equal(t, raw, raw2[2:])
 }

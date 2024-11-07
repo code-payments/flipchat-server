@@ -205,11 +205,22 @@ func (s *InMemoryStore) RemoveMember(_ context.Context, chatID *commonpb.ChatId,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Remove from member set.
 	members := s.members[string(chatID.Value)]
 	for i, m := range members {
 		if bytes.Equal(m.UserID.Value, member.Value) {
 			s.members[string(chatID.Value)] = slices.Delete(members, i, i+1)
-			return nil
+			break
+		}
+	}
+
+	// Remove from user index.
+	userChats := s.chatsByMember[string(member.Value)]
+	for i, m := range userChats {
+		if m == string(chatID.Value) {
+			userChats = slices.Delete(userChats, i, i+1)
+			s.chatsByMember[string(member.Value)] = userChats
+			break
 		}
 	}
 
