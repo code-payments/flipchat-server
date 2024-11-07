@@ -6,20 +6,23 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	"github.com/code-payments/flipchat-server/protoutil"
 
 	"github.com/code-payments/flipchat-server/auth"
 )
 
 func TestAuthorizer(t *testing.T) {
+	log := zap.Must(zap.NewDevelopment())
 	store := NewInMemory()
 	authn := auth.NewKeyPairAuthenticator()
 
-	authz := NewAuthorizer(store, authn)
+	authz := NewAuthorizer(log, store, authn)
 
 	userID := MustGenerateUserID()
 	signer := MustGenerateKeyPair()
@@ -35,7 +38,7 @@ func TestAuthorizer(t *testing.T) {
 		require.NoError(t, newKeyPair.Sign(req, &req.Signature))
 		require.NoError(t, signer.Auth(req, &req.Auth))
 
-		err := authz.Authorize(context.Background(), req, req.UserId, &req.Auth)
+		_, err := authz.Authorize(context.Background(), req, &req.Auth)
 		require.Equal(t, codes.PermissionDenied, status.Code(err))
 		require.NotNil(t, req.Auth)
 	})
@@ -54,24 +57,9 @@ func TestAuthorizer(t *testing.T) {
 		require.NoError(t, newKeyPair.Sign(req, &req.Signature))
 		require.NoError(t, signer.Auth(req, &req.Auth))
 
-		require.NoError(t, authz.Authorize(context.Background(), req, req.UserId, &req.Auth))
-		require.NotNil(t, req.Auth)
-	})
-
-	t.Run("Key Not Authorized", func(t *testing.T) {
-		newKeyPair := MustGenerateKeyPair()
-		req := &accountpb.AuthorizePublicKeyRequest{
-			UserId:    userID,
-			PublicKey: newKeyPair.Proto(),
-			Signature: nil,
-			Auth:      nil,
-		}
-		require.NoError(t, newKeyPair.Sign(req, &req.Signature))
-		require.NoError(t, newKeyPair.Auth(req, &req.Auth))
-
-		err := authz.Authorize(context.Background(), req, req.UserId, &req.Auth)
-		require.Equal(t, codes.PermissionDenied, status.Code(err))
-		require.NotNil(t, req.Auth)
+		actual, err := authz.Authorize(context.Background(), req, &req.Auth)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(userID, actual))
 	})
 
 	t.Run("Unauthenticated - Missing", func(t *testing.T) {
@@ -84,7 +72,7 @@ func TestAuthorizer(t *testing.T) {
 		}
 		require.NoError(t, newKeyPair.Sign(req, &req.Signature))
 
-		err := authz.Authorize(context.Background(), req, req.UserId, &req.Auth)
+		_, err := authz.Authorize(context.Background(), req, &req.Auth)
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
 
@@ -105,7 +93,7 @@ func TestAuthorizer(t *testing.T) {
 		}
 		require.NoError(t, newKeyPair.Sign(req, &req.Signature))
 
-		err := authz.Authorize(context.Background(), req, req.UserId, &req.Auth)
+		_, err := authz.Authorize(context.Background(), req, &req.Auth)
 		require.Equal(t, codes.Unauthenticated, status.Code(err))
 		require.NotNil(t, req.Auth)
 	})

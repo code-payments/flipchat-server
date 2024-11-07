@@ -12,6 +12,7 @@ import (
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	"github.com/code-payments/flipchat-server/profile"
 
 	"github.com/code-payments/flipchat-server/auth"
 )
@@ -21,15 +22,17 @@ const loginWindow = 5 * time.Minute
 type Server struct {
 	log      *zap.Logger
 	store    Store
+	profiles profile.Store
 	verifier auth.Authenticator
 
 	accountpb.UnimplementedAccountServer
 }
 
-func NewServer(log *zap.Logger, store Store, verifier auth.Authenticator) *Server {
+func NewServer(log *zap.Logger, store Store, profiles profile.Store, verifier auth.Authenticator) *Server {
 	return &Server{
 		log:      log,
 		store:    store,
+		profiles: profiles,
 		verifier: verifier,
 	}
 }
@@ -61,7 +64,9 @@ func (s *Server) Register(ctx context.Context, req *accountpb.RegisterRequest) (
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	// set the profile store here?
+	if err = s.profiles.SetDisplayName(ctx, userID, req.DisplayName); err != nil {
+		return nil, status.Error(codes.Internal, "failed to set display name")
+	}
 
 	return &accountpb.RegisterResponse{
 		UserId: prev,

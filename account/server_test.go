@@ -11,6 +11,7 @@ import (
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	"github.com/code-payments/flipchat-server/profile"
 
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/protoutil"
@@ -19,9 +20,12 @@ import (
 
 func TestServer(t *testing.T) {
 	store := NewInMemory()
+	profiles := profile.NewInMemory()
+
 	server := NewServer(
 		zap.Must(zap.NewDevelopment()),
 		store,
+		profiles,
 		auth.NewKeyPairAuthenticator(),
 	)
 
@@ -54,6 +58,10 @@ func TestServer(t *testing.T) {
 			} else {
 				require.NoError(t, protoutil.ProtoEqualError(userId, resp.UserId))
 			}
+
+			p, err := profiles.GetProfile(ctx, resp.UserId)
+			require.NoError(t, err)
+			require.Equal(t, "hello!", p.GetDisplayName())
 		}
 	})
 
