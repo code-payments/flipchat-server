@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -42,6 +43,19 @@ func (m *Member) Clone() *Member {
 		IsMuted: m.IsMuted,
 		IsHost:  m.IsHost,
 	}
+}
+
+func (m *Member) ToProto(self *commonpb.UserId) *chatpb.Member {
+	member := &chatpb.Member{
+		UserId: m.UserID,
+		IsHost: m.IsHost,
+	}
+
+	if self != nil {
+		member.IsSelf = bytes.Equal(member.UserId.GetValue(), self.GetValue())
+	}
+
+	return member
 }
 
 type Store interface {

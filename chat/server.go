@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -36,8 +37,9 @@ const (
 )
 
 type Server struct {
-	log   *zap.Logger
-	authz auth.Authorizer
+	log      *zap.Logger
+	authz    auth.Authorizer
+	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent]
 
 	chats    Store
 	profiles profile.Store
@@ -60,8 +62,9 @@ func NewServer(
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
 ) *Server {
 	s := &Server{
-		log:   log,
-		authz: authz,
+		log:      log,
+		authz:    authz,
+		eventBus: eventBus,
 
 		chats:    chats,
 		profiles: profiles,
@@ -125,19 +128,34 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 
 			update := &chatpb.StreamChatEventsResponse_ChatUpdate{
 				ChatId:       e.ChatID,
-				Metadata:     e.ChatUpdate,
-				MemberUpdate: e.MemberUpdate,
+				Metadata:     proto.Clone(e.ChatUpdate).(*chatpb.Metadata),
+				MemberUpdate: proto.Clone(e.MemberUpdate).(*chatpb.StreamChatEventsResponse_MemberUpdate),
 				LastMessage:  e.MessageUpdate,
 				Pointer:      e.PointerUpdate,
 				IsTyping:     e.IsTyping,
 			}
 
+			// Note: this is a bit hacky, but is probably the most robust
+			if mu := update.GetMetadata(); mu != nil {
+				mu.IsMuted, err = s.chats.GetMuteState(ctx, e.ChatID, userID)
+				if err != nil {
+					log.Warn("failed to correct mute state")
+				}
+			}
+
+			if refresh := update.GetMemberUpdate().GetRefresh(); refresh != nil {
+				for _, m := range refresh.Members {
+					m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
+				}
+			}
+
 			return &chatpb.StreamChatEventsResponse_EventBatch{
 				Updates: []*chatpb.StreamChatEventsResponse_ChatUpdate{update},
-			}, false
+			}, true
 		},
 	)
 
+	log = log.With(zap.String("ss", fmt.Sprintf("%p", ss)))
 	log.Debug("Initializing stream")
 
 	s.streams[userKey] = ss
@@ -315,19 +333,46 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		return nil, status.Errorf(codes.Internal, "failed to put chat")
 	}
 
+	log := s.log.With(
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)),
+		zap.String("user_id", model.UserIDString(userID)),
+	)
+
+	var members []Member
+	var memberProtos []*chatpb.Member
 	for _, m := range users {
 		member := Member{UserID: m, AddedBy: userID}
 		if req.GetGroupChat() != nil && bytes.Equal(m.Value, userID.Value) {
 			member.IsHost = true
 		}
 
+		members = append(members, member)
+		memberProtos = append(memberProtos, member.ToProto(userID))
+
 		err = s.chats.AddMember(ctx, md.ChatId, member)
 		if errors.Is(err, ErrMemberExists) {
 			continue
 		} else if err != nil {
-			s.log.Warn("Failed to put chat metadata", zap.Error(err))
+			log.Warn("Failed to put chat metadata", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to put chat member")
 		}
+	}
+
+	var mu *chatpb.StreamChatEventsResponse_MemberUpdate
+	if err := s.populateMemberData(ctx, memberProtos, nil); err != nil {
+		log.Warn("Failed to get member profiles for notification, not including")
+	} else {
+		mu = &chatpb.StreamChatEventsResponse_MemberUpdate{
+			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
+				Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+					Members: memberProtos,
+				},
+			},
+		}
+	}
+
+	if err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, ChatUpdate: md, MemberUpdate: mu}); err != nil {
+		log.Warn("Failed to notify new chat", zap.Error(err))
 	}
 
 	return &chatpb.StartChatResponse{Chat: md}, nil
@@ -354,6 +399,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	}
 
 	// TODO: Auth
+	// TODO: Return if no-op
 
 	if err = s.chats.AddMember(ctx, chatID, Member{UserID: userID}); err != nil {
 		s.log.Warn("Failed to put chat member", zap.Error(err))
@@ -366,10 +412,20 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		return nil, status.Errorf(codes.Internal, "failed to get chat data")
 	}
 
-	return &chatpb.JoinChatResponse{
-		Metadata: md,
-		Members:  members,
-	}, nil
+	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
+			Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+				Members: members,
+			},
+		},
+	}
+
+	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, ChatUpdate: md, MemberUpdate: mu})
+	if err != nil {
+		s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
+	}
+
+	return &chatpb.JoinChatResponse{Metadata: md, Members: members}, nil
 }
 
 func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*chatpb.LeaveChatResponse, error) {
@@ -378,9 +434,33 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 		return nil, err
 	}
 
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
 	if err = s.chats.RemoveMember(ctx, req.ChatId, userID); err != nil {
-		s.log.Warn("Failed to remove member", zap.Error(err))
+		log.Warn("Failed to remove member", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to remove chat member")
+	}
+
+	md, members, err := s.getMetadataWithMembers(ctx, req.ChatId, userID)
+	if err != nil {
+		log.Warn("Failed to get chat data for update", zap.Error(err))
+		return &chatpb.LeaveChatResponse{}, nil
+	}
+
+	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
+			Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+				Members: members,
+			},
+		},
+	}
+
+	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdate: mu})
+	if err != nil {
+		s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
 	}
 
 	return &chatpb.LeaveChatResponse{}, nil
@@ -427,10 +507,17 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 		return nil, err
 	}
 
-	// Need to get participant for isMuted
+	// If the caller is not specified, _or_ the caller isn't a member, we don't need to fill out
+	// caller specific fields.
+	if caller == nil {
+		return md, nil
+	}
+
 	member, err := s.chats.GetMember(ctx, chatID, caller)
-	if err != nil {
-		return nil, nil
+	if errors.Is(err, ErrMemberNotFound) {
+		return md, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get member for mute check: %w", err)
 	}
 	md.IsMuted = member.IsMuted
 
@@ -457,42 +544,46 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 }
 
 func (s *Server) getMetadataWithMembers(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId) (*chatpb.Metadata, []*chatpb.Member, error) {
-	md, err := s.chats.GetChatMetadata(ctx, chatID)
+	md, err := s.getMetadata(ctx, chatID, caller)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	members, err := s.chats.GetMembers(ctx, chatID)
 	memberProtos := make([]*chatpb.Member, 0, len(members))
-	for _, m := range members {
-		mp := &chatpb.Member{
-			UserId: m.UserID,
-			IsSelf: bytes.Equal(m.UserID.Value, caller.Value),
-			IsHost: m.IsHost,
-		}
+	for _, member := range members {
+		memberProtos = append(memberProtos, member.ToProto(caller))
+	}
 
-		if mp.IsSelf {
-			md.IsMuted = m.IsMuted
-		}
-
-		p, err := s.profiles.GetProfile(ctx, m.UserID)
-		if err != nil && !errors.Is(err, profile.ErrNotFound) {
-			return nil, nil, fmt.Errorf("failed to get user profile: %w", err)
-		}
-		mp.Identity = &chatpb.MemberIdentity{
-			DisplayName: p.GetDisplayName(),
-		}
-
-		pointers, err := s.pointers.GetPointers(ctx, chatID, m.UserID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get pointers: %w", err)
-		}
-		mp.Pointers = pointers
-
-		memberProtos = append(memberProtos, mp)
+	if err = s.populateMemberData(ctx, memberProtos, chatID); err != nil {
+		return nil, nil, fmt.Errorf("failed to populate member data: %w", err)
 	}
 
 	return md, memberProtos, nil
+}
+
+func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Member, chatID *commonpb.ChatId) error {
+	for _, m := range members {
+		p, err := s.profiles.GetProfile(ctx, m.UserId)
+		if err != nil && !errors.Is(err, profile.ErrNotFound) {
+			return fmt.Errorf("failed to get user profile: %w", err)
+		}
+		m.Identity = &chatpb.MemberIdentity{
+			DisplayName: p.GetDisplayName(),
+		}
+
+		if chatID == nil {
+			continue
+		}
+
+		pointers, err := s.pointers.GetPointers(ctx, chatID, m.UserId)
+		if err != nil {
+			return fmt.Errorf("failed to get pointers: %w", err)
+		}
+
+		m.Pointers = pointers
+	}
+	return nil
 }
 
 func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId, ss event.Stream[*event.ChatEvent]) {

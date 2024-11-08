@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
@@ -288,12 +290,150 @@ func TestServer(t *testing.T) {
 		require.Len(t, resp.GetChats(), 2)
 	})
 
+	t.Run("Stream Events", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		streamUser := model.MustGenerateUserID()
+		streamKeyPair := model.MustGenerateKeyPair()
+		_, _ = accounts.Bind(ctx, streamUser, streamKeyPair.Proto())
+
+		stream, err := client.StreamChatEvents(ctx)
+		require.NoError(t, err)
+
+		req := &chatpb.StreamChatEventsRequest{
+			Type: &chatpb.StreamChatEventsRequest_Params_{
+				Params: &chatpb.StreamChatEventsRequest_Params{
+					Ts: timestamppb.Now(),
+				},
+			},
+		}
+		require.NoError(t, streamKeyPair.Auth(req.GetParams(), &req.GetParams().Auth))
+		require.NoError(t, stream.Send(req))
+
+		updateCh := make(chan *chatpb.StreamChatEventsResponse_ChatUpdate, 1024)
+
+		go func() {
+			for {
+				resp, err := stream.Recv()
+				if codes.Canceled == status.Code(err) {
+					return
+				}
+				require.NoError(t, err)
+
+				switch typed := resp.Type.(type) {
+				case *chatpb.StreamChatEventsResponse_Ping:
+					_ = stream.Send(&chatpb.StreamChatEventsRequest{
+						Type: &chatpb.StreamChatEventsRequest_Pong{
+							Pong: &commonpb.ClientPong{Timestamp: timestamppb.Now()},
+						},
+					})
+				case *chatpb.StreamChatEventsResponse_Events:
+					for _, u := range typed.Events.Updates {
+						updateCh <- u
+					}
+				}
+			}
+		}()
+
+		// TODO: There's a bit of a race for 'flush initial state', so we just wait a bit
+		time.Sleep(200 * time.Millisecond)
+
+		verifyExpectedMembers := func(update *chatpb.StreamChatEventsResponse_MemberUpdate, expected []Member) {
+			refresh := update.GetRefresh()
+			require.NotNil(t, refresh)
+
+			slices.SortFunc(refresh.Members, func(a, b *chatpb.Member) int {
+				return bytes.Compare(a.UserId.Value, b.UserId.Value)
+			})
+			slices.SortFunc(expected, func(a, b Member) int {
+				return bytes.Compare(a.UserID.Value, b.UserID.Value)
+			})
+		}
+
+		start := &chatpb.StartChatRequest{
+			Parameters: &chatpb.StartChatRequest_GroupChat{
+				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
+					Title: "my-title",
+					Users: []*commonpb.UserId{userID},
+				},
+			},
+		}
+		require.NoError(t, streamKeyPair.Auth(start, &start.Auth))
+		started, err := client.StartChat(ctx, start)
+		require.NoError(t, err)
+
+		u := <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(started.Chat.ChatId, u.ChatId))
+		require.NoError(t, protoutil.ProtoEqualError(started.Chat, u.Metadata))
+		verifyExpectedMembers(
+			u.MemberUpdate,
+			[]Member{
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: true},
+				{UserID: userID, AddedBy: streamUser, IsMuted: false, IsHost: false},
+			},
+		)
+
+		// other user leaves chat (notification on leave)
+		leave := &chatpb.LeaveChatRequest{ChatId: started.Chat.ChatId}
+		require.NoError(t, keyPair.Auth(leave, &leave.Auth))
+		_, _ = client.LeaveChat(context.Background(), leave)
+
+		u = <-updateCh
+		require.Nil(t, u.Metadata)
+		require.NoError(t, protoutil.ProtoEqualError(started.Chat.ChatId, u.ChatId))
+		verifyExpectedMembers(
+			u.MemberUpdate,
+			[]Member{
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: true},
+			},
+		)
+
+		// Other user creates a group (which we will join)
+		require.NoError(t, keyPair.Auth(start, &start.Auth))
+		startedOther, err := client.StartChat(ctx, start)
+		require.NoError(t, err)
+
+		join := &chatpb.JoinChatRequest{Identifier: &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId}}
+		require.NoError(t, streamKeyPair.Auth(join, &join.Auth))
+
+		joined, err := client.JoinChat(ctx, join)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata, u.Metadata))
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		verifyExpectedMembers(
+			u.MemberUpdate,
+			[]Member{
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: false},
+				{UserID: userID, AddedBy: streamUser, IsMuted: false, IsHost: true},
+			},
+		)
+
+		leave = &chatpb.LeaveChatRequest{ChatId: started.Chat.ChatId}
+		require.NoError(t, streamKeyPair.Auth(leave, &leave.Auth))
+		_, _ = client.LeaveChat(context.Background(), leave)
+
+		select {
+		case <-updateCh:
+			require.Fail(t, "should not have produced an update")
+		case <-time.After(time.Second):
+		}
+	})
+
 	t.Run("Duplicate Streams", func(t *testing.T) {
 		streamA, err := client.StreamChatEvents(context.Background())
 		require.NoError(t, err)
 
-		params := &chatpb.StreamChatEventsRequest_Params{}
-		require.NoError(t, keyPair.Auth(params, &params.Auth))
+		streamUser := model.MustGenerateUserID()
+		streamKeyPair := model.MustGenerateKeyPair()
+		_, _ = accounts.Bind(context.Background(), streamUser, streamKeyPair.Proto())
+
+		params := &chatpb.StreamChatEventsRequest_Params{
+			Ts: timestamppb.Now(),
+		}
+		require.NoError(t, streamKeyPair.Auth(params, &params.Auth))
 		err = streamA.Send(&chatpb.StreamChatEventsRequest{Type: &chatpb.StreamChatEventsRequest_Params_{Params: params}})
 		require.NoError(t, err)
 		_, _ = streamA.Recv() // Ping

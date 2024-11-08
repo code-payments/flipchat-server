@@ -94,10 +94,10 @@ func (k KeyPair) Auth(m proto.Message, target **commonpb.Auth) error {
 		},
 	}
 
+	*target = nil
 	if err := k.Sign(m, &auth.GetKeyPair().Signature); err != nil {
 		return err
 	}
-
 	*target = auth
 	return nil
 }
