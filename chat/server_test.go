@@ -114,6 +114,7 @@ func TestServer(t *testing.T) {
 		require.Equal(t, chatpb.StartChatResponse_OK, created.Result)
 		require.Equal(t, "My Fun Group!", created.Chat.Title)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
+		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
 
 		expectedMembers := []*chatpb.Member{{
 			UserId: userID,

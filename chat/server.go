@@ -319,6 +319,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			Type:     chatpb.Metadata_GROUP,
 			Title:    t.GroupChat.Title,
 			Muteable: true,
+			Owner:    userID,
 		}
 
 		users = append(t.GroupChat.Users, userID)
@@ -552,7 +553,12 @@ func (s *Server) getMetadataWithMembers(ctx context.Context, chatID *commonpb.Ch
 	members, err := s.chats.GetMembers(ctx, chatID)
 	memberProtos := make([]*chatpb.Member, 0, len(members))
 	for _, member := range members {
-		memberProtos = append(memberProtos, member.ToProto(caller))
+		p := member.ToProto(caller)
+		if bytes.Equal(member.UserID.Value, md.Owner.GetValue()) {
+			p.IsHost = true
+		}
+
+		memberProtos = append(memberProtos, p)
 	}
 
 	if err = s.populateMemberData(ctx, memberProtos, chatID); err != nil {
