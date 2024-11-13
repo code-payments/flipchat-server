@@ -395,7 +395,10 @@ func TestServer(t *testing.T) {
 		startedOther, err := client.StartChat(ctx, start)
 		require.NoError(t, err)
 
-		join := &chatpb.JoinChatRequest{Identifier: &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId}}
+		join := &chatpb.JoinChatRequest{
+			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
+			PaymentIntent: model.MustGenerateIntentID(),
+		}
 		require.NoError(t, streamKeyPair.Auth(join, &join.Auth))
 
 		joined, err := client.JoinChat(ctx, join)
