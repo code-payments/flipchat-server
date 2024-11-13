@@ -4,10 +4,11 @@ go 1.23.0
 
 require (
 	github.com/code-payments/code-protobuf-api v1.19.0
-	github.com/code-payments/code-server v1.10.20
-	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241021224548-f8d7458da646
+	github.com/code-payments/code-server v1.10.20-0.20241113150103-f6f79dc119df
+	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241112145307-68be7b5dd7c2
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
+	github.com/mr-tron/base58 v1.2.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.67.1
@@ -34,7 +35,6 @@ require (
 	github.com/jdgcs/ed25519 v0.0.0-20200408034030-96c10d46cdc3 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af // indirect
 	github.com/jmoiron/sqlx v1.3.4 // indirect
-	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/newrelic/go-agent/v3 v3.20.1 // indirect
 	github.com/newrelic/go-agent/v3/integrations/nrpgx v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
