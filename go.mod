@@ -3,7 +3,7 @@ module github.com/code-payments/flipchat-server
 go 1.23.0
 
 require (
-	github.com/code-payments/code-protobuf-api v1.19.0
+	github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84
 	github.com/code-payments/code-server v1.10.20-0.20241113150103-f6f79dc119df
 	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241112145307-68be7b5dd7c2
 	github.com/google/uuid v1.6.0
