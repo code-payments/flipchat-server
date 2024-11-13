@@ -202,6 +202,7 @@ func TestServer(t *testing.T) {
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
 				},
+				PaymentIntent: model.MustGenerateIntentID(),
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 
@@ -230,6 +231,7 @@ func TestServer(t *testing.T) {
 				Identifier: &chatpb.JoinChatRequest_RoomId{
 					RoomId: created.Chat.RoomNumber,
 				},
+				PaymentIntent: model.MustGenerateIntentID(),
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
