@@ -205,8 +205,8 @@ func TestServer(t *testing.T) {
 			})
 
 			paymentMetadata := &chatpb.JoinChatPaymentMetadata{
-				UserId:     otherUser,
-				Identifier: &chatpb.JoinChatPaymentMetadata_ChatId{ChatId: created.Chat.GetChatId()},
+				UserId: otherUser,
+				ChatId: created.Chat.ChatId,
 			}
 			intentID := testutil.CreatePayment(t, codeData, 200, paymentMetadata)
 
@@ -240,8 +240,8 @@ func TestServer(t *testing.T) {
 			require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
 
 			paymentMetadata = &chatpb.JoinChatPaymentMetadata{
-				UserId:     otherUser,
-				Identifier: &chatpb.JoinChatPaymentMetadata_RoomId{RoomId: created.Chat.RoomNumber},
+				UserId: otherUser,
+				ChatId: created.Chat.ChatId,
 			}
 			intentID = testutil.CreatePayment(t, codeData, 200, paymentMetadata)
 			join = &chatpb.JoinChatRequest{

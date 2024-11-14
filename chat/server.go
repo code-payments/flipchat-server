@@ -414,27 +414,13 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		}
 	}
 
-	var paidChatID *commonpb.ChatId
-	switch t := paymentMetadata.Identifier.(type) {
-	case *chatpb.JoinChatPaymentMetadata_ChatId:
-		paidChatID = t.ChatId
-	case *chatpb.JoinChatPaymentMetadata_RoomId:
-		paidChatID, err = s.chats.GetChatID(ctx, t.RoomId)
-		if errors.Is(err, ErrChatNotFound) {
-			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-		} else if err != nil {
-			s.log.Warn("Failed to get room", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to lookup room")
-		}
-	}
-
 	// Payment amount, source/destination accounts, etc. should already be
 	// validated by SubmitIntent against the FC servers before allowing the
 	// intent to go through. We do not need to verify again in this RPC.
 	if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
 		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	}
-	if !bytes.Equal(chatID.Value, paidChatID.Value) {
+	if !bytes.Equal(paymentMetadata.ChatId.Value, chatID.Value) {
 		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	}
 
