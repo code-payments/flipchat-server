@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	codecommon "github.com/code-payments/code-server/pkg/code/common"
+	codedata "github.com/code-payments/code-server/pkg/code/data"
+	codetestutil "github.com/code-payments/code-server/pkg/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -22,6 +25,7 @@ import (
 func TestServer(t *testing.T) {
 	store := NewInMemory()
 	profiles := profile.NewInMemory()
+	codeStores := codedata.NewTestDataProvider()
 
 	server := NewServer(
 		zap.Must(zap.NewDevelopment()),
@@ -36,6 +40,8 @@ func TestServer(t *testing.T) {
 
 	ctx := context.Background()
 	client := accountpb.NewAccountClient(cc)
+
+	codetestutil.SetupRandomSubsidizer(t, codeStores)
 
 	var keys []model.KeyPair
 	var userId *commonpb.UserId
@@ -254,6 +260,22 @@ func TestServer(t *testing.T) {
 		actual, err := store.GetPubKeys(ctx, userId)
 		require.NoError(t, err)
 		require.Len(t, actual, 1)
+	})
+
+	t.Run("GetPaymentDestination", func(t *testing.T) {
+		ownerAccount, err := codecommon.NewAccountFromPublicKeyBytes(keys[0].Public())
+		require.NoError(t, err)
+		expected, err := ownerAccount.ToTimelockVault(codecommon.CodeVmAccount, codecommon.KinMintAccount)
+		require.NoError(t, err)
+
+		req := &accountpb.GetPaymentDestinationRequest{
+			UserId: userId,
+		}
+
+		resp, err := client.GetPaymentDestination(ctx, req)
+		require.NoError(t, err)
+		require.Equal(t, accountpb.GetPaymentDestinationResponse_OK, resp.Result)
+		require.Equal(t, expected.PublicKey().ToBytes(), resp.PaymentDestination.Value)
 	})
 
 }

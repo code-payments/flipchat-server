@@ -4,8 +4,8 @@ go 1.23.0
 
 require (
 	github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84
-	github.com/code-payments/code-server v1.10.20-0.20241113150103-f6f79dc119df
-	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241113172803-d4ac5f74c4fc
+	github.com/code-payments/code-server v1.10.20-0.20241113221941-16bb545e1277
+	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241114151454-3e2808f9c0a7
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/mr-tron/base58 v1.2.0
@@ -37,6 +37,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.4 // indirect
 	github.com/newrelic/go-agent/v3 v3.20.1 // indirect
 	github.com/newrelic/go-agent/v3/integrations/nrpgx v1.0.0 // indirect
+	github.com/oschwald/maxminddb-golang v1.11.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect

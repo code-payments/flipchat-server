@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	codecommon "github.com/code-payments/code-server/pkg/code/common"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -185,4 +186,36 @@ func (s *Server) RevokePublicKey(ctx context.Context, req *accountpb.RevokePubli
 	}
 
 	return &accountpb.RevokePublicKeyResponse{}, nil
+}
+
+func (s *Server) GetPaymentDestination(ctx context.Context, req *accountpb.GetPaymentDestinationRequest) (*accountpb.GetPaymentDestinationResponse, error) {
+	authorized, err := s.store.GetPubKeys(ctx, req.UserId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get keys")
+	}
+
+	if len(authorized) == 0 {
+		return &accountpb.GetPaymentDestinationResponse{Result: accountpb.GetPaymentDestinationResponse_NOT_FOUND}, nil
+	}
+
+	if len(authorized) != 1 {
+		// todo: Handle multiple public keys. For now, each user gets one access key.
+		//       We'll also be implementing some form of public declaration of a
+		//       payment destination as well.
+		return nil, status.Errorf(codes.Internal, "multiple public keys")
+	}
+
+	ownerAccount, err := codecommon.NewAccountFromPublicKeyBytes(authorized[0].Value)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "invalid public key")
+	}
+	timelockAccount, err := ownerAccount.ToTimelockVault(codecommon.CodeVmAccount, codecommon.KinMintAccount)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to derive timelock vault")
+	}
+
+	return &accountpb.GetPaymentDestinationResponse{
+		Result:             accountpb.GetPaymentDestinationResponse_OK,
+		PaymentDestination: &commonpb.PublicKey{Value: timelockAccount.PublicKey().ToBytes()},
+	}, nil
 }
