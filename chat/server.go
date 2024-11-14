@@ -390,6 +390,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		return nil, err
 	}
 
+	// todo: need to dedup intent ID
 	var paymentMetadata chatpb.JoinChatPaymentMetadata
 	err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
 	if err == intent.ErrNoPaymentMetadata {
@@ -427,6 +428,9 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		}
 	}
 
+	// Payment amount, source/destination accounts, etc. should already be
+	// validated by SubmitIntent against the FC servers before allowing the
+	// intent to go through. We do not need to verify again in this RPC.
 	if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
 		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	}
