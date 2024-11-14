@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/mr-tron/base58"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -13,6 +12,7 @@ import (
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codeintent "github.com/code-payments/code-server/pkg/code/data/intent"
+	"github.com/code-payments/flipchat-server/model"
 )
 
 var (
@@ -20,7 +20,7 @@ var (
 )
 
 func LoadPaymentMetadata(ctx context.Context, codeData codedata.Provider, intentID *commonpb.IntentId, dst proto.Message) error {
-	intentRecord, err := codeData.GetIntent(ctx, base58.Encode(intentID.Value))
+	intentRecord, err := codeData.GetIntent(ctx, model.IntentIDString(intentID))
 	if err == codeintent.ErrIntentNotFound {
 		return ErrNoPaymentMetadata
 	} else if err != nil {

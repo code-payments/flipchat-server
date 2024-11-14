@@ -185,7 +185,6 @@ func TestServer(t *testing.T) {
 		require.Equal(t, chatpb.GetChatsResponse_OK, getAllResp.Result)
 		require.NoError(t, protoutil.ProtoEqualError(created.Chat, getAllResp.Chats[0]))
 
-		// todo: fix test
 		t.Run("Join and leave", func(t *testing.T) {
 			otherUser := model.MustGenerateUserID()
 			otherKeyPair := model.MustGenerateKeyPair()
@@ -205,11 +204,17 @@ func TestServer(t *testing.T) {
 				return bytes.Compare(a.UserId.Value, b.UserId.Value)
 			})
 
+			paymentMetadata := &chatpb.JoinChatPaymentMetadata{
+				UserId:     otherUser,
+				Identifier: &chatpb.JoinChatPaymentMetadata_ChatId{ChatId: created.Chat.GetChatId()},
+			}
+			intentID := testutil.CreatePayment(t, codeData, 200, paymentMetadata)
+
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
 				},
-				PaymentIntent: model.MustGenerateIntentID(),
+				PaymentIntent: intentID,
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 
@@ -234,11 +239,16 @@ func TestServer(t *testing.T) {
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
 			require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
 
+			paymentMetadata = &chatpb.JoinChatPaymentMetadata{
+				UserId:     otherUser,
+				Identifier: &chatpb.JoinChatPaymentMetadata_RoomId{RoomId: created.Chat.RoomNumber},
+			}
+			intentID = testutil.CreatePayment(t, codeData, 200, paymentMetadata)
 			join = &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_RoomId{
 					RoomId: created.Chat.RoomNumber,
 				},
-				PaymentIntent: model.MustGenerateIntentID(),
+				PaymentIntent: intentID,
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
