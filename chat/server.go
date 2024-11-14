@@ -21,8 +21,10 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
+	codedata "github.com/code-payments/code-server/pkg/code/data"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/profile"
@@ -45,6 +47,7 @@ type Server struct {
 	profiles profile.Store
 	messages messaging.MessageStore
 	pointers messaging.PointerStore
+	codeData codedata.Provider
 
 	streamsMu sync.RWMutex
 	streams   map[string]event.Stream[*event.ChatEvent]
@@ -59,6 +62,7 @@ func NewServer(
 	profiles profile.Store,
 	messages messaging.MessageStore,
 	pointers messaging.PointerStore,
+	codeData codedata.Provider,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
 ) *Server {
 	s := &Server{
@@ -70,6 +74,7 @@ func NewServer(
 		profiles: profiles,
 		pointers: pointers,
 		messages: messages,
+		codeData: codeData,
 
 		streams: make(map[string]event.Stream[*event.ChatEvent]),
 	}
@@ -385,6 +390,14 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		return nil, err
 	}
 
+	var joinChatPaymentMetdata chatpb.JoinChatPaymentMetadata
+	err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &joinChatPaymentMetdata)
+	if err == intent.ErrNoPaymentMetadata {
+		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+	} else if err != nil {
+		s.log.Warn("Failed to get payment metadata", zap.Error(err))
+	}
+
 	var chatID *commonpb.ChatId
 	switch t := req.Identifier.(type) {
 	case *chatpb.JoinChatRequest_ChatId:
@@ -397,6 +410,27 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			s.log.Warn("Failed to get room", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to lookup room")
 		}
+	}
+
+	var paidChatID *commonpb.ChatId
+	switch t := joinChatPaymentMetdata.Identifier.(type) {
+	case *chatpb.JoinChatPaymentMetadata_ChatId:
+		paidChatID = t.ChatId
+	case *chatpb.JoinChatPaymentMetadata_RoomId:
+		paidChatID, err = s.chats.GetChatID(ctx, t.RoomId)
+		if errors.Is(err, ErrChatNotFound) {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get room", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to lookup room")
+		}
+	}
+
+	if !bytes.Equal(joinChatPaymentMetdata.UserId.Value, userID.Value) {
+		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+	}
+	if !bytes.Equal(chatID.Value, paidChatID.Value) {
+		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	}
 
 	// TODO: Auth

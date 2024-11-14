@@ -22,6 +22,7 @@ import (
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 
+	codedata "github.com/code-payments/code-server/pkg/code/data"
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/messaging"
@@ -34,6 +35,7 @@ func TestServer(t *testing.T) {
 	accounts := account.NewInMemory()
 	messageDB := messaging.NewMemory()
 	profiles := profile.NewInMemory()
+	codeData := codedata.NewTestDataProvider()
 
 	userID := model.MustGenerateUserID()
 	keyPair := model.MustGenerateKeyPair()
@@ -50,6 +52,7 @@ func TestServer(t *testing.T) {
 		profiles,
 		messageDB,
 		messageDB,
+		codeData,
 		bus,
 	)
 
@@ -182,6 +185,7 @@ func TestServer(t *testing.T) {
 		require.Equal(t, chatpb.GetChatsResponse_OK, getAllResp.Result)
 		require.NoError(t, protoutil.ProtoEqualError(created.Chat, getAllResp.Chats[0]))
 
+		// todo: fix test
 		t.Run("Join and leave", func(t *testing.T) {
 			otherUser := model.MustGenerateUserID()
 			otherKeyPair := model.MustGenerateKeyPair()
