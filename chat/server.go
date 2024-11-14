@@ -390,12 +390,13 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		return nil, err
 	}
 
-	var joinChatPaymentMetdata chatpb.JoinChatPaymentMetadata
-	err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &joinChatPaymentMetdata)
+	var paymentMetadata chatpb.JoinChatPaymentMetadata
+	err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
 	if err == intent.ErrNoPaymentMetadata {
 		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	} else if err != nil {
 		s.log.Warn("Failed to get payment metadata", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
 	}
 
 	var chatID *commonpb.ChatId
@@ -413,7 +414,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	}
 
 	var paidChatID *commonpb.ChatId
-	switch t := joinChatPaymentMetdata.Identifier.(type) {
+	switch t := paymentMetadata.Identifier.(type) {
 	case *chatpb.JoinChatPaymentMetadata_ChatId:
 		paidChatID = t.ChatId
 	case *chatpb.JoinChatPaymentMetadata_RoomId:
@@ -426,7 +427,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		}
 	}
 
-	if !bytes.Equal(joinChatPaymentMetdata.UserId.Value, userID.Value) {
+	if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
 		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	}
 	if !bytes.Equal(chatID.Value, paidChatID.Value) {
