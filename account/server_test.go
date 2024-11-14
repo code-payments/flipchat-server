@@ -4,9 +4,6 @@ import (
 	"context"
 	"testing"
 
-	codecommon "github.com/code-payments/code-server/pkg/code/common"
-	codedata "github.com/code-payments/code-server/pkg/code/data"
-	codetestutil "github.com/code-payments/code-server/pkg/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -15,6 +12,9 @@ import (
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
+	codecommon "github.com/code-payments/code-server/pkg/code/common"
+	codedata "github.com/code-payments/code-server/pkg/code/data"
+	codetestutil "github.com/code-payments/code-server/pkg/testutil"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/profile"

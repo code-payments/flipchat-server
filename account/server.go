@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	codecommon "github.com/code-payments/code-server/pkg/code/common"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,6 +13,7 @@ import (
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
+	codecommon "github.com/code-payments/code-server/pkg/code/common"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/profile"
