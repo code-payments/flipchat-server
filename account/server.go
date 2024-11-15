@@ -14,6 +14,7 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
 	codecommon "github.com/code-payments/code-server/pkg/code/common"
+	codekin "github.com/code-payments/code-server/pkg/kin"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/profile"
@@ -217,5 +218,39 @@ func (s *Server) GetPaymentDestination(ctx context.Context, req *accountpb.GetPa
 	return &accountpb.GetPaymentDestinationResponse{
 		Result:             accountpb.GetPaymentDestinationResponse_OK,
 		PaymentDestination: &commonpb.PublicKey{Value: timelockAccount.PublicKey().ToBytes()},
+	}, nil
+}
+
+func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRequest) (*accountpb.GetUserFlagsResponse, error) {
+	authorized, err := s.store.GetPubKeys(ctx, req.UserId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get keys")
+	}
+
+	if len(authorized) == 0 {
+		// Don't leak that the user does not exist.
+		return &accountpb.GetUserFlagsResponse{Result: accountpb.GetUserFlagsResponse_DENIED}, nil
+	}
+
+	var signerAuthorized bool
+	for _, key := range authorized {
+		if bytes.Equal(key.Value, req.GetAuth().GetKeyPair().PubKey.Value) {
+			signerAuthorized = true
+			break
+		}
+	}
+
+	if !signerAuthorized {
+		return &accountpb.GetUserFlagsResponse{Result: accountpb.GetUserFlagsResponse_DENIED}, nil
+	}
+
+	return &accountpb.GetUserFlagsResponse{
+		Result: accountpb.GetUserFlagsResponse_OK,
+		UserFlags: &accountpb.UserFlags{
+			IsStaff: false, // todo: implement staff flag
+			StartGroupCost: &commonpb.PaymentAmount{
+				Quarks: codekin.ToQuarks(200),
+			},
+		},
 	}, nil
 }
