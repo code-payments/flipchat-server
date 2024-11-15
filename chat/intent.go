@@ -44,10 +44,10 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 			ErrorDescription: "payment must be public",
 		}, nil
 	}
-	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != codekin.ToQuarks(200) {
+	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != codekin.ToQuarks(100) {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
-			ErrorDescription: "join chat cost is 200 kin",
+			ErrorDescription: "join chat cost is 100 kin",
 		}, nil
 	}
 
