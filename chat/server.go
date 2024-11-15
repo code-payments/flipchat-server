@@ -22,6 +22,7 @@ import (
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
+	codekin "github.com/code-payments/code-server/pkg/kin"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/intent"
@@ -320,11 +321,12 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 	case *chatpb.StartChatRequest_GroupChat:
 		// Need to do this transactionally...but we've lost it...so...heh :)
 		md = &chatpb.Metadata{
-			ChatId:   model.MustGenerateChatID(),
-			Type:     chatpb.Metadata_GROUP,
-			Title:    t.GroupChat.Title,
-			Muteable: true,
-			Owner:    userID,
+			ChatId:      model.MustGenerateChatID(),
+			Type:        chatpb.Metadata_GROUP,
+			Title:       t.GroupChat.Title,
+			Muteable:    true,
+			Owner:       userID,
+			CoverCharge: &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(100)},
 		}
 
 		users = append(t.GroupChat.Users, userID)
@@ -527,6 +529,36 @@ func (s *Server) SetMuteState(ctx context.Context, req *chatpb.SetMuteStateReque
 	}
 
 	return &chatpb.SetMuteStateResponse{}, nil
+}
+
+func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeRequest) (*chatpb.SetCoverChargeResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	md, err := s.chats.GetChatMetadata(ctx, req.ChatId)
+	if err == ErrChatNotFound {
+		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
+	} else if err != nil {
+		s.log.Warn("Failed to get chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat")
+	}
+
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
+		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
+	}
+	if md.CoverCharge == nil {
+		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_CANT_SET}, nil
+	}
+
+	err = s.chats.SetCoverCharge(ctx, req.ChatId, req.CoverCharge)
+	if err != nil {
+		s.log.Warn("Failed to set cover charge", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to set cover charge")
+	}
+
+	return &chatpb.SetCoverChargeResponse{}, nil
 }
 
 func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {

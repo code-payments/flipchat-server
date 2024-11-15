@@ -255,3 +255,17 @@ func (s *InMemoryStore) GetMuteState(_ context.Context, chatID *commonpb.ChatId,
 
 	return false, ErrMemberNotFound
 }
+
+func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	md, ok := s.chats[string(chatID.Value)]
+	if !ok {
+		return ErrChatNotFound
+	}
+
+	md.CoverCharge = proto.Clone(coverCharge).(*commonpb.PaymentAmount)
+
+	return nil
+}

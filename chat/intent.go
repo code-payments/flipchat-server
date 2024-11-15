@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
@@ -12,7 +13,6 @@ import (
 	codecommon "github.com/code-payments/code-server/pkg/code/common"
 	codeintent "github.com/code-payments/code-server/pkg/code/data/intent"
 	codecurrency "github.com/code-payments/code-server/pkg/currency"
-	codekin "github.com/code-payments/code-server/pkg/kin"
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/intent"
 )
@@ -35,19 +35,11 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		return nil, errors.New("unexepected custom metadata")
 	}
 
-	// Payment must be public for exactly 200 Kin
-	//
-	// todo: Dynamic check when we have configurable cover charges
+	// Payment must be public
 	if intentRecord.IntentType != codeintent.SendPublicPayment {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "payment must be public",
-		}, nil
-	}
-	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != codekin.ToQuarks(100) {
-		return &intent.ValidationResult{
-			StatusCode:       intent.INVALID,
-			ErrorDescription: "join chat cost is 100 kin",
 		}, nil
 	}
 
@@ -85,6 +77,22 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		}, nil
 	} else if err != nil {
 		return nil, err
+	}
+
+	// Chat must enforce a cover charge
+	if chat.CoverCharge == nil {
+		return &intent.ValidationResult{
+			StatusCode:       intent.INVALID,
+			ErrorDescription: "chat does not have a cover charge",
+		}, nil
+	}
+
+	// Payment amount must be exactly the cover charge
+	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != chat.CoverCharge.Quarks {
+		return &intent.ValidationResult{
+			StatusCode:       intent.INVALID,
+			ErrorDescription: fmt.Sprintf("cover charge is %d quarks", chat.CoverCharge.Quarks),
+		}, nil
 	}
 
 	// The paying user must pay for their own join
