@@ -20,6 +20,27 @@ func SliceEqualError[T proto.Message](a, b []T) error {
 	return nil
 }
 
+func SetEqualError[T proto.Message](a, b []T) error {
+	if len(a) != len(b) {
+		return fmt.Errorf("len(%d) != len(%d)", len(a), len(b))
+	}
+
+	for i := 0; i < len(a); i++ {
+		found := false
+		for j := 0; j < len(b); j++ {
+			if proto.Equal(a[i], b[j]) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("missing[%d]: %v", i, a[i])
+		}
+	}
+
+	return nil
+}
+
 func ProtoEqualError(a, b proto.Message) error {
 	if !proto.Equal(a, b) {
 		return fmt.Errorf("expected: %v\nactual: %v\n", a, b)

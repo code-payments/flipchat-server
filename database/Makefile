@@ -42,3 +42,8 @@ push:
 # Pull the database schema into Prisma schema
 pull:
 	go run github.com/steebchen/prisma-client-go db pull
+
+# Run a local test database using Docker
+# (don't use this running golang tests, those spin up their own db)
+db:
+	docker run --name my-postgres -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d postgres

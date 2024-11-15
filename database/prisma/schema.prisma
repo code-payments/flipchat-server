@@ -14,8 +14,8 @@ generator db {
 // }
 
 model User {
-    id          String   @id @default(uuid())
-    displayName String
+    id          String   @id
+    displayName String?
     publicKeys  PublicKey[]
 
     @@map("flipchat_users")

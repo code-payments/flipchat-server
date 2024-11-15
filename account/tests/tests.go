@@ -51,7 +51,7 @@ func testRoundTrip(t *testing.T, s account.Store) {
 
 	actual, err := s.GetPubKeys(ctx, user)
 	require.NoError(t, err)
-	require.NoError(t, protoutil.SliceEqualError(actual, keyPairs))
+	require.NoError(t, protoutil.SetEqualError(actual, keyPairs))
 
 	for i := range keyPairs {
 		authorized, err := s.IsAuthorized(ctx, user, keyPairs[i])

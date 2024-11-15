@@ -1,7 +1,6 @@
-package database
+package postgres
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -10,6 +9,8 @@ import (
 
 	postgrestest "github.com/code-payments/flipchat-server/database/postgres/test"
 	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
+
+	"github.com/code-payments/flipchat-server/account/tests"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
@@ -55,16 +56,13 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestCheckForMigrations(t *testing.T) {
-	client, cleanFn := prismatest.NewTestClient(databaseUrl, t)
-	defer cleanFn()
+func TestAccount_Postgres(t *testing.T) {
+	client, disconnect := prismatest.NewTestClient(databaseUrl, t)
+	defer disconnect()
 
-	// Here we check for the existence of the _prisma_migrations table using the
-	// prisma client.
-
-	ctx := context.Background()
-	_, err := client.Prisma.ExecuteRaw("SELECT * FROM _prisma_migrations").Exec(ctx)
-	if err != nil {
-		t.Fatalf("Error checking for migrations: %v", err)
+	testStore := NewPostgres(client)
+	teardown := func() {
+		testStore.(*store).reset()
 	}
+	tests.RunTests(t, testStore, teardown)
 }
