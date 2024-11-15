@@ -23,6 +23,8 @@ import (
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 
+	codedata "github.com/code-payments/code-server/pkg/code/data"
+	codekin "github.com/code-payments/code-server/pkg/kin"
 	"github.com/code-payments/flipchat-server/account/memory"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/messaging"
@@ -35,6 +37,7 @@ func TestServer(t *testing.T) {
 	accounts := memory.NewInMemory()
 	messageDB := messaging.NewMemory()
 	profiles := profile.NewInMemory()
+	codeData := codedata.NewTestDataProvider()
 
 	userID := model.MustGenerateUserID()
 	keyPair := model.MustGenerateKeyPair()
@@ -51,6 +54,7 @@ func TestServer(t *testing.T) {
 		profiles,
 		messageDB,
 		messageDB,
+		codeData,
 		bus,
 	)
 
@@ -116,6 +120,7 @@ func TestServer(t *testing.T) {
 		require.Equal(t, "My Fun Group!", created.Chat.Title)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
+		require.Equal(t, codekin.ToQuarks(100), created.Chat.CoverCharge.Quarks)
 
 		expectedMembers := []*chatpb.Member{{
 			UserId: userID,
@@ -202,11 +207,17 @@ func TestServer(t *testing.T) {
 				return bytes.Compare(a.UserId.Value, b.UserId.Value)
 			})
 
+			paymentMetadata := &chatpb.JoinChatPaymentMetadata{
+				UserId: otherUser,
+				ChatId: created.Chat.ChatId,
+			}
+			intentID := testutil.CreatePayment(t, codeData, 200, paymentMetadata)
+
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
 				},
-				PaymentIntent: model.MustGenerateIntentID(),
+				PaymentIntent: intentID,
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 
@@ -231,16 +242,44 @@ func TestServer(t *testing.T) {
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
 			require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
 
+			paymentMetadata = &chatpb.JoinChatPaymentMetadata{
+				UserId: otherUser,
+				ChatId: created.Chat.ChatId,
+			}
+			intentID = testutil.CreatePayment(t, codeData, 200, paymentMetadata)
 			join = &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_RoomId{
 					RoomId: created.Chat.RoomNumber,
 				},
-				PaymentIntent: model.MustGenerateIntentID(),
+				PaymentIntent: intentID,
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
 			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
+		})
+
+		t.Run("Set cover charge", func(t *testing.T) {
+			setCoverCharge := &chatpb.SetCoverChargeRequest{
+				ChatId:      created.Chat.ChatId,
+				CoverCharge: &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(500)},
+			}
+			require.NoError(t, keyPair.Auth(setCoverCharge, &setCoverCharge.Auth))
+
+			setCoverChargeResp, err := client.SetCoverCharge(context.Background(), setCoverCharge)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.SetCoverChargeResponse_OK, setCoverChargeResp.Result)
+
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, keyPair.Auth(getByID, &getByID.Auth))
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.NoError(t, protoutil.ProtoEqualError(setCoverCharge.CoverCharge, get.Metadata.CoverCharge))
 		})
 	})
 
@@ -396,9 +435,14 @@ func TestServer(t *testing.T) {
 		startedOther, err := client.StartChat(ctx, start)
 		require.NoError(t, err)
 
+		paymentMetadata := &chatpb.JoinChatPaymentMetadata{
+			UserId: streamUser,
+			ChatId: startedOther.Chat.ChatId,
+		}
+		intentID := testutil.CreatePayment(t, codeData, 200, paymentMetadata)
 		join := &chatpb.JoinChatRequest{
 			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
-			PaymentIntent: model.MustGenerateIntentID(),
+			PaymentIntent: intentID,
 		}
 		require.NoError(t, streamKeyPair.Auth(join, &join.Auth))
 

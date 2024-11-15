@@ -21,8 +21,11 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
+	codedata "github.com/code-payments/code-server/pkg/code/data"
+	codekin "github.com/code-payments/code-server/pkg/kin"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/profile"
@@ -45,6 +48,7 @@ type Server struct {
 	profiles profile.Store
 	messages messaging.MessageStore
 	pointers messaging.PointerStore
+	codeData codedata.Provider
 
 	streamsMu sync.RWMutex
 	streams   map[string]event.Stream[*event.ChatEvent]
@@ -59,6 +63,7 @@ func NewServer(
 	profiles profile.Store,
 	messages messaging.MessageStore,
 	pointers messaging.PointerStore,
+	codeData codedata.Provider,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
 ) *Server {
 	s := &Server{
@@ -70,6 +75,7 @@ func NewServer(
 		profiles: profiles,
 		pointers: pointers,
 		messages: messages,
+		codeData: codeData,
 
 		streams: make(map[string]event.Stream[*event.ChatEvent]),
 	}
@@ -315,11 +321,12 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 	case *chatpb.StartChatRequest_GroupChat:
 		// Need to do this transactionally...but we've lost it...so...heh :)
 		md = &chatpb.Metadata{
-			ChatId:   model.MustGenerateChatID(),
-			Type:     chatpb.Metadata_GROUP,
-			Title:    t.GroupChat.Title,
-			Muteable: true,
-			Owner:    userID,
+			ChatId:      model.MustGenerateChatID(),
+			Type:        chatpb.Metadata_GROUP,
+			Title:       t.GroupChat.Title,
+			Muteable:    true,
+			Owner:       userID,
+			CoverCharge: &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(100)},
 		}
 
 		users = append(t.GroupChat.Users, userID)
@@ -385,6 +392,21 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		return nil, err
 	}
 
+	hasPaymentIntent := req.PaymentIntent != nil
+	var paymentMetadata chatpb.JoinChatPaymentMetadata
+
+	// todo: need to dedup intent ID when we implement booting
+
+	if hasPaymentIntent {
+		err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
+		if err == intent.ErrNoPaymentMetadata {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get payment metadata", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
+		}
+	}
+
 	var chatID *commonpb.ChatId
 	switch t := req.Identifier.(type) {
 	case *chatpb.JoinChatRequest_ChatId:
@@ -396,6 +418,32 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		} else if err != nil {
 			s.log.Warn("Failed to get room", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to lookup room")
+		}
+	}
+
+	if hasPaymentIntent {
+		// Verify the provided payment is for this user joining the specified
+		// chat.
+		//
+		// Payment amount, source/destination accounts, etc. should already be
+		// validated by SubmitIntent against the FC servers before allowing the
+		// intent to go through. We do not need to verify again in this RPC.
+		if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		}
+		if !bytes.Equal(paymentMetadata.ChatId.Value, chatID.Value) {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		}
+	} else {
+		chatMetadata, err := s.chats.GetChatMetadata(ctx, chatID)
+		if err != nil {
+			s.log.Warn("Failed to get chat", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to get chat")
+		}
+
+		// Only the owner of the chat can join without payment
+		if chatMetadata.Owner == nil || !bytes.Equal(chatMetadata.Owner.Value, userID.Value) {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 		}
 	}
 
@@ -481,6 +529,36 @@ func (s *Server) SetMuteState(ctx context.Context, req *chatpb.SetMuteStateReque
 	}
 
 	return &chatpb.SetMuteStateResponse{}, nil
+}
+
+func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeRequest) (*chatpb.SetCoverChargeResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	md, err := s.chats.GetChatMetadata(ctx, req.ChatId)
+	if err == ErrChatNotFound {
+		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
+	} else if err != nil {
+		s.log.Warn("Failed to get chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat")
+	}
+
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
+		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
+	}
+	if md.CoverCharge == nil {
+		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_CANT_SET}, nil
+	}
+
+	err = s.chats.SetCoverCharge(ctx, req.ChatId, req.CoverCharge)
+	if err != nil {
+		s.log.Warn("Failed to set cover charge", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to set cover charge")
+	}
+
+	return &chatpb.SetCoverChargeResponse{}, nil
 }
 
 func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
