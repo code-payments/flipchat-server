@@ -105,9 +105,8 @@ func TestServer(t *testing.T) {
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
-					Users:         otherUsers,
-					Title:         "My Fun Group!",
-					PaymentIntent: model.MustGenerateIntentID(),
+					Users: otherUsers,
+					Title: "My Fun Group!",
 				},
 			},
 		}
@@ -370,9 +369,8 @@ func TestServer(t *testing.T) {
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
-					Title:         "my-title",
-					Users:         []*commonpb.UserId{userID},
-					PaymentIntent: model.MustGenerateIntentID(),
+					Title: "my-title",
+					Users: []*commonpb.UserId{userID},
 				},
 			},
 		}
@@ -411,9 +409,14 @@ func TestServer(t *testing.T) {
 		startedOther, err := client.StartChat(ctx, start)
 		require.NoError(t, err)
 
+		paymentMetadata := &chatpb.JoinChatPaymentMetadata{
+			UserId: streamUser,
+			ChatId: startedOther.Chat.ChatId,
+		}
+		intentID := testutil.CreatePayment(t, codeData, 200, paymentMetadata)
 		join := &chatpb.JoinChatRequest{
 			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
-			PaymentIntent: model.MustGenerateIntentID(),
+			PaymentIntent: intentID,
 		}
 		require.NoError(t, streamKeyPair.Auth(join, &join.Auth))
 
