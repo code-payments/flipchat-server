@@ -1,4 +1,4 @@
-package account
+package memory
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
@@ -23,7 +24,7 @@ func TestAuthorizer(t *testing.T) {
 	store := NewInMemory()
 	authn := auth.NewKeyPairAuthenticator()
 
-	authz := NewAuthorizer(log, store, authn)
+	authz := account.NewAuthorizer(log, store, authn)
 
 	userID := model.MustGenerateUserID()
 	signer := model.MustGenerateKeyPair()

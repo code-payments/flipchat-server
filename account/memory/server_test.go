@@ -1,4 +1,4 @@
-package account
+package memory
 
 import (
 	"context"
@@ -15,6 +15,9 @@ import (
 	codecommon "github.com/code-payments/code-server/pkg/code/common"
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codetestutil "github.com/code-payments/code-server/pkg/testutil"
+
+	"github.com/code-payments/flipchat-server/account"
+
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/profile"
@@ -27,7 +30,7 @@ func TestServer(t *testing.T) {
 	profiles := profile.NewInMemory()
 	codeStores := codedata.NewTestDataProvider()
 
-	server := NewServer(
+	server := account.NewServer(
 		zap.Must(zap.NewDevelopment()),
 		store,
 		profiles,

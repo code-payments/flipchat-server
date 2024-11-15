@@ -18,11 +18,12 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 
-	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/account/memory"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/profile"
@@ -31,7 +32,7 @@ import (
 
 func TestServer(t *testing.T) {
 	log := zap.Must(zap.NewDevelopment())
-	accounts := account.NewInMemory()
+	accounts := memory.NewInMemory()
 	messageDB := messaging.NewMemory()
 	profiles := profile.NewInMemory()
 

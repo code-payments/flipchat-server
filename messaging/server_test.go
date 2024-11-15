@@ -19,6 +19,7 @@ import (
 	"github.com/code-payments/flipchat-server/protoutil"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/account/memory"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/testutil"
@@ -29,7 +30,7 @@ type testAuthn struct {
 
 func TestServerHappy(t *testing.T) {
 	log := zap.Must(zap.NewDevelopment())
-	accountStore := account.NewInMemory()
+	accountStore := memory.NewInMemory()
 	authz := account.NewAuthorizer(log, accountStore, auth.NewKeyPairAuthenticator())
 	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
 		return id.Value
@@ -180,7 +181,7 @@ func TestServerHappy(t *testing.T) {
 
 func TestServerDuplicateStreams(t *testing.T) {
 	log := zap.Must(zap.NewDevelopment())
-	accountStore := account.NewInMemory()
+	accountStore := memory.NewInMemory()
 	authz := account.NewAuthorizer(log, accountStore, auth.NewKeyPairAuthenticator())
 	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
 		return id.Value

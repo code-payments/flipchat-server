@@ -1,0 +1,30 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator db {
+  provider = "go run github.com/steebchen/prisma-client-go"
+}
+
+// Uncomment to generate Prisma Client JS (required for the studio)
+// (https://github.com/steebchen/prisma-client-go/issues/455)
+// generator js {
+//   provider = "prisma-client-js"
+// }
+
+model User {
+    id          String   @id @default(uuid())
+    displayName String
+    publicKeys  PublicKey[]
+
+    @@map("flipchat_users")
+}
+
+model PublicKey {
+    key       String @id
+    user      User   @relation(fields: [userId], references: [id])
+    userId    String
+
+    @@map("flipchat_publickeys")
+}

@@ -29,3 +29,8 @@ build/
 # Jetbrains
 .idea/
 
+# Node.js
+node_modules/
+
+# Environment / Config files
+.env

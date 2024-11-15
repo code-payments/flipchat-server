@@ -1,4 +1,4 @@
-package account
+package tests
 
 import (
 	"context"
@@ -11,10 +11,20 @@ import (
 
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
+
+	"github.com/code-payments/flipchat-server/account"
 )
 
-func TestStore(t *testing.T) {
-	store := NewInMemory()
+func RunTests(t *testing.T, s account.Store, teardown func()) {
+	for _, tf := range []func(t *testing.T, s account.Store){
+		testRoundTrip,
+	} {
+		tf(t, s)
+		teardown()
+	}
+}
+
+func testRoundTrip(t *testing.T, s account.Store) {
 	ctx := context.Background()
 
 	user := model.MustGenerateUserID()
@@ -22,41 +32,43 @@ func TestStore(t *testing.T) {
 	for i := range keyPairs {
 		keyPairs[i] = model.MustGenerateKeyPair().Proto()
 
-		_, err := store.GetUserId(ctx, keyPairs[i])
-		require.ErrorIs(t, err, ErrNotFound)
+		_, err := s.GetUserId(ctx, keyPairs[i])
+		require.ErrorIs(t, err, account.ErrNotFound)
 
-		actual, err := store.Bind(ctx, user, keyPairs[i])
+		actual, err := s.Bind(ctx, user, keyPairs[i])
 		require.NoError(t, err)
 		require.True(t, proto.Equal(user, actual))
 
-		actual, err = store.GetUserId(ctx, keyPairs[i])
+		actual, err = s.GetUserId(ctx, keyPairs[i])
 		require.NoError(t, err)
 		require.True(t, proto.Equal(user, actual))
 
 		// Cannot rebind without revoking first
-		actual, err = store.Bind(ctx, model.MustGenerateUserID(), keyPairs[i])
+		actual, err = s.Bind(ctx, model.MustGenerateUserID(), keyPairs[i])
 		require.NoError(t, err)
 		require.True(t, proto.Equal(user, actual))
 	}
 
-	actual, err := store.GetPubKeys(ctx, user)
+	actual, err := s.GetPubKeys(ctx, user)
 	require.NoError(t, err)
 	require.NoError(t, protoutil.SliceEqualError(actual, keyPairs))
 
 	for i := range keyPairs {
-		authorized, err := store.IsAuthorized(ctx, user, keyPairs[i])
+		authorized, err := s.IsAuthorized(ctx, user, keyPairs[i])
 		require.NoError(t, err)
 		require.True(t, authorized)
 
-		require.NoError(t, store.RemoveKey(ctx, user, keyPairs[i]))
+		require.NoError(t, s.RemoveKey(ctx, user, keyPairs[i]))
 
-		_, err = store.GetUserId(ctx, keyPairs[i])
-		require.ErrorIs(t, err, ErrNotFound)
+		_, err = s.GetUserId(ctx, keyPairs[i])
+		require.ErrorIs(t, err, account.ErrNotFound)
 
-		authorized, err = store.IsAuthorized(ctx, user, keyPairs[i])
+		authorized, err = s.IsAuthorized(ctx, user, keyPairs[i])
 		require.NoError(t, err)
 		require.False(t, authorized)
 
-		require.NoError(t, store.RemoveKey(ctx, user, keyPairs[i]))
+		require.NoError(t, s.RemoveKey(ctx, user, keyPairs[i]))
 	}
+
+	t.Logf("testRoundTrip: %d key pairs", len(keyPairs))
 }
