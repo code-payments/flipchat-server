@@ -48,7 +48,7 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		return nil, err
 	}
 
-	receivingOwner, err := codecommon.NewAccountFromPublicKeyString(intentRecord.SendPrivatePaymentMetadata.DestinationOwnerAccount)
+	paidOwner, err := codecommon.NewAccountFromPublicKeyString(intentRecord.SendPrivatePaymentMetadata.DestinationOwnerAccount)
 	if err != nil {
 		return nil, err
 	}
@@ -69,11 +69,11 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		return nil, err
 	}
 
-	receivingUser, err := h.accounts.GetUserId(ctx, &commonpb.PublicKey{Value: receivingOwner.PublicKey().ToBytes()})
+	paidUser, err := h.accounts.GetUserId(ctx, &commonpb.PublicKey{Value: paidOwner.PublicKey().ToBytes()})
 	if err == account.ErrNotFound {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
-			ErrorDescription: "receiving user not found",
+			ErrorDescription: "paid user not found",
 		}, nil
 	} else if err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 	}
 
 	// The payment must go to the current chat owner
-	if !bytes.Equal(receivingUser.Value, chat.Owner.Value) {
+	if !bytes.Equal(paidUser.Value, chat.Owner.Value) {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "payment must go to chat owner",
