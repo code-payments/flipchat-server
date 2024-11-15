@@ -390,14 +390,19 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		return nil, err
 	}
 
-	// todo: need to dedup intent ID when we implement booting
+	hasPaymentIntent := req.PaymentIntent != nil
 	var paymentMetadata chatpb.JoinChatPaymentMetadata
-	err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
-	if err == intent.ErrNoPaymentMetadata {
-		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-	} else if err != nil {
-		s.log.Warn("Failed to get payment metadata", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
+
+	// todo: need to dedup intent ID when we implement booting
+
+	if hasPaymentIntent {
+		err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
+		if err == intent.ErrNoPaymentMetadata {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get payment metadata", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
+		}
 	}
 
 	var chatID *commonpb.ChatId
@@ -414,14 +419,30 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		}
 	}
 
-	// Payment amount, source/destination accounts, etc. should already be
-	// validated by SubmitIntent against the FC servers before allowing the
-	// intent to go through. We do not need to verify again in this RPC.
-	if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
-		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-	}
-	if !bytes.Equal(paymentMetadata.ChatId.Value, chatID.Value) {
-		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+	if hasPaymentIntent {
+		// Verify the provided payment is for this user joining the specified
+		// chat.
+		//
+		// Payment amount, source/destination accounts, etc. should already be
+		// validated by SubmitIntent against the FC servers before allowing the
+		// intent to go through. We do not need to verify again in this RPC.
+		if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		}
+		if !bytes.Equal(paymentMetadata.ChatId.Value, chatID.Value) {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		}
+	} else {
+		chatMetadata, err := s.chats.GetChatMetadata(ctx, chatID)
+		if err != nil {
+			s.log.Warn("Failed to get chat", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to get chat")
+		}
+
+		// Only the owner of the chat can join without payment
+		if chatMetadata.Owner == nil || !bytes.Equal(chatMetadata.Owner.Value, userID.Value) {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		}
 	}
 
 	// TODO: Auth

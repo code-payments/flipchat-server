@@ -105,8 +105,9 @@ func TestServer(t *testing.T) {
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
-					Users: otherUsers,
-					Title: "My Fun Group!",
+					Users:         otherUsers,
+					Title:         "My Fun Group!",
+					PaymentIntent: model.MustGenerateIntentID(),
 				},
 			},
 		}
@@ -369,8 +370,9 @@ func TestServer(t *testing.T) {
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
-					Title: "my-title",
-					Users: []*commonpb.UserId{userID},
+					Title:         "my-title",
+					Users:         []*commonpb.UserId{userID},
+					PaymentIntent: model.MustGenerateIntentID(),
 				},
 			},
 		}
