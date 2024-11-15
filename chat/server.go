@@ -390,7 +390,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		return nil, err
 	}
 
-	// todo: need to dedup intent ID
+	// todo: need to dedup intent ID when we implement booting
 	var paymentMetadata chatpb.JoinChatPaymentMetadata
 	err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
 	if err == intent.ErrNoPaymentMetadata {
