@@ -22,28 +22,11 @@ func NewPostgres(client *db.PrismaClient) account.Store {
 }
 
 func (s *store) reset() {
+	s.client.PublicKey.FindMany().Delete().Exec(context.Background())
 	s.client.User.FindMany().Delete().Exec(context.Background())
 }
 
-func (s *store) Bind(_ context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
-	/*
-		// in-memory implementation
-
-		if prev, ok := m.keys[string(pubKey.Value)]; ok {
-			return &commonpb.UserId{Value: []byte(prev)}, nil
-		}
-
-		keys := m.users[string(userID.Value)]
-		keys = append(keys, string(pubKey.Value))
-		m.users[string(userID.Value)] = keys
-
-		m.keys[string(pubKey.Value)] = string(userID.Value)
-		return proto.Clone(userID).(*commonpb.UserId), nil
-	*/
-
-	// postgres implementation
-
-	ctx := context.Background()
+func (s *store) Bind(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
 
 	// Check if this pubkey is already bound to a user
 	key, err := s.client.PublicKey.FindUnique(
@@ -95,20 +78,7 @@ func (s *store) Bind(_ context.Context, userID *commonpb.UserId, pubKey *commonp
 	return &commonpb.UserId{Value: userID.Value}, nil
 }
 
-func (s *store) GetUserId(_ context.Context, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
-	/*
-		// in-memory implementation
-		userID, ok := m.keys[string(pubKey.Value)]
-		if !ok {
-			return nil, account.ErrNotFound
-		}
-
-		return &commonpb.UserId{Value: []byte(userID)}, nil
-	*/
-
-	// postgres implementation
-
-	ctx := context.Background()
+func (s *store) GetUserId(ctx context.Context, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
 
 	key, err := s.client.PublicKey.FindFirst(
 		db.PublicKey.Key.Equals(pg.Encode(pubKey.Value)),
@@ -126,20 +96,7 @@ func (s *store) GetUserId(_ context.Context, pubKey *commonpb.PublicKey) (*commo
 	return &commonpb.UserId{Value: val}, nil
 }
 
-func (s *store) GetPubKeys(_ context.Context, userID *commonpb.UserId) ([]*commonpb.PublicKey, error) {
-	/*
-		// in-memory implementation
-		var keys []*commonpb.PublicKey
-		for _, key := range m.users[string(userID.Value)] {
-			keys = append(keys, &commonpb.PublicKey{Value: []byte(key)})
-		}
-
-		return keys, nil
-	*/
-
-	// postgres implementation
-
-	ctx := context.Background()
+func (s *store) GetPubKeys(ctx context.Context, userID *commonpb.UserId) ([]*commonpb.PublicKey, error) {
 
 	keys, err := s.client.PublicKey.FindMany(
 		db.PublicKey.UserID.Equals(pg.Encode(userID.Value)),
@@ -165,25 +122,7 @@ func (s *store) GetPubKeys(_ context.Context, userID *commonpb.UserId) ([]*commo
 	return pbKeys, nil
 }
 
-func (s *store) RemoveKey(_ context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) error {
-	/*
-		// in-memory implementation
-		boundUserID, exists := m.keys[string(pubKey.Value)]
-		if !exists || boundUserID != string(userID.Value) {
-			return nil
-		}
-
-		delete(m.keys, string(pubKey.Value))
-		keys := m.users[string(userID.Value)]
-		keys = slices.DeleteFunc(keys, func(e string) bool {
-			return e == string(pubKey.Value)
-		})
-		m.users[string(userID.Value)] = keys
-	*/
-
-	// postgres implementation
-
-	ctx := context.Background()
+func (s *store) RemoveKey(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) error {
 
 	_, err := s.client.PublicKey.FindMany(
 		db.PublicKey.UserID.Equals(pg.Encode(userID.Value)),
@@ -194,22 +133,6 @@ func (s *store) RemoveKey(_ context.Context, userID *commonpb.UserId, pubKey *co
 }
 
 func (s *store) IsAuthorized(_ context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (bool, error) {
-	/*
-		keys, ok := m.users[string(userID.Value)]
-		if !ok {
-			return false, nil
-		}
-
-		for _, key := range keys {
-			if bytes.Equal([]byte(key), pubKey.Value) {
-				return true, nil
-			}
-		}
-
-		return false, nil
-	*/
-
-	// postgres implementation
 
 	ctx := context.Background()
 
