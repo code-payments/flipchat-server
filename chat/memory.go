@@ -234,7 +234,7 @@ func (s *InMemoryStore) SetMuteState(_ context.Context, chatID *commonpb.ChatId,
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
 		if bytes.Equal(m.UserID.Value, member.Value) {
-			m.IsMuted = isMuted
+			m.HasMuted = isMuted
 			return nil
 		}
 	}
@@ -249,7 +249,7 @@ func (s *InMemoryStore) GetMuteState(_ context.Context, chatID *commonpb.ChatId,
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
 		if bytes.Equal(m.UserID.Value, member.Value) {
-			return m.IsMuted, nil
+			return m.HasMuted, nil
 		}
 	}
 

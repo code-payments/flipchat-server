@@ -11,12 +11,12 @@ import (
 
 type Pusher interface {
 	// SendPush sends a basic visible push to a user.
-	SendPush(ctx context.Context, userID *commonpb.UserId, title, body string) error
+	SendPushes(ctx context.Context, members []*commonpb.UserId, title, body string) error
 }
 
 type NoOpPusher struct{}
 
-func (n *NoOpPusher) SendPush(_ context.Context, _ *commonpb.UserId, _, _ string) error { return nil }
+func (n *NoOpPusher) SendPush(_ context.Context, _ []*commonpb.UserId, _, _ string) error { return nil }
 
 type FCMPusher struct {
 	log    *zap.Logger
@@ -37,11 +37,16 @@ func NewFCMPusher(log *zap.Logger, tokens TokenStore, client FCMClient) *FCMPush
 	}
 }
 
-func (p *FCMPusher) SendPush(ctx context.Context, userID *commonpb.UserId, title, body string) error {
-	pushTokens, err := p.tokens.GetTokens(ctx, userID)
-	if err != nil {
-		return err
+func (p *FCMPusher) SendPush(ctx context.Context, users []*commonpb.UserId, title, body string) error {
+	var allPushTokens []Token
+	for _, user := range users {
+		tokens, err := p.tokens.GetTokens(ctx, user)
+		if err != nil {
+			return err
+		}
+		allPushTokens = append(allPushTokens, tokens...)
 	}
+	pushTokens := allPushTokens
 
 	if len(pushTokens) == 0 {
 		return nil

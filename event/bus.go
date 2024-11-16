@@ -56,10 +56,13 @@ func (b *Bus[Key, Event]) AddHandler(h Handler[Key, Event]) {
 
 func (b *Bus[Key, Event]) OnEvent(key Key, e Event) error {
 	b.handlersMu.RLock()
+	// Copy handlers to prevent race conditions
+	handlers := make([]Handler[Key, Event], len(b.handlers))
+	copy(handlers, b.handlers)
 	b.handlersMu.RUnlock()
 
-	// TODO: Use better locking primitives here.
-	for _, h := range b.handlers {
+	// Execute handlers outside the lock
+	for _, h := range handlers {
 		h.OnEvent(key, e)
 	}
 

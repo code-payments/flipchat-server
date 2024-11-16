@@ -410,8 +410,8 @@ func TestServer(t *testing.T) {
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]Member{
-				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: true},
-				{UserID: userID, AddedBy: streamUser, IsMuted: false, IsHost: false},
+				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: true},
+				{UserID: userID, AddedBy: streamUser, HasMuted: false, IsHost: false},
 			},
 		)
 
@@ -426,7 +426,7 @@ func TestServer(t *testing.T) {
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]Member{
-				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: true},
+				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: true},
 			},
 		)
 
@@ -455,8 +455,8 @@ func TestServer(t *testing.T) {
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]Member{
-				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: false},
-				{UserID: userID, AddedBy: streamUser, IsMuted: false, IsHost: true},
+				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: false},
+				{UserID: userID, AddedBy: streamUser, HasMuted: false, IsHost: true},
 			},
 		)
 

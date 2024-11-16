@@ -598,7 +598,7 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get member for mute check: %w", err)
 	}
-	md.IsMuted = member.IsMuted
+	md.IsMuted = member.HasMuted
 
 	ptrs, err := s.pointers.GetPointers(ctx, chatID, caller)
 	if err != nil {

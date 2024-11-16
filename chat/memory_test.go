@@ -167,9 +167,9 @@ func TestInMemoryStore_GetChatMembers(t *testing.T) {
 	var expectedMembers []*Member
 	for i := 0; i < 10; i++ {
 		member := &Member{
-			UserID:  model.MustGenerateUserID(),
-			AddedBy: model.MustGenerateUserID(),
-			IsMuted: i%2 == 0,
+			UserID:   model.MustGenerateUserID(),
+			AddedBy:  model.MustGenerateUserID(),
+			HasMuted: i%2 == 0,
 		}
 
 		expectedMembers = append(expectedMembers, member)
@@ -191,7 +191,7 @@ func TestInMemoryStore_GetChatMembers(t *testing.T) {
 	for i := range expectedMembers {
 		require.NoError(t, protoutil.ProtoEqualError(expectedMembers[i].UserID, members[i].UserID))
 		require.NoError(t, protoutil.ProtoEqualError(expectedMembers[i].AddedBy, members[i].AddedBy))
-		require.Equal(t, expectedMembers[i].IsMuted, members[i].IsMuted)
+		require.Equal(t, expectedMembers[i].HasMuted, members[i].HasMuted)
 	}
 
 }
@@ -239,13 +239,13 @@ func TestInMemoryStore_SetChatMuteState(t *testing.T) {
 
 	members, err := store.GetMembers(context.Background(), chatID)
 	require.NoError(t, err)
-	require.False(t, members[0].IsMuted)
+	require.False(t, members[0].HasMuted)
 
 	require.NoError(t, store.SetMuteState(context.Background(), chatID, memberID, true))
 
 	members, err = store.GetMembers(context.Background(), chatID)
 	require.NoError(t, err)
-	require.True(t, members[0].IsMuted)
+	require.True(t, members[0].HasMuted)
 }
 
 func TestInMemoryStore_JoinLeave(t *testing.T) {
