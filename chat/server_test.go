@@ -20,6 +20,7 @@ import (
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 
@@ -37,6 +38,7 @@ func TestServer(t *testing.T) {
 	accounts := memory.NewInMemory()
 	messageDB := messaging.NewMemory()
 	profiles := profile.NewInMemory()
+	intents := intent.NewMemory()
 	codeData := codedata.NewTestDataProvider()
 
 	userID := model.MustGenerateUserID()
@@ -54,6 +56,7 @@ func TestServer(t *testing.T) {
 		profiles,
 		messageDB,
 		messageDB,
+		intents,
 		codeData,
 		bus,
 	)

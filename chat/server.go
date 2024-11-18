@@ -48,6 +48,7 @@ type Server struct {
 	profiles profile.Store
 	messages messaging.MessageStore
 	pointers messaging.PointerStore
+	intents  intent.Store
 	codeData codedata.Provider
 
 	streamsMu sync.RWMutex
@@ -63,6 +64,7 @@ func NewServer(
 	profiles profile.Store,
 	messages messaging.MessageStore,
 	pointers messaging.PointerStore,
+	intents intent.Store,
 	codeData codedata.Provider,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
 ) *Server {
@@ -75,6 +77,7 @@ func NewServer(
 		profiles: profiles,
 		pointers: pointers,
 		messages: messages,
+		intents:  intents,
 		codeData: codeData,
 
 		streams: make(map[string]event.Stream[*event.ChatEvent]),
@@ -300,7 +303,6 @@ func (s *Server) GetChat(ctx context.Context, req *chatpb.GetChatRequest) (*chat
 	}, nil
 }
 
-// todo: we need to dedup the intent ID to avoid replay attacks
 func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*chatpb.StartChatResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
@@ -310,6 +312,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 	var md *chatpb.Metadata
 	var users []*commonpb.UserId
 
+	var paymentIntent *commonpb.IntentId
 	switch t := req.Parameters.(type) {
 	case *chatpb.StartChatRequest_TwoWayChat:
 		md = &chatpb.Metadata{
@@ -321,22 +324,34 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 
 	case *chatpb.StartChatRequest_GroupChat:
 		if t.GroupChat.PaymentIntent == nil {
-			// todo: make payment mandatory once it's rolled out
-			// return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+			// todo: make payment mandatory once it's rolled out, and remove the next if statement
+			//return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
 		}
 
-		var paymentMetadata chatpb.StartGroupChatPaymentMetadata
-		err = intent.LoadPaymentMetadata(ctx, s.codeData, t.GroupChat.PaymentIntent, &paymentMetadata)
-		if err == intent.ErrNoPaymentMetadata {
-			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
-		} else if err != nil {
-			s.log.Warn("Failed to get payment metadata", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
-		}
+		if t.GroupChat.PaymentIntent != nil {
+			paymentIntent = t.GroupChat.PaymentIntent
 
-		// Verify the provided payment is for this user to create a new group.
-		if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
-			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+			isFulfilled, err := s.intents.IsFulfilled(ctx, paymentIntent)
+			if err != nil {
+				s.log.Warn("Failed to check if intent is already fulfilled", zap.Error(err))
+				return nil, status.Errorf(codes.Internal, "failed to check if intent is already fulfilled")
+			} else if isFulfilled {
+				return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+			}
+
+			var paymentMetadata chatpb.StartGroupChatPaymentMetadata
+			err = intent.LoadPaymentMetadata(ctx, s.codeData, t.GroupChat.PaymentIntent, &paymentMetadata)
+			if err == intent.ErrNoPaymentMetadata {
+				return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+			} else if err != nil {
+				s.log.Warn("Failed to get payment metadata", zap.Error(err))
+				return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
+			}
+
+			// Verify the provided payment is for this user to create a new group.
+			if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
+				return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+			}
 		}
 
 		// Need to do this transactionally...but we've lost it...so...heh :)
@@ -359,6 +374,17 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 	if err != nil && !errors.Is(err, ErrChatExists) {
 		s.log.Warn("Failed to put chat metadata", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to put chat")
+	}
+
+	// todo: put this logic in a DB transaction alongside chat creation
+	if paymentIntent != nil {
+		err = s.intents.MarkFulfilled(ctx, paymentIntent)
+		if err == intent.ErrAlreadyFulfilled {
+			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
+		}
 	}
 
 	log := s.log.With(
@@ -415,9 +441,15 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	hasPaymentIntent := req.PaymentIntent != nil
 	var paymentMetadata chatpb.JoinChatPaymentMetadata
 
-	// todo: need to dedup intent ID when we implement booting
-
 	if hasPaymentIntent {
+		isFulfilled, err := s.intents.IsFulfilled(ctx, req.PaymentIntent)
+		if err != nil {
+			s.log.Warn("Failed to check if intent is already fulfilled", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to check if intent is already fulfilled")
+		} else if isFulfilled {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		}
+
 		err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
 		if err == intent.ErrNoPaymentMetadata {
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
@@ -469,6 +501,17 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	if err = s.chats.AddMember(ctx, chatID, Member{UserID: userID}); err != nil {
 		s.log.Warn("Failed to put chat member", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to put chat member")
+	}
+
+	// todo: put this logic in a DB transaction alongside member add
+	if hasPaymentIntent {
+		err = s.intents.MarkFulfilled(ctx, req.PaymentIntent)
+		if err == intent.ErrAlreadyFulfilled {
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
+		}
 	}
 
 	md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)
