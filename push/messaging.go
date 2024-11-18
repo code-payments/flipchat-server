@@ -12,7 +12,6 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
-
 	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/profile"
@@ -43,6 +42,7 @@ func (h *EventHandler) OnEvent(chatID *commonpb.ChatId, e event.ChatEvent) {
 	ctx := context.Background()
 
 	if e.MessageUpdate != nil {
+		h.log.Debug("Handling push for message", zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
 		if err := h.handleMessage(ctx, chatID, e.MessageUpdate); err != nil {
 			h.log.Warn("Failed to handle message", zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)), zap.Error(err))
 		}
@@ -57,9 +57,11 @@ func (h *EventHandler) OnEvent(chatID *commonpb.ChatId, e event.ChatEvent) {
 
 func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {
 	if msg.SenderId == nil {
+		h.log.Debug("Dropping push, no sender")
 		return nil
 	}
 	if len(msg.Content) == 0 {
+		h.log.Debug("Dropping push, no content")
 		return nil
 	}
 
