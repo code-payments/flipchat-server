@@ -14,11 +14,11 @@ ALTER TABLE "flipchat_users" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DE
 ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL;
 
 -- CreateTable
-CREATE TABLE "flipchat_intnets" (
+CREATE TABLE "flipchat_intents" (
     "id" TEXT NOT NULL,
-    "isFullfilled" BOOLEAN NOT NULL,
+    "isFulfilled" BOOLEAN NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "flipchat_intnets_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "flipchat_intents_pkey" PRIMARY KEY ("id")
 );
