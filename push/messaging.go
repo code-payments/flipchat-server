@@ -46,6 +46,8 @@ func (h *EventHandler) OnEvent(chatID *commonpb.ChatId, e event.ChatEvent) {
 		if err := h.handleMessage(ctx, chatID, e.MessageUpdate); err != nil {
 			h.log.Warn("Failed to handle message", zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)), zap.Error(err))
 		}
+
+		h.log.Debug("Processed message update")
 	}
 
 	// TODO: Handle member updates (when we know about join/leave).
@@ -90,6 +92,7 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	}
 
 	if len(pushMembers) == 0 {
+		h.log.Debug("Dropping push, no pushable members")
 		return nil
 	}
 
@@ -110,7 +113,10 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 		body = pushPreview
 	}
 
-	if err := h.pusher.SendPushes(ctx, pushMembers, title, body); err != nil {
+	data := map[string]string{
+		"chat_id": base64.StdEncoding.EncodeToString(chatID.Value),
+	}
+	if err := h.pusher.SendPushes(ctx, pushMembers, title, body, data); err != nil {
 		h.log.Warn("Failed to send pushes", zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)), zap.Error(err))
 	}
 

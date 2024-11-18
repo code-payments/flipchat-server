@@ -10,8 +10,8 @@ import (
 )
 
 type Pusher interface {
-	// SendPush sends a basic visible push to a user.
-	SendPushes(ctx context.Context, members []*commonpb.UserId, title, body string) error
+	// SendPushes sends a basic visible push to a user.
+	SendPushes(ctx context.Context, members []*commonpb.UserId, title, body string, data map[string]string) error
 }
 
 type NoOpPusher struct{}
@@ -39,7 +39,7 @@ func NewFCMPusher(log *zap.Logger, tokens TokenStore, client FCMClient) *FCMPush
 	}
 }
 
-func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, title, body string) error {
+func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, title, body string, data map[string]string) error {
 	var allPushTokens []Token
 	for _, user := range users {
 		tokens, err := p.tokens.GetTokens(ctx, user)
@@ -51,6 +51,7 @@ func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, ti
 	pushTokens := allPushTokens
 
 	if len(pushTokens) == 0 {
+		p.log.Debug("Dropping push, no tokens for users", zap.Int("num_users", len(users)))
 		return nil
 	}
 
@@ -65,6 +66,7 @@ func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, ti
 			Title: title,
 			Body:  body,
 		},
+		Data: data,
 	}
 
 	// Send the message to all tokens
@@ -72,6 +74,8 @@ func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, ti
 	if err != nil {
 		return err
 	}
+
+	p.log.Debug("Send pushes", zap.Int("success", response.SuccessCount), zap.Int("failed", response.FailureCount))
 	if response.FailureCount == 0 {
 		return nil
 	}
@@ -99,6 +103,7 @@ func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, ti
 			for _, token := range invalidTokens {
 				_ = p.tokens.DeleteToken(ctx, token.Type, token.Token)
 			}
+			p.log.Debug("Removed invalid tokens", zap.Int("count", len(invalidTokens)))
 		}()
 	}
 
