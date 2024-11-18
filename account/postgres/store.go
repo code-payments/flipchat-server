@@ -27,10 +27,12 @@ func (s *store) reset() {
 }
 
 func (s *store) Bind(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
+	encodedUserID := pg.Encode(userID.Value)
+	encodedPubKey := pg.Encode(pubKey.Value)
 
 	// Check if this pubkey is already bound to a user
 	key, err := s.client.PublicKey.FindUnique(
-		db.PublicKey.Key.Equals(pg.Encode(pubKey.Value)),
+		db.PublicKey.Key.Equals(encodedPubKey),
 	).Exec(ctx)
 
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
@@ -49,22 +51,22 @@ func (s *store) Bind(ctx context.Context, userID *commonpb.UserId, pubKey *commo
 
 	// Create a new user if it doesn't exist already
 	userTx := s.client.User.UpsertOne(
-		db.User.ID.Equals(pg.Encode(userID.Value)),
+		db.User.ID.Equals(encodedUserID),
 	).Create(
-		db.User.ID.Set(pg.Encode(userID.Value)),
+		db.User.ID.Set(encodedUserID),
 	).Update().Tx()
 
 	// Create a new public key if it doesn't exist
 	keyTx := s.client.PublicKey.UpsertOne(
-		db.PublicKey.Key.Equals(pg.Encode(pubKey.Value)),
+		db.PublicKey.Key.Equals(encodedPubKey),
 	).Create(
-		db.PublicKey.Key.Set(pg.Encode(pubKey.Value)),
+		db.PublicKey.Key.Set(encodedPubKey),
 		db.PublicKey.User.Link(
-			db.User.ID.Equals(pg.Encode(userID.Value)),
+			db.User.ID.Equals(encodedUserID),
 		),
 	).Update(
 		db.PublicKey.User.Link(
-			db.User.ID.Equals(pg.Encode(userID.Value)),
+			db.User.ID.Equals(encodedUserID),
 		),
 	).Tx()
 
@@ -81,9 +83,10 @@ func (s *store) Bind(ctx context.Context, userID *commonpb.UserId, pubKey *commo
 }
 
 func (s *store) GetUserId(ctx context.Context, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
+	encodedPubKey := pg.Encode(pubKey.Value)
 
 	key, err := s.client.PublicKey.FindFirst(
-		db.PublicKey.Key.Equals(pg.Encode(pubKey.Value)),
+		db.PublicKey.Key.Equals(encodedPubKey),
 	).Exec(ctx)
 
 	if err != nil || key == nil {
@@ -99,10 +102,11 @@ func (s *store) GetUserId(ctx context.Context, pubKey *commonpb.PublicKey) (*com
 }
 
 func (s *store) GetPubKeys(ctx context.Context, userID *commonpb.UserId) ([]*commonpb.PublicKey, error) {
+	encodedUserID := pg.Encode(userID.Value)
 
 	keys, err := s.client.PublicKey.FindMany(
-		db.PublicKey.UserID.Equals(pg.Encode(userID.Value)),
-	).Take(1000).Exec(ctx)
+		db.PublicKey.UserID.Equals(encodedUserID),
+	).Take(100).Exec(ctx)
 
 	if err != nil {
 		return nil, err
@@ -110,7 +114,6 @@ func (s *store) GetPubKeys(ctx context.Context, userID *commonpb.UserId) ([]*com
 
 	var pbKeys []*commonpb.PublicKey
 	for _, key := range keys {
-
 		val, err := pg.Decode(key.Key)
 		if err != nil {
 			return nil, err
@@ -125,22 +128,25 @@ func (s *store) GetPubKeys(ctx context.Context, userID *commonpb.UserId) ([]*com
 }
 
 func (s *store) RemoveKey(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) error {
+	encodedUserID := pg.Encode(userID.Value)
+	encodedPubKey := pg.Encode(pubKey.Value)
 
 	_, err := s.client.PublicKey.FindMany(
-		db.PublicKey.UserID.Equals(pg.Encode(userID.Value)),
-		db.PublicKey.Key.Equals(pg.Encode(pubKey.Value)),
+		db.PublicKey.UserID.Equals(encodedUserID),
+		db.PublicKey.Key.Equals(encodedPubKey),
 	).Delete().Exec(ctx)
 
 	return err
 }
 
 func (s *store) IsAuthorized(_ context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (bool, error) {
-
 	ctx := context.Background()
+	encodedUserID := pg.Encode(userID.Value)
+	encodedPubKey := pg.Encode(pubKey.Value)
 
 	key, err := s.client.PublicKey.FindFirst(
-		db.PublicKey.UserID.Equals(pg.Encode(userID.Value)),
-		db.PublicKey.Key.Equals(pg.Encode(pubKey.Value)),
+		db.PublicKey.UserID.Equals(encodedUserID),
+		db.PublicKey.Key.Equals(encodedPubKey),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
