@@ -18,7 +18,7 @@ import (
 	"github.com/code-payments/flipchat-server/model"
 )
 
-func CreatePayment(t *testing.T, codeData codedata.Provider, kinAmount uint64, mtdt proto.Message) *commonpb.IntentId {
+func CreatePayment(t *testing.T, codeData codedata.Provider, quarks uint64, mtdt proto.Message) *commonpb.IntentId {
 	intentID := model.MustGenerateIntentID()
 
 	extendedMetadata := codetransactionpb.ExtendedPaymentMetadata{Value: &anypb.Any{}}
@@ -32,11 +32,11 @@ func CreatePayment(t *testing.T, codeData codedata.Provider, kinAmount uint64, m
 		SendPublicPaymentMetadata: &codeintent.SendPublicPaymentMetadata{
 			DestinationOwnerAccount: "todo", // todo: value doesn't actually matter, it's assumed to be validated in SubmitIntent
 			DestinationTokenAccount: "todo", // todo: value doesn't actually matter, it's assumed to be validated in SubmitIntent
-			Quantity:                kin.ToQuarks(kinAmount),
+			Quantity:                quarks,
 
 			ExchangeCurrency: codecurrency.KIN,
 			ExchangeRate:     1.0,
-			NativeAmount:     float64(kinAmount),
+			NativeAmount:     float64(kin.FromQuarks(quarks)),
 			UsdMarketValue:   1.0,
 
 			IsWithdrawal: true,
