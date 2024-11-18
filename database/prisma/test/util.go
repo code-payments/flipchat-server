@@ -7,8 +7,48 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/ory/dockertest/v3"
+
+	postgrestest "github.com/code-payments/flipchat-server/database/postgres/test"
+
 	"github.com/code-payments/flipchat-server/database/prisma/db"
 )
+
+type TestEnv struct {
+	TestPool    *dockertest.Pool
+	DatabaseUrl string
+}
+
+func NewTestEnv() (*TestEnv, error) {
+	var err error
+	testPool, err := dockertest.NewPool("")
+	if err != nil {
+		return nil, err
+	}
+
+	// Start a postgres container
+	databaseUrl, err := postgrestest.StartPostgresDB(testPool)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wait for the database to be ready
+	_, _, err = postgrestest.WaitForConnection(databaseUrl, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply sql migrations
+	err = RunPrismaMigrateDeploy(databaseUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TestEnv{
+		TestPool:    testPool,
+		DatabaseUrl: databaseUrl,
+	}, nil
+}
 
 // A bit of a hack, we should call the prisma migration programmatically
 func RunPrismaMigrateDeploy(databaseUrl string) error {

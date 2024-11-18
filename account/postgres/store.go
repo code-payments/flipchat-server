@@ -22,8 +22,15 @@ func NewPostgres(client *db.PrismaClient) account.Store {
 }
 
 func (s *store) reset() {
-	s.client.PublicKey.FindMany().Delete().Exec(context.Background())
-	s.client.User.FindMany().Delete().Exec(context.Background())
+	ctx := context.Background()
+
+	keys := s.client.PublicKey.FindMany().Delete().Tx()
+	users := s.client.User.FindMany().Delete().Tx()
+
+	err := s.client.Prisma.Transaction(keys, users).Exec(ctx)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (s *store) Bind(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {

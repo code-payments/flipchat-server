@@ -11,7 +11,7 @@ import (
 )
 
 func TestAccount_PostgresServer(t *testing.T) {
-	client, disconnect := prismatest.NewTestClient(databaseUrl, t)
+	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
 	defer disconnect()
 
 	testStore := NewPostgres(client)
