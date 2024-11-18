@@ -248,7 +248,7 @@ func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRe
 		Result: accountpb.GetUserFlagsResponse_OK,
 		UserFlags: &accountpb.UserFlags{
 			IsStaff:        false, // todo: implement staff flag
-			StartGroupCost: &commonpb.PaymentAmount{Quarks: flags.StartGroupCost},
+			StartGroupFee:  &commonpb.PaymentAmount{Quarks: flags.StartGroupFee},
 			FeeDestination: &commonpb.PublicKey{Value: flags.FeeDestination.PublicKey().ToBytes()},
 		},
 	}, nil

@@ -50,7 +50,7 @@ func TestFCMPusher_SendPush(t *testing.T) {
 
 	// Send push to first 3 users
 	targetUsers := users[:3]
-	err := pusher.SendPush(ctx, targetUsers, "Test Title", "Test Body")
+	err := pusher.SendPushes(ctx, targetUsers, "Test Title", "Test Body")
 	require.NoError(t, err)
 
 	// Verify the message was sent with all 6 tokens (2 tokens * 3 users)
