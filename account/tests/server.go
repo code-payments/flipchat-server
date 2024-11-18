@@ -109,7 +109,7 @@ func testServer(t *testing.T, store account.Store) {
 			actual, err := store.GetPubKeys(ctx, userId)
 			require.NoError(t, err)
 
-			require.NoError(t, protoutil.SliceEqualError(expected, actual))
+			require.NoError(t, protoutil.SetEqualError(expected, actual))
 		}
 	})
 
@@ -209,7 +209,7 @@ func testServer(t *testing.T, store account.Store) {
 			}
 
 			actual, err := store.GetPubKeys(ctx, userId)
-			require.NoError(t, protoutil.SliceEqualError(expected, actual))
+			require.NoError(t, protoutil.SetEqualError(expected, actual))
 
 			login := &accountpb.LoginRequest{Timestamp: timestamppb.Now()}
 			require.NoError(t, remove.Auth(login, &login.Auth))
@@ -241,7 +241,7 @@ func testServer(t *testing.T, store account.Store) {
 			}
 
 			actual, err := store.GetPubKeys(ctx, userId)
-			require.NoError(t, protoutil.SliceEqualError(expected, actual))
+			require.NoError(t, protoutil.SetEqualError(expected, actual))
 
 			login := &accountpb.LoginRequest{Timestamp: timestamppb.Now()}
 			require.NoError(t, key.Auth(login, &login.Auth))

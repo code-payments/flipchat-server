@@ -10,7 +10,7 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
-func TestAccount_PostgresStore(t *testing.T) {
+func TestAccount_PostgresAuthorizer(t *testing.T) {
 	client, disconnect := prismatest.NewTestClient(databaseUrl, t)
 	defer disconnect()
 
@@ -18,5 +18,5 @@ func TestAccount_PostgresStore(t *testing.T) {
 	teardown := func() {
 		testStore.(*store).reset()
 	}
-	tests.RunStoreTests(t, testStore, teardown)
+	tests.RunAuthorizerTests(t, testStore, teardown)
 }
