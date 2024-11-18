@@ -45,11 +45,11 @@ func (h *StartGroupChatPaymentIntentHandler) Validate(ctx context.Context, inten
 		}, nil
 	}
 
-	// Payment amount must be exactly the group creation cost
-	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != flags.StartGroupCost {
+	// Payment amount must be exactly the group creation fee
+	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != flags.StartGroupFee {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
-			ErrorDescription: fmt.Sprintf("fee payment must be exactly %d quarks", flags.StartGroupCost),
+			ErrorDescription: fmt.Sprintf("fee payment must be exactly %d quarks", flags.StartGroupFee),
 		}, nil
 	}
 
