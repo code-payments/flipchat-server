@@ -245,7 +245,7 @@ func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRe
 	}
 
 	// todo: most of these values should be configurable
-	feePayer, _ := codecommon.NewAccountFromPublicKeyString("38u1jq3wpb8YGY5hPVZL7hRx7FUES4dGE9KR5XUeGC4b")
+	feeDestination, _ := codecommon.NewAccountFromPublicKeyString("38u1jq3wpb8YGY5hPVZL7hRx7FUES4dGE9KR5XUeGC4b")
 	return &accountpb.GetUserFlagsResponse{
 		Result: accountpb.GetUserFlagsResponse_OK,
 		UserFlags: &accountpb.UserFlags{
@@ -253,8 +253,8 @@ func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRe
 			StartGroupCost: &commonpb.PaymentAmount{
 				Quarks: codekin.ToQuarks(200),
 			},
-			FeePayer: &commonpb.PublicKey{
-				Value: feePayer.PublicKey().ToBytes(),
+			FeeDestination: &commonpb.PublicKey{
+				Value: feeDestination.PublicKey().ToBytes(),
 			},
 		},
 	}, nil
