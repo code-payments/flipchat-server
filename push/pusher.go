@@ -16,7 +16,9 @@ type Pusher interface {
 
 type NoOpPusher struct{}
 
-func (n *NoOpPusher) SendPush(_ context.Context, _ []*commonpb.UserId, _, _ string) error { return nil }
+func (n *NoOpPusher) SendPushes(_ context.Context, _ []*commonpb.UserId, _, _ string) error {
+	return nil
+}
 
 type FCMPusher struct {
 	log    *zap.Logger
@@ -37,7 +39,7 @@ func NewFCMPusher(log *zap.Logger, tokens TokenStore, client FCMClient) *FCMPush
 	}
 }
 
-func (p *FCMPusher) SendPush(ctx context.Context, users []*commonpb.UserId, title, body string) error {
+func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, title, body string) error {
 	var allPushTokens []Token
 	for _, user := range users {
 		tokens, err := p.tokens.GetTokens(ctx, user)
