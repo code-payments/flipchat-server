@@ -600,7 +600,7 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 		return nil, err
 	}
 
-	md, err := s.chats.GetChatMetadata(ctx, req.ChatId)
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
 	if err == ErrChatNotFound {
 		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
 	} else if err != nil {
@@ -622,6 +622,64 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 	}
 
 	return &chatpb.SetCoverChargeResponse{}, nil
+}
+
+// todo: this RPC needs tests
+func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) (*chatpb.RemoveUserResponse, error) {
+	ownerID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("owner_id", model.UserIDString(ownerID)),
+		zap.String("user_id", model.UserIDString(req.UserId)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	if bytes.Equal(ownerID.Value, req.UserId.Value) {
+		return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+	}
+
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
+	if err == ErrChatNotFound {
+		return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat data", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat data")
+	}
+
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, ownerID.Value) {
+		return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+	}
+
+	// todo: Return if no-op
+
+	if err = s.chats.RemoveMember(ctx, req.ChatId, req.UserId); err != nil {
+		log.Warn("Failed to remove member", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to remove chat member")
+	}
+
+	_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
+	if err != nil {
+		log.Warn("Failed to get chat data", zap.Error(err))
+		return &chatpb.RemoveUserResponse{}, nil
+	}
+
+	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
+			Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+				Members: members,
+			},
+		},
+	}
+
+	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdate: mu})
+	if err != nil {
+		s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
+	}
+
+	return &chatpb.RemoveUserResponse{}, nil
 }
 
 func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
