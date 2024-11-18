@@ -48,17 +48,14 @@ func (s *store) Bind(ctx context.Context, userID *commonpb.UserId, pubKey *commo
 	}
 
 	// Create a new user if it doesn't exist already
-	_, err = s.client.User.UpsertOne(
+	userTx := s.client.User.UpsertOne(
 		db.User.ID.Equals(pg.Encode(userID.Value)),
 	).Create(
 		db.User.ID.Set(pg.Encode(userID.Value)),
-	).Update().Exec(ctx)
-	if err != nil {
-		return nil, err
-	}
+	).Update().Tx()
 
 	// Create a new public key if it doesn't exist
-	_, err = s.client.PublicKey.UpsertOne(
+	keyTx := s.client.PublicKey.UpsertOne(
 		db.PublicKey.Key.Equals(pg.Encode(pubKey.Value)),
 	).Create(
 		db.PublicKey.Key.Set(pg.Encode(pubKey.Value)),
@@ -69,6 +66,11 @@ func (s *store) Bind(ctx context.Context, userID *commonpb.UserId, pubKey *commo
 		db.PublicKey.User.Link(
 			db.User.ID.Equals(pg.Encode(userID.Value)),
 		),
+	).Tx()
+
+	err = s.client.Prisma.Transaction(
+		userTx,
+		keyTx,
 	).Exec(ctx)
 
 	if err != nil {
