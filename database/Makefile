@@ -31,7 +31,7 @@ studio:
 #   If you want to use the Go client, you can run the following command:
 #   go run github.com/steebchen/prisma-client-go studio
 
-# Generate the Prisma Go client (not needed at the moment)
+# Generate the Prisma Go client
 generate:
 	go run github.com/steebchen/prisma-client-go generate
 
