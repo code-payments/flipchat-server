@@ -20,6 +20,7 @@ import (
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/flags"
 	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
@@ -107,11 +108,17 @@ func TestServer(t *testing.T) {
 			otherUsers = append(otherUsers, groupUserID)
 		}
 
+		startPaymentMetadata := &chatpb.StartGroupChatPaymentMetadata{
+			UserId: userID,
+		}
+		startIntentID := testutil.CreatePayment(t, codeData, flags.StartGroupFee, startPaymentMetadata)
+
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
-					Users: otherUsers,
-					Title: "My Fun Group!",
+					Users:         otherUsers,
+					Title:         "My Fun Group!",
+					PaymentIntent: startIntentID,
 				},
 			},
 		}
@@ -123,7 +130,7 @@ func TestServer(t *testing.T) {
 		require.Equal(t, "My Fun Group!", created.Chat.Title)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
-		require.Equal(t, codekin.ToQuarks(100), created.Chat.CoverCharge.Quarks)
+		require.Equal(t, initialCoverCharge, created.Chat.CoverCharge.Quarks)
 
 		expectedMembers := []*chatpb.Member{{
 			UserId: userID,
@@ -210,17 +217,17 @@ func TestServer(t *testing.T) {
 				return bytes.Compare(a.UserId.Value, b.UserId.Value)
 			})
 
-			paymentMetadata := &chatpb.JoinChatPaymentMetadata{
+			joinPaymentMetadata := &chatpb.JoinChatPaymentMetadata{
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			intentID := testutil.CreatePayment(t, codeData, 200, paymentMetadata)
+			joinIntentID := testutil.CreatePayment(t, codeData, initialCoverCharge, joinPaymentMetadata)
 
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
 				},
-				PaymentIntent: intentID,
+				PaymentIntent: joinIntentID,
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 
@@ -245,16 +252,16 @@ func TestServer(t *testing.T) {
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
 			require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
 
-			paymentMetadata = &chatpb.JoinChatPaymentMetadata{
+			joinPaymentMetadata = &chatpb.JoinChatPaymentMetadata{
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			intentID = testutil.CreatePayment(t, codeData, 200, paymentMetadata)
+			joinIntentID = testutil.CreatePayment(t, codeData, initialCoverCharge, joinPaymentMetadata)
 			join = &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_RoomId{
 					RoomId: created.Chat.RoomNumber,
 				},
-				PaymentIntent: intentID,
+				PaymentIntent: joinIntentID,
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
@@ -395,11 +402,16 @@ func TestServer(t *testing.T) {
 			})
 		}
 
+		startPaymentMetadata := &chatpb.StartGroupChatPaymentMetadata{
+			UserId: streamUser,
+		}
+		startIntentID := testutil.CreatePayment(t, codeData, flags.StartGroupFee, startPaymentMetadata)
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
-					Title: "my-title",
-					Users: []*commonpb.UserId{userID},
+					Title:         "my-title",
+					Users:         []*commonpb.UserId{userID},
+					PaymentIntent: startIntentID,
 				},
 			},
 		}
@@ -434,18 +446,22 @@ func TestServer(t *testing.T) {
 		)
 
 		// Other user creates a group (which we will join)
+		startPaymentMetadata = &chatpb.StartGroupChatPaymentMetadata{
+			UserId: userID,
+		}
+		start.GetGroupChat().PaymentIntent = testutil.CreatePayment(t, codeData, flags.StartGroupFee, startPaymentMetadata)
 		require.NoError(t, keyPair.Auth(start, &start.Auth))
 		startedOther, err := client.StartChat(ctx, start)
 		require.NoError(t, err)
 
-		paymentMetadata := &chatpb.JoinChatPaymentMetadata{
+		joinPaymentMetadata := &chatpb.JoinChatPaymentMetadata{
 			UserId: streamUser,
 			ChatId: startedOther.Chat.ChatId,
 		}
-		intentID := testutil.CreatePayment(t, codeData, 200, paymentMetadata)
+		joinIntentID := testutil.CreatePayment(t, codeData, initialCoverCharge, joinPaymentMetadata)
 		join := &chatpb.JoinChatRequest{
 			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
-			PaymentIntent: intentID,
+			PaymentIntent: joinIntentID,
 		}
 		require.NoError(t, streamKeyPair.Auth(join, &join.Auth))
 

@@ -39,6 +39,10 @@ const (
 	streamTimeout    = time.Second
 )
 
+var (
+	initialCoverCharge = codekin.ToQuarks(100)
+)
+
 type Server struct {
 	log      *zap.Logger
 	authz    auth.Authorizer
@@ -361,7 +365,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			Title:       t.GroupChat.Title,
 			Muteable:    true,
 			Owner:       userID,
-			CoverCharge: &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(100)},
+			CoverCharge: &commonpb.PaymentAmount{Quarks: initialCoverCharge},
 		}
 
 		users = append(t.GroupChat.Users, userID)
