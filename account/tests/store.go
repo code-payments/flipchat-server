@@ -15,16 +15,16 @@ import (
 	"github.com/code-payments/flipchat-server/account"
 )
 
-func RunTests(t *testing.T, s account.Store, teardown func()) {
+func RunStoreTests(t *testing.T, s account.Store, teardown func()) {
 	for _, tf := range []func(t *testing.T, s account.Store){
-		testRoundTrip,
+		testStore,
 	} {
 		tf(t, s)
 		teardown()
 	}
 }
 
-func testRoundTrip(t *testing.T, s account.Store) {
+func testStore(t *testing.T, s account.Store) {
 	ctx := context.Background()
 
 	user := model.MustGenerateUserID()

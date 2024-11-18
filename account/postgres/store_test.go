@@ -64,5 +64,5 @@ func TestAccount_Postgres(t *testing.T) {
 	teardown := func() {
 		testStore.(*store).reset()
 	}
-	tests.RunTests(t, testStore, teardown)
+	tests.RunStoreTests(t, testStore, teardown)
 }

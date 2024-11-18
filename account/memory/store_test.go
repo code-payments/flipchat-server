@@ -11,5 +11,5 @@ func TestAccount_MemoryStore(t *testing.T) {
 	teardown := func() {
 		testStore.(*memory).reset()
 	}
-	tests.RunTests(t, testStore, teardown)
+	tests.RunStoreTests(t, testStore, teardown)
 }
