@@ -10,7 +10,7 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
-func TestAccount_PostgresStore(t *testing.T) {
+func TestProfile_PostgresStore(t *testing.T) {
 	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
 	defer disconnect()
 

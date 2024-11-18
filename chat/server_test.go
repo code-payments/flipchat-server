@@ -22,13 +22,13 @@ import (
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codekin "github.com/code-payments/code-server/pkg/kin"
 	memAccount "github.com/code-payments/flipchat-server/account/memory"
-	"github.com/code-payments/flipchat-server/flags"
+	memIntent "github.com/code-payments/flipchat-server/intent/memory"
 	memProfile "github.com/code-payments/flipchat-server/profile/memory"
 
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
-	"github.com/code-payments/flipchat-server/intent"
+	"github.com/code-payments/flipchat-server/flags"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
@@ -40,7 +40,7 @@ func TestServer(t *testing.T) {
 	accounts := memAccount.NewInMemory()
 	messageDB := messaging.NewMemory()
 	profiles := memProfile.NewInMemory()
-	intents := intent.NewMemory()
+	intents := memIntent.NewInMemory()
 	codeData := codedata.NewTestDataProvider()
 
 	userID := model.MustGenerateUserID()

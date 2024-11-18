@@ -23,6 +23,7 @@ import (
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codekin "github.com/code-payments/code-server/pkg/kin"
+
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/intent"

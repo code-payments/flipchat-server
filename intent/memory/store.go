@@ -1,10 +1,12 @@
-package intent
+package memory
 
 import (
 	"context"
 	"sync"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+
+	"github.com/code-payments/flipchat-server/intent"
 )
 
 type InMemoryStore struct {
@@ -12,7 +14,7 @@ type InMemoryStore struct {
 	fulfilledIntents map[string]any
 }
 
-func NewMemory() Store {
+func NewInMemory() intent.Store {
 	return &InMemoryStore{
 		fulfilledIntents: make(map[string]any),
 	}
@@ -31,7 +33,7 @@ func (s *InMemoryStore) MarkFulfilled(ctx context.Context, id *commonpb.IntentId
 	defer s.mu.Unlock()
 
 	if _, ok := s.fulfilledIntents[string(id.Value)]; ok {
-		return ErrAlreadyFulfilled
+		return intent.ErrAlreadyFulfilled
 	}
 
 	s.fulfilledIntents[string(id.Value)] = struct{}{}
