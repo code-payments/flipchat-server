@@ -16,11 +16,11 @@ import (
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codetestutil "github.com/code-payments/code-server/pkg/testutil"
 
-	"github.com/code-payments/flipchat-server/account"
+	memProfile "github.com/code-payments/flipchat-server/profile/memory"
 
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
-	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
 )
@@ -35,7 +35,7 @@ func RunServerTests(t *testing.T, s account.Store, teardown func()) {
 }
 
 func testServer(t *testing.T, store account.Store) {
-	profiles := profile.NewInMemory()
+	profiles := memProfile.NewInMemory()
 	codeStores := codedata.NewTestDataProvider()
 
 	server := account.NewServer(

@@ -1,4 +1,4 @@
-package profile
+package tests
 
 import (
 	"context"
@@ -14,14 +14,24 @@ import (
 	"github.com/code-payments/flipchat-server/model"
 
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
-func TestServer(t *testing.T) {
+func RunServerTests(t *testing.T, s profile.Store, teardown func()) {
+	for _, tf := range []func(t *testing.T, s profile.Store){
+		testServer,
+	} {
+		tf(t, s)
+		teardown()
+	}
+}
+
+func testServer(t *testing.T, store profile.Store) {
 	authz := auth.NewStaticAuthorizer()
 
-	serv := NewServer(zap.Must(zap.NewDevelopment()), NewInMemory(), authz)
+	serv := profile.NewServer(zap.Must(zap.NewDevelopment()), store, authz)
 	cc := testutil.RunGRPCServer(t, testutil.WithService(func(s *grpc.Server) {
 		profilepb.RegisterProfileServer(s, serv)
 	}))

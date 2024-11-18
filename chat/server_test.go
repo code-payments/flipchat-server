@@ -18,25 +18,26 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
-	"github.com/code-payments/flipchat-server/account"
-	"github.com/code-payments/flipchat-server/event"
-	"github.com/code-payments/flipchat-server/model"
-	"github.com/code-payments/flipchat-server/protoutil"
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codekin "github.com/code-payments/code-server/pkg/kin"
-	"github.com/code-payments/flipchat-server/account/memory"
+	memAccount "github.com/code-payments/flipchat-server/account/memory"
+	memProfile "github.com/code-payments/flipchat-server/profile/memory"
+
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/messaging"
-	"github.com/code-payments/flipchat-server/profile"
+	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
 func TestServer(t *testing.T) {
 	log := zap.Must(zap.NewDevelopment())
-	accounts := memory.NewInMemory()
+	accounts := memAccount.NewInMemory()
 	messageDB := messaging.NewMemory()
-	profiles := profile.NewInMemory()
+	profiles := memProfile.NewInMemory()
 	codeData := codedata.NewTestDataProvider()
 
 	userID := model.MustGenerateUserID()
