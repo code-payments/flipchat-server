@@ -38,7 +38,7 @@ func NewPushEventHandler(
 	}
 }
 
-func (h *EventHandler) OnEvent(chatID *commonpb.ChatId, e event.ChatEvent) {
+func (h *EventHandler) OnEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 	ctx := context.Background()
 
 	if e.MessageUpdate != nil {

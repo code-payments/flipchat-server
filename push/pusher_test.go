@@ -50,7 +50,8 @@ func TestFCMPusher_SendPush(t *testing.T) {
 
 	// Send push to first 3 users
 	targetUsers := users[:3]
-	err := pusher.SendPushes(ctx, targetUsers, "Test Title", "Test Body")
+	data := map[string]string{"my-data": "data is gold"}
+	err := pusher.SendPushes(ctx, targetUsers, "Test Title", "Test Body", data)
 	require.NoError(t, err)
 
 	// Verify the message was sent with all 6 tokens (2 tokens * 3 users)
@@ -60,6 +61,7 @@ func TestFCMPusher_SendPush(t *testing.T) {
 	// Verify message content
 	assert.Equal(t, "Test Title", fcmClient.sentMessage.Notification.Title)
 	assert.Equal(t, "Test Body", fcmClient.sentMessage.Notification.Body)
+	assert.Equal(t, data, fcmClient.sentMessage.Data)
 
 	// Verify the correct tokens were included
 	expectedTokens := []string{

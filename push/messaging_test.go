@@ -2,6 +2,7 @@ package push
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,12 +25,14 @@ type mockPusher struct {
 	lastPushMembers []*commonpb.UserId
 	lastTitle       string
 	lastBody        string
+	lastData        map[string]string
 }
 
-func (m *mockPusher) SendPushes(ctx context.Context, members []*commonpb.UserId, title, body string) error {
+func (m *mockPusher) SendPushes(ctx context.Context, members []*commonpb.UserId, title, body string, data map[string]string) error {
 	m.lastPushMembers = members
 	m.lastTitle = title
 	m.lastBody = body
+	m.lastData = data
 	return nil
 }
 
@@ -178,10 +181,10 @@ func TestEventHandler_HandleMessage(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chatID, err := tt.setupChat()
+			md, err := tt.setupChat()
 			require.NoError(t, err)
 
-			handler.OnEvent(chatID.ChatId, event.ChatEvent{
+			handler.OnEvent(md.ChatId, &event.ChatEvent{
 				MessageUpdate: tt.message,
 			})
 
@@ -189,6 +192,7 @@ func TestEventHandler_HandleMessage(t *testing.T) {
 			if tt.expectedPushes != nil {
 				assert.Equal(t, tt.expectedTitle, pusher.lastTitle)
 				assert.Equal(t, tt.expectedBody, pusher.lastBody)
+				assert.Equal(t, base64.StdEncoding.EncodeToString(md.ChatId.Value), pusher.lastData["chat_id"])
 			}
 
 			pusher.reset()
