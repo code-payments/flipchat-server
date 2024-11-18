@@ -14,8 +14,8 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
 	codecommon "github.com/code-payments/code-server/pkg/code/common"
-	codekin "github.com/code-payments/code-server/pkg/kin"
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/flags"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/profile"
 )
@@ -244,18 +244,12 @@ func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRe
 		return &accountpb.GetUserFlagsResponse{Result: accountpb.GetUserFlagsResponse_DENIED}, nil
 	}
 
-	// todo: most of these values should be configurable
-	feeDestination, _ := codecommon.NewAccountFromPublicKeyString("38u1jq3wpb8YGY5hPVZL7hRx7FUES4dGE9KR5XUeGC4b")
 	return &accountpb.GetUserFlagsResponse{
 		Result: accountpb.GetUserFlagsResponse_OK,
 		UserFlags: &accountpb.UserFlags{
-			IsStaff: false, // todo: implement staff flag
-			StartGroupCost: &commonpb.PaymentAmount{
-				Quarks: codekin.ToQuarks(200),
-			},
-			FeeDestination: &commonpb.PublicKey{
-				Value: feeDestination.PublicKey().ToBytes(),
-			},
+			IsStaff:        false, // todo: implement staff flag
+			StartGroupCost: &commonpb.PaymentAmount{Quarks: flags.StartGroupCost},
+			FeeDestination: &commonpb.PublicKey{Value: flags.FeeDestination.PublicKey().ToBytes()},
 		},
 	}, nil
 }

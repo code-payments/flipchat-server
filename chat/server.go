@@ -300,6 +300,7 @@ func (s *Server) GetChat(ctx context.Context, req *chatpb.GetChatRequest) (*chat
 	}, nil
 }
 
+// todo: we need to dedup the intent ID to avoid replay attacks
 func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*chatpb.StartChatResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
@@ -319,6 +320,25 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		users = []*commonpb.UserId{userID, t.TwoWayChat.OtherUserId}
 
 	case *chatpb.StartChatRequest_GroupChat:
+		if t.GroupChat.PaymentIntent == nil {
+			// todo: make payment mandatory once it's rolled out
+			// return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+		}
+
+		var paymentMetadata chatpb.StartGroupChatPaymentMetadata
+		err = intent.LoadPaymentMetadata(ctx, s.codeData, t.GroupChat.PaymentIntent, &paymentMetadata)
+		if err == intent.ErrNoPaymentMetadata {
+			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get payment metadata", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
+		}
+
+		// Verify the provided payment is for this user to create a new group.
+		if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
+			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+		}
+
 		// Need to do this transactionally...but we've lost it...so...heh :)
 		md = &chatpb.Metadata{
 			ChatId:      model.MustGenerateChatID(),
@@ -424,10 +444,6 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	if hasPaymentIntent {
 		// Verify the provided payment is for this user joining the specified
 		// chat.
-		//
-		// Payment amount, source/destination accounts, etc. should already be
-		// validated by SubmitIntent against the FC servers before allowing the
-		// intent to go through. We do not need to verify again in this RPC.
 		if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 		}
