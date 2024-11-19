@@ -1,4 +1,4 @@
-package chat
+package memory
 
 import (
 	"bytes"
@@ -12,13 +12,15 @@ import (
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+
+	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/query"
 )
 
 type InMemoryStore struct {
 	mu       sync.RWMutex
 	chats    map[string]*chatpb.Metadata
-	members  map[string][]*Member
+	members  map[string][]*chat.Member
 	nextRoom uint64
 
 	// Indexes
@@ -26,10 +28,10 @@ type InMemoryStore struct {
 	chatsByMember map[string][]string
 }
 
-func NewMemory() Store {
+func NewInMemory() chat.Store {
 	return &InMemoryStore{
 		chats:         map[string]*chatpb.Metadata{},
-		members:       map[string][]*Member{},
+		members:       map[string][]*chat.Member{},
 		nextRoom:      1,
 		ids:           map[uint64]string{},
 		chatsByMember: map[string][]string{},
@@ -42,7 +44,7 @@ func (s *InMemoryStore) GetChatID(_ context.Context, roomID uint64) (*commonpb.C
 
 	idString, ok := s.ids[roomID]
 	if !ok {
-		return nil, ErrChatNotFound
+		return nil, chat.ErrChatNotFound
 	}
 
 	return &commonpb.ChatId{Value: []byte(idString)}, nil
@@ -54,7 +56,7 @@ func (s *InMemoryStore) GetChatMetadata(_ context.Context, chatID *commonpb.Chat
 
 	md, ok := s.chats[string(chatID.Value)]
 	if !ok {
-		return nil, ErrChatNotFound
+		return nil, chat.ErrChatNotFound
 	}
 
 	return proto.Clone(md).(*chatpb.Metadata), nil
@@ -106,13 +108,13 @@ func (s *InMemoryStore) GetChatsForUser(_ context.Context, userID *commonpb.User
 	return chatIDs, nil
 }
 
-func (s *InMemoryStore) GetMembers(_ context.Context, chatID *commonpb.ChatId) ([]*Member, error) {
+func (s *InMemoryStore) GetMembers(_ context.Context, chatID *commonpb.ChatId) ([]*chat.Member, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	members := s.members[string(chatID.Value)]
 
-	result := make([]*Member, 0, len(members))
+	result := make([]*chat.Member, 0, len(members))
 	for _, member := range members {
 		result = append(result, member.Clone())
 	}
@@ -120,7 +122,7 @@ func (s *InMemoryStore) GetMembers(_ context.Context, chatID *commonpb.ChatId) (
 	return result, nil
 }
 
-func (s *InMemoryStore) GetMember(_ context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (*Member, error) {
+func (s *InMemoryStore) GetMember(_ context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (*chat.Member, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -131,7 +133,7 @@ func (s *InMemoryStore) GetMember(_ context.Context, chatID *commonpb.ChatId, us
 		}
 	}
 
-	return nil, ErrMemberNotFound
+	return nil, chat.ErrMemberNotFound
 }
 
 func (s *InMemoryStore) IsMember(_ context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {
@@ -163,7 +165,7 @@ func (s *InMemoryStore) CreateChat(_ context.Context, md *chatpb.Metadata) (*cha
 	defer s.mu.Unlock()
 
 	if existing, exists := s.chats[string(md.ChatId.Value)]; exists {
-		return proto.Clone(existing).(*chatpb.Metadata), ErrChatExists
+		return proto.Clone(existing).(*chatpb.Metadata), chat.ErrChatExists
 	}
 
 	md.RoomNumber = s.nextRoom
@@ -175,12 +177,12 @@ func (s *InMemoryStore) CreateChat(_ context.Context, md *chatpb.Metadata) (*cha
 	return md, nil
 }
 
-func (s *InMemoryStore) AddMember(_ context.Context, chatID *commonpb.ChatId, member Member) error {
+func (s *InMemoryStore) AddMember(_ context.Context, chatID *commonpb.ChatId, member chat.Member) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, exists := s.chats[string(chatID.Value)]; !exists {
-		return ErrChatNotFound
+		return chat.ErrChatNotFound
 	}
 
 	members := s.members[string(chatID.Value)]
@@ -191,7 +193,7 @@ func (s *InMemoryStore) AddMember(_ context.Context, chatID *commonpb.ChatId, me
 	}
 
 	members = append(members, member.Clone())
-	slices.SortFunc(members, func(a, b *Member) int {
+	slices.SortFunc(members, func(a, b *chat.Member) int {
 		return bytes.Compare(a.UserID.Value, b.UserID.Value)
 	})
 
@@ -239,7 +241,7 @@ func (s *InMemoryStore) SetMuteState(_ context.Context, chatID *commonpb.ChatId,
 		}
 	}
 
-	return ErrMemberNotFound
+	return chat.ErrMemberNotFound
 }
 
 func (s *InMemoryStore) GetMuteState(_ context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
@@ -253,7 +255,7 @@ func (s *InMemoryStore) GetMuteState(_ context.Context, chatID *commonpb.ChatId,
 		}
 	}
 
-	return false, ErrMemberNotFound
+	return false, chat.ErrMemberNotFound
 }
 
 func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
@@ -262,7 +264,7 @@ func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.Cha
 
 	md, ok := s.chats[string(chatID.Value)]
 	if !ok {
-		return ErrChatNotFound
+		return chat.ErrChatNotFound
 	}
 
 	md.CoverCharge = proto.Clone(coverCharge).(*commonpb.PaymentAmount)

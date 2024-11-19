@@ -1,4 +1,4 @@
-package chat
+package tests
 
 import (
 	"bytes"
@@ -12,13 +12,29 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
+	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/query"
 )
 
-func TestInMemoryStore_Metadata(t *testing.T) {
-	store := NewMemory()
+func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
+	for _, tf := range []func(t *testing.T, s chat.Store){
+		testInMemoryStore_Metadata,
+		testInMemoryStore_GetAllChatsForUser,
+		testInMemoryStore_GetAllChatsForUser_Pagination,
+		testInMemoryStore_GetChatMembers,
+		testInMemoryStore_IsChatMember,
+		testInMemoryStore_SetChatMuteState,
+		testInMemoryStore_JoinLeave,
+		testInMemoryStore_AddRemove,
+	} {
+		tf(t, s)
+		teardown()
+	}
+}
+
+func testInMemoryStore_Metadata(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 	expected := &chatpb.Metadata{
@@ -37,7 +53,7 @@ func TestInMemoryStore_Metadata(t *testing.T) {
 	metadata.NumUnread = 20
 
 	result, err := store.GetChatMetadata(context.Background(), chatID)
-	require.ErrorIs(t, err, ErrChatNotFound)
+	require.ErrorIs(t, err, chat.ErrChatNotFound)
 	require.Nil(t, result)
 
 	created, err := store.CreateChat(context.Background(), metadata)
@@ -49,8 +65,7 @@ func TestInMemoryStore_Metadata(t *testing.T) {
 	require.NoError(t, protoutil.ProtoEqualError(expected, result))
 }
 
-func TestInMemoryStore_GetAllChatsForUser(t *testing.T) {
-	store := NewMemory()
+func testInMemoryStore_GetAllChatsForUser(t *testing.T, store chat.Store) {
 
 	memberID := model.MustGenerateUserID()
 
@@ -69,7 +84,7 @@ func TestInMemoryStore_GetAllChatsForUser(t *testing.T) {
 		})
 
 		for range 2 {
-			require.NoError(t, store.AddMember(context.Background(), chatID, Member{
+			require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
 				UserID: memberID,
 			}))
 		}
@@ -84,8 +99,7 @@ func TestInMemoryStore_GetAllChatsForUser(t *testing.T) {
 	require.NoError(t, protoutil.SliceEqualError(expectedChatIDs, chatIDs))
 }
 
-func TestInMemoryStore_GetAllChatsForUser_Pagination(t *testing.T) {
-	store := NewMemory()
+func testInMemoryStore_GetAllChatsForUser_Pagination(t *testing.T, store chat.Store) {
 
 	memberID := model.MustGenerateUserID()
 
@@ -101,7 +115,7 @@ func TestInMemoryStore_GetAllChatsForUser_Pagination(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.NoError(t, store.AddMember(context.Background(), chatID, Member{
+		require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
 			UserID: memberID,
 		}))
 	}
@@ -154,8 +168,7 @@ func TestInMemoryStore_GetAllChatsForUser_Pagination(t *testing.T) {
 }
 
 // TODO: Need proper pagination tests
-func TestInMemoryStore_GetChatMembers(t *testing.T) {
-	store := NewMemory()
+func testInMemoryStore_GetChatMembers(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
@@ -164,9 +177,9 @@ func TestInMemoryStore_GetChatMembers(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var expectedMembers []*Member
+	var expectedMembers []*chat.Member
 	for i := 0; i < 10; i++ {
-		member := &Member{
+		member := &chat.Member{
 			UserID:   model.MustGenerateUserID(),
 			AddedBy:  model.MustGenerateUserID(),
 			HasMuted: i%2 == 0,
@@ -179,7 +192,7 @@ func TestInMemoryStore_GetChatMembers(t *testing.T) {
 		}
 	}
 
-	slices.SortFunc(expectedMembers, func(a, b *Member) int {
+	slices.SortFunc(expectedMembers, func(a, b *chat.Member) int {
 		return bytes.Compare(a.UserID.Value, b.UserID.Value)
 	})
 
@@ -196,8 +209,7 @@ func TestInMemoryStore_GetChatMembers(t *testing.T) {
 
 }
 
-func TestInMemoryStore_IsChatMember(t *testing.T) {
-	store := NewMemory()
+func testInMemoryStore_IsChatMember(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 	memberID := model.MustGenerateUserID()
@@ -212,7 +224,7 @@ func TestInMemoryStore_IsChatMember(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, isMember)
 
-	require.NoError(t, store.AddMember(context.Background(), chatID, Member{
+	require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
 		UserID: memberID,
 	}))
 
@@ -221,8 +233,7 @@ func TestInMemoryStore_IsChatMember(t *testing.T) {
 	require.True(t, isMember)
 }
 
-func TestInMemoryStore_SetChatMuteState(t *testing.T) {
-	store := NewMemory()
+func testInMemoryStore_SetChatMuteState(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 	memberID := model.MustGenerateUserID()
@@ -233,7 +244,7 @@ func TestInMemoryStore_SetChatMuteState(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, store.AddMember(context.Background(), chatID, Member{
+	require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
 		UserID: memberID,
 	}))
 
@@ -248,8 +259,7 @@ func TestInMemoryStore_SetChatMuteState(t *testing.T) {
 	require.True(t, members[0].HasMuted)
 }
 
-func TestInMemoryStore_JoinLeave(t *testing.T) {
-	store := NewMemory()
+func testInMemoryStore_JoinLeave(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 
@@ -259,7 +269,7 @@ func TestInMemoryStore_JoinLeave(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	member := Member{
+	member := chat.Member{
 		UserID:  model.MustGenerateUserID(),
 		AddedBy: model.MustGenerateUserID(),
 	}
@@ -277,8 +287,7 @@ func TestInMemoryStore_JoinLeave(t *testing.T) {
 	require.Empty(t, chats, 0)
 }
 
-func TestInMemoryStore_AddRemove(t *testing.T) {
-	store := NewMemory()
+func testInMemoryStore_AddRemove(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 
@@ -288,9 +297,9 @@ func TestInMemoryStore_AddRemove(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var members []*Member
+	var members []*chat.Member
 	for range 10 {
-		member := Member{
+		member := chat.Member{
 			UserID:  model.MustGenerateUserID(),
 			AddedBy: model.MustGenerateUserID(),
 		}
@@ -299,7 +308,7 @@ func TestInMemoryStore_AddRemove(t *testing.T) {
 		members = append(members, &member)
 	}
 
-	slices.SortFunc(members, func(a, b *Member) int {
+	slices.SortFunc(members, func(a, b *chat.Member) int {
 		return bytes.Compare(a.UserID.Value, b.UserID.Value)
 	})
 

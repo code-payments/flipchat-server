@@ -35,13 +35,13 @@ import (
 )
 
 const (
-	streamBufferSize = 64
-	streamPingDelay  = 5 * time.Second
-	streamTimeout    = time.Second
+	StreamBufferSize = 64
+	StreamPingDelay  = 5 * time.Second
+	StreamTimeout    = time.Second
 )
 
 var (
-	initialCoverCharge = codekin.ToQuarks(100)
+	InitialCoverCharge = codekin.ToQuarks(100)
 )
 
 type Server struct {
@@ -133,7 +133,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 
 	ss := event.NewProtoEventStream[*event.ChatEvent, *chatpb.StreamChatEventsResponse_EventBatch](
 		userKey,
-		streamBufferSize,
+		StreamBufferSize,
 		func(e *event.ChatEvent) (*chatpb.StreamChatEventsResponse_EventBatch, bool) {
 			isMember, err := s.chats.IsMember(ctx, e.ChatID, userID)
 			if err != nil {
@@ -223,13 +223,13 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 		case <-sendPingCh:
 			log.Debug("sending ping to client")
 
-			sendPingCh = time.After(streamPingDelay)
+			sendPingCh = time.After(StreamPingDelay)
 
 			err := stream.Send(&chatpb.StreamChatEventsResponse{
 				Type: &chatpb.StreamChatEventsResponse_Ping{
 					Ping: &commonpb.ServerPing{
 						Timestamp: timestamppb.Now(),
-						PingDelay: durationpb.New(streamPingDelay),
+						PingDelay: durationpb.New(StreamPingDelay),
 					},
 				},
 			})
@@ -371,7 +371,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			Title:       t.GroupChat.Title,
 			Muteable:    true,
 			Owner:       userID,
-			CoverCharge: &commonpb.PaymentAmount{Quarks: initialCoverCharge},
+			CoverCharge: &commonpb.PaymentAmount{Quarks: InitialCoverCharge},
 		}
 
 		users = append(t.GroupChat.Users, userID)
@@ -743,7 +743,7 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
 
 	for _, memberID := range memberIDs {
 		if stream, exists := s.streams[string(memberID.UserID.Value)]; exists {
-			if err = stream.Notify(event, streamTimeout); err != nil {
+			if err = stream.Notify(event, StreamTimeout); err != nil {
 				s.log.Warn("Failed to send event", zap.Error(err))
 			}
 		}
@@ -876,7 +876,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 			event.MessageUpdate = messages[len(messages)-1]
 		}
 
-		if err = ss.Notify(event, streamTimeout); err != nil {
+		if err = ss.Notify(event, StreamTimeout); err != nil {
 			log.Warn("Failed to notify stream (steam flush)", zap.Error(err))
 		}
 	}

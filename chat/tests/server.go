@@ -1,4 +1,4 @@
-package chat
+package tests
 
 import (
 	"bytes"
@@ -21,26 +21,58 @@ import (
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codekin "github.com/code-payments/code-server/pkg/kin"
-	memAccount "github.com/code-payments/flipchat-server/account/memory"
-	memIntent "github.com/code-payments/flipchat-server/intent/memory"
-	memProfile "github.com/code-payments/flipchat-server/profile/memory"
 
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/flags"
+	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
-func TestServer(t *testing.T) {
+func RunServerTests(
+	t *testing.T,
+	accounts account.Store,
+	profiles profile.Store,
+	chats chat.Store,
+	messages messaging.MessageStore,
+	pointers messaging.PointerStore,
+	intents intent.Store,
+	teardown func(),
+) {
+
+	for _, tf := range []func(
+		t *testing.T,
+		accounts account.Store,
+		profiles profile.Store,
+		chats chat.Store,
+		messages messaging.MessageStore,
+		pointers messaging.PointerStore,
+		intents intent.Store,
+	){
+		testServer,
+	} {
+		tf(t, accounts, profiles, chats, messages, pointers, intents)
+		teardown()
+	}
+}
+
+func testServer(
+	t *testing.T,
+	accounts account.Store,
+	profiles profile.Store,
+	chats chat.Store,
+	messageDB messaging.MessageStore,
+	pointerDB messaging.PointerStore,
+	intents intent.Store,
+) {
+
 	log := zap.Must(zap.NewDevelopment())
-	accounts := memAccount.NewInMemory()
-	messageDB := messaging.NewMemory()
-	profiles := memProfile.NewInMemory()
-	intents := memIntent.NewInMemory()
 	codeData := codedata.NewTestDataProvider()
 
 	userID := model.MustGenerateUserID()
@@ -51,13 +83,13 @@ func TestServer(t *testing.T) {
 		return id.Value
 	})
 
-	serv := NewServer(
+	serv := chat.NewServer(
 		log,
 		account.NewAuthorizer(log, accounts, auth.NewKeyPairAuthenticator()),
-		NewMemory(),
+		chats,
 		profiles,
 		messageDB,
-		messageDB,
+		pointerDB,
 		intents,
 		codeData,
 		messaging.NewNoopMessenger(), // todo: add tests for status messages
@@ -132,7 +164,7 @@ func TestServer(t *testing.T) {
 		require.Equal(t, "My Fun Group!", created.Chat.Title)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
-		require.Equal(t, initialCoverCharge, created.Chat.CoverCharge.Quarks)
+		require.Equal(t, chat.InitialCoverCharge, created.Chat.CoverCharge.Quarks)
 
 		expectedMembers := []*chatpb.Member{{
 			UserId: userID,
@@ -149,7 +181,7 @@ func TestServer(t *testing.T) {
 				{Type: messagingpb.Pointer_DELIVERED, Value: messaging.MustGenerateMessageID()},
 			}
 			for _, p := range pointers {
-				advanced, err := messageDB.AdvancePointer(context.Background(), created.Chat.ChatId, groupUserID, p)
+				advanced, err := pointerDB.AdvancePointer(context.Background(), created.Chat.ChatId, groupUserID, p)
 				require.NoError(t, err)
 				require.True(t, advanced)
 			}
@@ -223,7 +255,7 @@ func TestServer(t *testing.T) {
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			joinIntentID := testutil.CreatePayment(t, codeData, initialCoverCharge, joinPaymentMetadata)
+			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
 
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
@@ -258,7 +290,7 @@ func TestServer(t *testing.T) {
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			joinIntentID = testutil.CreatePayment(t, codeData, initialCoverCharge, joinPaymentMetadata)
+			joinIntentID = testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
 			join = &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_RoomId{
 					RoomId: created.Chat.RoomNumber,
@@ -392,14 +424,14 @@ func TestServer(t *testing.T) {
 		// TODO: There's a bit of a race for 'flush initial state', so we just wait a bit
 		time.Sleep(200 * time.Millisecond)
 
-		verifyExpectedMembers := func(update *chatpb.StreamChatEventsResponse_MemberUpdate, expected []Member) {
+		verifyExpectedMembers := func(update *chatpb.StreamChatEventsResponse_MemberUpdate, expected []chat.Member) {
 			refresh := update.GetRefresh()
 			require.NotNil(t, refresh)
 
 			slices.SortFunc(refresh.Members, func(a, b *chatpb.Member) int {
 				return bytes.Compare(a.UserId.Value, b.UserId.Value)
 			})
-			slices.SortFunc(expected, func(a, b Member) int {
+			slices.SortFunc(expected, func(a, b chat.Member) int {
 				return bytes.Compare(a.UserID.Value, b.UserID.Value)
 			})
 		}
@@ -426,7 +458,7 @@ func TestServer(t *testing.T) {
 		require.NoError(t, protoutil.ProtoEqualError(started.Chat, u.Metadata))
 		verifyExpectedMembers(
 			u.MemberUpdate,
-			[]Member{
+			[]chat.Member{
 				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: true},
 				{UserID: userID, AddedBy: streamUser, HasMuted: false, IsHost: false},
 			},
@@ -442,7 +474,7 @@ func TestServer(t *testing.T) {
 		require.NoError(t, protoutil.ProtoEqualError(started.Chat.ChatId, u.ChatId))
 		verifyExpectedMembers(
 			u.MemberUpdate,
-			[]Member{
+			[]chat.Member{
 				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: true},
 			},
 		)
@@ -460,7 +492,7 @@ func TestServer(t *testing.T) {
 			UserId: streamUser,
 			ChatId: startedOther.Chat.ChatId,
 		}
-		joinIntentID := testutil.CreatePayment(t, codeData, initialCoverCharge, joinPaymentMetadata)
+		joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
 		join := &chatpb.JoinChatRequest{
 			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
 			PaymentIntent: joinIntentID,
@@ -475,7 +507,7 @@ func TestServer(t *testing.T) {
 		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
 		verifyExpectedMembers(
 			u.MemberUpdate,
-			[]Member{
+			[]chat.Member{
 				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: false},
 				{UserID: userID, AddedBy: streamUser, HasMuted: false, IsHost: true},
 			},

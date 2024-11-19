@@ -13,6 +13,7 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
+	memChat "github.com/code-payments/flipchat-server/chat/memory"
 	memProfile "github.com/code-payments/flipchat-server/profile/memory"
 
 	"github.com/code-payments/flipchat-server/chat"
@@ -46,7 +47,7 @@ func TestEventHandler_HandleMessage(t *testing.T) {
 	ctx := context.Background()
 	logger := zaptest.NewLogger(t)
 
-	chatStore := chat.NewMemory()
+	chatStore := memChat.NewInMemory()
 	profileStore := memProfile.NewInMemory()
 	pusher := &mockPusher{}
 
