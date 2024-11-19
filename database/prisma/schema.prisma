@@ -14,33 +14,92 @@ generator db {
 // }
 
 model User {
-    id          String   @id
-    displayName String?
-    publicKeys  PublicKey[]
+  // Fields
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id          String      @id
+  displayName String?
+  publicKeys  PublicKey[]
 
-    @@map("flipchat_users")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  chats   Member[] @relation("member")
+  addedBy Member[] @relation("addedBy")
+
+  @@map("flipchat_users")
 }
 
 model PublicKey {
-    key       String @id
-    user      User   @relation(fields: [userId], references: [id])
-    userId    String
+  // Fields
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  key    String @id
+  userId String
 
-    @@map("flipchat_publickeys")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("flipchat_publickeys")
 }
 
 model Intent {
-    id          String   @id
-    isFulfilled Boolean
+  // Fields
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id          String  @id
+  isFulfilled Boolean
 
-    @@map("flipchat_intents")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  // - none -
+
+  @@map("flipchat_intents")
+}
+
+model Chat {
+  // Fields
+
+  id          String @id
+  title       String
+  roomNumber  Int
+  coverCharge Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  members Member[]
+
+  @@map("flipchat_chats")
+}
+
+model Member {
+  // Fields
+
+  id        String @id
+  chatId    String
+  userId    String
+  addedById String
+
+  isHost    Boolean
+  numUnread Int
+  hasMuted  Boolean
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  chat    Chat @relation(fields: [chatId], references: [id])
+  user    User @relation(fields: [userId], references: [id], name: "member")
+  addedBy User @relation(fields: [addedById], references: [id], name: "addedBy")
+
+  @@map("flipchat_members")
 }
