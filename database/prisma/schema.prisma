@@ -86,7 +86,7 @@ model Member {
 
   chatId    String
   userId    String
-  addedById String
+  addedById String?
 
   isHost    Boolean @default(false)
   numUnread Int     @default(0)
@@ -99,7 +99,7 @@ model Member {
 
   chat    Chat @relation(fields: [chatId], references: [id])
   user    User @relation(fields: [userId], references: [id], name: "member")
-  addedBy User @relation(fields: [addedById], references: [id], name: "addedBy")
+  addedBy User? @relation(fields: [addedById], references: [id], name: "addedBy")
 
   // Constraints
 

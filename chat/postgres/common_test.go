@@ -1,4 +1,4 @@
-//go:build notimplemented
+//go:build integration
 
 package postgres
 

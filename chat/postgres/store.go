@@ -1,10 +1,10 @@
-//go:build notimplemented
-
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"slices"
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
@@ -28,6 +28,7 @@ func NewPostgres(client *db.PrismaClient) chat.Store {
 
 func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 	decodedChatID, err := pg.Decode(m.ID)
+
 	if err != nil {
 		return nil, err
 	}
@@ -37,6 +38,11 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		room = uint64(roomNumber)
 	}
 
+	coverCharge := (*commonpb.PaymentAmount)(nil)
+	if m.CoverCharge != 0 {
+		coverCharge = &commonpb.PaymentAmount{Quarks: uint64(m.CoverCharge)}
+	}
+
 	return &chatpb.Metadata{
 		ChatId: &commonpb.ChatId{Value: decodedChatID},
 
@@ -44,9 +50,11 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		Title:      m.Title,
 		RoomNumber: room,
 
-		CoverCharge: &commonpb.PaymentAmount{
-			Quarks: uint64(m.CoverCharge),
-		},
+		IsMuted:   false, // not stored in the DB on this model
+		Muteable:  true,  // not stored in the DB on this model
+		NumUnread: 0,     // not stored in the DB on this model
+
+		CoverCharge: coverCharge,
 	}, nil
 }
 
@@ -101,7 +109,7 @@ func (s *store) GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) || owner == nil {
-		return nil, chat.ErrMemberNotFound
+		return fromModel(res)
 	} else if err != nil {
 		return nil, err
 	}
@@ -115,52 +123,64 @@ func (s *store) GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*
 }
 
 func (s *store) GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
-	/*
-		s.mu.RLock()
-		defer s.mu.RUnlock()
 
-		chatIDStrings := s.chatsByMember[string(userID.Value)]
+	encodedUserID := pg.Encode(userID.Value)
 
-		var chatIDs []*commonpb.ChatId
-		for _, chatIDString := range chatIDStrings {
-			chatIDs = append(chatIDs, &commonpb.ChatId{Value: []byte(chatIDString)})
+	res, err := s.client.Member.FindMany(
+		db.Member.UserID.Equals(encodedUserID),
+	).Select(
+		db.Member.ChatID.Field(),
+	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Use the DB to sort, limit, and paginate the results
+	// (Using the same logic from the in-memory store for now)
+
+	var chatIDs []*commonpb.ChatId
+	for _, member := range res {
+		decodedChatID, err := pg.Decode(member.ChatID)
+		if err != nil {
+			return nil, err
 		}
 
-		queryOpts := query.DefaultOptions()
-		for _, o := range opts {
-			o(&queryOpts)
-		}
+		chatIDs = append(chatIDs, &commonpb.ChatId{Value: decodedChatID})
+	}
 
-		slices.SortFunc(chatIDs, func(a, b *commonpb.ChatId) int {
-			if queryOpts.Order == commonpb.QueryOptions_ASC {
-				return bytes.Compare(a.GetValue(), b.GetValue())
+	queryOpts := query.DefaultOptions()
+	for _, o := range opts {
+		o(&queryOpts)
+	}
+
+	slices.SortFunc(chatIDs, func(a, b *commonpb.ChatId) int {
+		if queryOpts.Order == commonpb.QueryOptions_ASC {
+			return bytes.Compare(a.GetValue(), b.GetValue())
+		} else {
+			return -1 * bytes.Compare(a.GetValue(), b.GetValue())
+		}
+	})
+
+	if queryOpts.Token != nil {
+		for i := range chatIDs {
+			cmp := bytes.Compare(chatIDs[i].GetValue(), queryOpts.Token.GetValue())
+			if queryOpts.Order == commonpb.QueryOptions_DESC {
+				cmp *= -1
+			}
+			if cmp <= 0 {
+				continue
 			} else {
-				return -1 * bytes.Compare(a.GetValue(), b.GetValue())
-			}
-		})
-
-		if queryOpts.Token != nil {
-			for i := range chatIDs {
-				cmp := bytes.Compare(chatIDs[i].GetValue(), queryOpts.Token.GetValue())
-				if queryOpts.Order == commonpb.QueryOptions_DESC {
-					cmp *= -1
-				}
-				if cmp <= 0 {
-					continue
-				} else {
-					chatIDs = chatIDs[i:]
-					break
-				}
+				chatIDs = chatIDs[i:]
+				break
 			}
 		}
+	}
 
-		if queryOpts.Limit > 0 {
-			chatIDs = chatIDs[:min(queryOpts.Limit, len(chatIDs))]
-		}
+	if queryOpts.Limit > 0 {
+		chatIDs = chatIDs[:min(queryOpts.Limit, len(chatIDs))]
+	}
 
-		return chatIDs, nil
-	*/
-	return nil, nil
+	return chatIDs, nil
 }
 
 func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*chat.Member, error) {
@@ -182,17 +202,22 @@ func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*cha
 			return nil, err
 		}
 
-		decodedAddedBy, err := pg.Decode(member.AddedByID)
-		if err != nil {
-			return nil, err
-		}
-
-		pbMembers = append(pbMembers, &chat.Member{
+		pgMember := &chat.Member{
 			UserID:   &commonpb.UserId{Value: decodedUserId},
-			AddedBy:  &commonpb.UserId{Value: decodedAddedBy},
 			HasMuted: member.HasMuted,
 			IsHost:   member.IsHost,
-		})
+		}
+
+		if addedByID, ok := member.AddedByID(); ok {
+			decodedAddedBy, err := pg.Decode(addedByID)
+			if err != nil {
+				return nil, err
+			}
+
+			pgMember.AddedBy = &commonpb.UserId{Value: decodedAddedBy}
+		}
+
+		pbMembers = append(pbMembers, pgMember)
 	}
 
 	return pbMembers, nil
@@ -213,17 +238,22 @@ func (s *store) GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *
 		return nil, chat.ErrMemberNotFound
 	}
 
-	decodedAddedBy, err := pg.Decode(member.AddedByID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &chat.Member{
+	pgMember := &chat.Member{
 		UserID:   &commonpb.UserId{Value: userID.Value},
-		AddedBy:  &commonpb.UserId{Value: decodedAddedBy},
 		HasMuted: member.HasMuted,
 		IsHost:   member.IsHost,
-	}, nil
+	}
+
+	if addedByID, ok := member.AddedByID(); ok {
+		decodedAddedBy, err := pg.Decode(addedByID)
+		if err != nil {
+			return nil, err
+		}
+
+		pgMember.AddedBy = &commonpb.UserId{Value: decodedAddedBy}
+	}
+
+	return pgMember, nil
 }
 
 func (s *store) IsMember(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {
@@ -267,24 +297,36 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 
 		return meta, chat.ErrChatExists
 	}
-	if !errors.Is(err, db.ErrNotFound) {
+	if !errors.Is(err, db.ErrNotFound) && err != nil {
 		return nil, err
 	}
 
 	// Find the next room number
+
+	// TODO: This is not efficient, but it's fine for now. Maybe an
+	// auto-incrementing field would be better, but thats not how the in-memory
+	// store works
+
 	largest, err := s.client.Chat.FindFirst(
 		db.Chat.Not(db.Chat.RoomNumber.IsNull()),
 	).OrderBy(
 		db.Chat.RoomNumber.Order(db.SortOrderDesc),
 	).Exec(ctx)
 
-	if err != nil {
+	if !errors.Is(err, db.ErrNotFound) && err != nil {
 		return nil, err
 	}
 
 	nextNumber := uint64(1)
-	if roomNumber, ok := largest.RoomNumber(); ok {
-		nextNumber = uint64(roomNumber) + 1
+	if largest != nil {
+		if roomNumber, ok := largest.RoomNumber(); ok {
+			nextNumber = uint64(roomNumber) + 1
+		}
+	}
+
+	coverCharge := int(0)
+	if md.CoverCharge != nil {
+		coverCharge = int(md.CoverCharge.Quarks)
 	}
 
 	// Create the chat room
@@ -293,7 +335,7 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		db.Chat.Title.Set(md.Title),
 		db.Chat.RoomNumber.Set(int(nextNumber)),
 		db.Chat.Type.Set(int(md.Type)),
-		db.Chat.CoverCharge.Set(int(md.CoverCharge.Quarks)),
+		db.Chat.CoverCharge.Set(coverCharge),
 	).Exec(ctx)
 
 	if err != nil {
@@ -306,7 +348,6 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member chat.Member) error {
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedUserID := pg.Encode(member.UserID.Value)
-	encodedAddedBy := pg.Encode(member.AddedBy.Value)
 
 	// Check if the chat exists
 	res, err := s.client.Chat.FindUnique(
@@ -330,15 +371,22 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 	}
 
 	// Create the member
+	createArgs := []db.MemberSetParam{
+		db.Member.HasMuted.Set(member.HasMuted),
+		db.Member.IsHost.Set(member.IsHost),
+	}
+
+	// Add AddedBy parameter conditionally
+	if member.AddedBy != nil {
+		encodedAddedBy := pg.Encode(member.AddedBy.Value)
+		createArgs = append(createArgs, db.Member.AddedBy.Link(db.User.ID.Equals(encodedAddedBy)))
+	}
+
 	_, err = s.client.Member.CreateOne(
 		db.Member.Chat.Link(db.Chat.ID.Equals(encodedChatID)),
 		db.Member.User.Link(db.User.ID.Equals(encodedUserID)),
-		db.Member.AddedBy.Link(db.User.ID.Equals(encodedAddedBy)),
-
-		db.Member.HasMuted.Set(member.HasMuted),
-		db.Member.IsHost.Set(member.IsHost),
+		createArgs...,
 	).Exec(ctx)
-
 	return err
 }
 

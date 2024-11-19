@@ -20,21 +20,21 @@ import (
 
 func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 	for _, tf := range []func(t *testing.T, s chat.Store){
-		testInMemoryStore_Metadata,
-		testInMemoryStore_GetAllChatsForUser,
-		testInMemoryStore_GetAllChatsForUser_Pagination,
-		testInMemoryStore_GetChatMembers,
-		testInMemoryStore_IsChatMember,
-		testInMemoryStore_SetChatMuteState,
-		testInMemoryStore_JoinLeave,
-		testInMemoryStore_AddRemove,
+		testChatStore_Metadata,
+		testChatStore_GetAllChatsForUser,
+		testChatStore_GetAllChatsForUser_Pagination,
+		testChatStore_GetChatMembers,
+		testChatStore_IsChatMember,
+		testChatStore_SetChatMuteState,
+		testChatStore_JoinLeave,
+		testChatStore_AddRemove,
 	} {
 		tf(t, s)
 		teardown()
 	}
 }
 
-func testInMemoryStore_Metadata(t *testing.T, store chat.Store) {
+func testChatStore_Metadata(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 	expected := &chatpb.Metadata{
@@ -65,7 +65,7 @@ func testInMemoryStore_Metadata(t *testing.T, store chat.Store) {
 	require.NoError(t, protoutil.ProtoEqualError(expected, result))
 }
 
-func testInMemoryStore_GetAllChatsForUser(t *testing.T, store chat.Store) {
+func testChatStore_GetAllChatsForUser(t *testing.T, store chat.Store) {
 
 	memberID := model.MustGenerateUserID()
 
@@ -78,10 +78,12 @@ func testInMemoryStore_GetAllChatsForUser(t *testing.T, store chat.Store) {
 		chatID := model.MustGenerateChatID()
 		expectedChatIDs = append(expectedChatIDs, chatID)
 
-		_, err = store.CreateChat(context.Background(), &chatpb.Metadata{
+		_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
 			ChatId: chatID,
 			Type:   chatpb.Metadata_TWO_WAY,
 		})
+
+		require.NoError(t, err)
 
 		for range 2 {
 			require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
@@ -99,7 +101,7 @@ func testInMemoryStore_GetAllChatsForUser(t *testing.T, store chat.Store) {
 	require.NoError(t, protoutil.SliceEqualError(expectedChatIDs, chatIDs))
 }
 
-func testInMemoryStore_GetAllChatsForUser_Pagination(t *testing.T, store chat.Store) {
+func testChatStore_GetAllChatsForUser_Pagination(t *testing.T, store chat.Store) {
 
 	memberID := model.MustGenerateUserID()
 
@@ -168,7 +170,7 @@ func testInMemoryStore_GetAllChatsForUser_Pagination(t *testing.T, store chat.St
 }
 
 // TODO: Need proper pagination tests
-func testInMemoryStore_GetChatMembers(t *testing.T, store chat.Store) {
+func testChatStore_GetChatMembers(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
@@ -209,7 +211,7 @@ func testInMemoryStore_GetChatMembers(t *testing.T, store chat.Store) {
 
 }
 
-func testInMemoryStore_IsChatMember(t *testing.T, store chat.Store) {
+func testChatStore_IsChatMember(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 	memberID := model.MustGenerateUserID()
@@ -233,7 +235,7 @@ func testInMemoryStore_IsChatMember(t *testing.T, store chat.Store) {
 	require.True(t, isMember)
 }
 
-func testInMemoryStore_SetChatMuteState(t *testing.T, store chat.Store) {
+func testChatStore_SetChatMuteState(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 	memberID := model.MustGenerateUserID()
@@ -259,7 +261,7 @@ func testInMemoryStore_SetChatMuteState(t *testing.T, store chat.Store) {
 	require.True(t, members[0].HasMuted)
 }
 
-func testInMemoryStore_JoinLeave(t *testing.T, store chat.Store) {
+func testChatStore_JoinLeave(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 
@@ -287,7 +289,7 @@ func testInMemoryStore_JoinLeave(t *testing.T, store chat.Store) {
 	require.Empty(t, chats, 0)
 }
 
-func testInMemoryStore_AddRemove(t *testing.T, store chat.Store) {
+func testChatStore_AddRemove(t *testing.T, store chat.Store) {
 
 	chatID := model.MustGenerateChatID()
 

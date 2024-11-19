@@ -15,7 +15,7 @@ CREATE TABLE "flipchat_chats" (
 CREATE TABLE "flipchat_members" (
     "chatId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "addedById" TEXT NOT NULL,
+    "addedById" TEXT,
     "isHost" BOOLEAN NOT NULL DEFAULT false,
     "numUnread" INTEGER NOT NULL DEFAULT 0,
     "hasMuted" BOOLEAN NOT NULL DEFAULT false,
@@ -35,4 +35,4 @@ ALTER TABLE "flipchat_members" ADD CONSTRAINT "flipchat_members_chatId_fkey" FOR
 ALTER TABLE "flipchat_members" ADD CONSTRAINT "flipchat_members_userId_fkey" FOREIGN KEY ("userId") REFERENCES "flipchat_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "flipchat_members" ADD CONSTRAINT "flipchat_members_addedById_fkey" FOREIGN KEY ("addedById") REFERENCES "flipchat_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "flipchat_members" ADD CONSTRAINT "flipchat_members_addedById_fkey" FOREIGN KEY ("addedById") REFERENCES "flipchat_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
