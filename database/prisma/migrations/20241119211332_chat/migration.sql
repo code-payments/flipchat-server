@@ -2,8 +2,9 @@
 CREATE TABLE "flipchat_chats" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
-    "roomNumber" INTEGER NOT NULL,
-    "coverCharge" INTEGER NOT NULL,
+    "roomNumber" INTEGER,
+    "coverCharge" INTEGER NOT NULL DEFAULT 0,
+    "type" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -12,18 +13,20 @@ CREATE TABLE "flipchat_chats" (
 
 -- CreateTable
 CREATE TABLE "flipchat_members" (
-    "id" TEXT NOT NULL,
     "chatId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "addedById" TEXT NOT NULL,
-    "isHost" BOOLEAN NOT NULL,
-    "numUnread" INTEGER NOT NULL,
-    "hasMuted" BOOLEAN NOT NULL,
+    "isHost" BOOLEAN NOT NULL DEFAULT false,
+    "numUnread" INTEGER NOT NULL DEFAULT 0,
+    "hasMuted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "flipchat_members_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "flipchat_members_pkey" PRIMARY KEY ("chatId","userId")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "flipchat_chats_roomNumber_key" ON "flipchat_chats"("roomNumber");
 
 -- AddForeignKey
 ALTER TABLE "flipchat_members" ADD CONSTRAINT "flipchat_members_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "flipchat_chats"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

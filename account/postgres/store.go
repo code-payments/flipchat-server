@@ -111,9 +111,10 @@ func (s *store) GetUserId(ctx context.Context, pubKey *commonpb.PublicKey) (*com
 func (s *store) GetPubKeys(ctx context.Context, userID *commonpb.UserId) ([]*commonpb.PublicKey, error) {
 	encodedUserID := pg.Encode(userID.Value)
 
+	// TODO: Add pagination
 	keys, err := s.client.PublicKey.FindMany(
 		db.PublicKey.UserID.Equals(encodedUserID),
-	).Take(100).Exec(ctx)
+	).Exec(ctx)
 
 	if err != nil {
 		return nil, err
