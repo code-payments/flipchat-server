@@ -89,7 +89,7 @@ func (m *Memory) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userI
 	messages := m.messages[string(chatID.Value)]
 
 	for _, message := range messages {
-		if lastRead != nil && bytes.Compare(message.MessageId.Value, lastRead.Value) < 0 {
+		if lastRead != nil && bytes.Compare(message.MessageId.Value, lastRead.Value) <= 0 {
 			continue
 		}
 		if message.SenderId != nil && bytes.Equal(message.SenderId.Value, userID.Value) {
