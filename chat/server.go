@@ -403,13 +403,13 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 	)
 
 	if md.Type == chatpb.Metadata_GROUP {
-		if err := messaging.SendStatusMessage(
+		if err := messaging.SendAnnouncement(
 			ctx,
 			s.messenger,
 			md.ChatId,
-			messaging.NewRoomIsLiveStatusContentBuilder(md.RoomNumber),
+			messaging.NewRoomIsLiveAnnouncementContentBuilder(md.RoomNumber),
 		); err != nil {
-			log.Warn("Failed to send status message", zap.Error(err))
+			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 	}
 
@@ -535,13 +535,13 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		}
 	}
 
-	if err := messaging.SendStatusMessage(
+	if err := messaging.SendAnnouncement(
 		ctx,
 		s.messenger,
 		chatID,
-		messaging.NewUserJoinedChatStatusContentBuilder(ctx, s.profiles, userID),
+		messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID),
 	); err != nil {
-		s.log.Warn("Failed to send status message", zap.Error(err))
+		s.log.Warn("Failed to send announcement", zap.Error(err))
 	}
 
 	md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)
@@ -652,13 +652,13 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 		return nil, status.Errorf(codes.Internal, "failed to set cover charge")
 	}
 
-	if err = messaging.SendStatusMessage(
+	if err = messaging.SendAnnouncement(
 		ctx,
 		s.messenger,
 		req.ChatId,
-		messaging.NewCoverChangedStatusContentBuilder(req.CoverCharge.Quarks),
+		messaging.NewCoverChangedAnnouncementContentBuilder(req.CoverCharge.Quarks),
 	); err != nil {
-		log.Warn("Failed to send status message", zap.Error(err))
+		log.Warn("Failed to send announcement", zap.Error(err))
 	}
 
 	return &chatpb.SetCoverChargeResponse{}, nil
@@ -700,13 +700,13 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 		return nil, status.Errorf(codes.Internal, "failed to remove chat member")
 	}
 
-	if err = messaging.SendStatusMessage(
+	if err = messaging.SendAnnouncement(
 		ctx,
 		s.messenger,
 		req.ChatId,
-		messaging.NewUserRemovedStatusContentBuilder(ctx, s.profiles, req.UserId),
+		messaging.NewUserRemovedAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
 	); err != nil {
-		log.Warn("Failed to send status message", zap.Error(err))
+		log.Warn("Failed to send announcement", zap.Error(err))
 	}
 
 	_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)

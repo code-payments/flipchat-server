@@ -92,7 +92,7 @@ func testServer(
 		pointerDB,
 		intents,
 		codeData,
-		messaging.NewNoopMessenger(), // todo: add tests for status messages
+		messaging.NewNoopMessenger(), // todo: add tests for announcements
 		bus,
 	)
 
