@@ -60,6 +60,7 @@ func TestServer(t *testing.T) {
 		messageDB,
 		intents,
 		codeData,
+		messaging.NewNoopMessenger(), // todo: add tests for status messages
 		bus,
 	)
 

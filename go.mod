@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v0.17.0
 	github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84
 	github.com/code-payments/code-server v1.10.20-0.20241113221941-16bb545e1277
-	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241118193337-91efefc4cbc6
+	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241119153054-311b604be50c
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/jackc/pgconn v1.10.0
@@ -86,7 +86,7 @@ require (
 	golang.org/x/oauth2 v0.22.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
-	golang.org/x/text v0.19.0 // indirect
+	golang.org/x/text v0.19.0
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/api v0.170.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect

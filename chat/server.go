@@ -56,6 +56,8 @@ type Server struct {
 	intents  intent.Store
 	codeData codedata.Provider
 
+	messenger messaging.Messenger
+
 	streamsMu sync.RWMutex
 	streams   map[string]event.Stream[*event.ChatEvent]
 
@@ -71,6 +73,7 @@ func NewServer(
 	pointers messaging.PointerStore,
 	intents intent.Store,
 	codeData codedata.Provider,
+	messenger messaging.Messenger,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
 ) *Server {
 	s := &Server{
@@ -84,6 +87,8 @@ func NewServer(
 		messages: messages,
 		intents:  intents,
 		codeData: codeData,
+
+		messenger: messenger,
 
 		streams: make(map[string]event.Stream[*event.ChatEvent]),
 	}
@@ -397,6 +402,17 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		zap.String("user_id", model.UserIDString(userID)),
 	)
 
+	if md.Type == chatpb.Metadata_GROUP {
+		if err := messaging.SendStatusMessage(
+			ctx,
+			s.messenger,
+			md.ChatId,
+			messaging.NewRoomIsLiveStatusContentBuilder(md.RoomNumber),
+		); err != nil {
+			log.Warn("Failed to send status message", zap.Error(err))
+		}
+	}
+
 	var members []Member
 	var memberProtos []*chatpb.Member
 	for _, m := range users {
@@ -519,6 +535,15 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		}
 	}
 
+	if err := messaging.SendStatusMessage(
+		ctx,
+		s.messenger,
+		chatID,
+		messaging.NewUserJoinedChatStatusContentBuilder(ctx, s.profiles, userID),
+	); err != nil {
+		s.log.Warn("Failed to send status message", zap.Error(err))
+	}
+
 	md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)
 	if err != nil {
 		s.log.Warn("Failed to get chat data", zap.Error(err))
@@ -601,11 +626,16 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 		return nil, err
 	}
 
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
 	md, err := s.getMetadata(ctx, req.ChatId, nil)
 	if err == ErrChatNotFound {
 		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
 	} else if err != nil {
-		s.log.Warn("Failed to get chat", zap.Error(err))
+		log.Warn("Failed to get chat", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to get chat")
 	}
 
@@ -618,8 +648,17 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 
 	err = s.chats.SetCoverCharge(ctx, req.ChatId, req.CoverCharge)
 	if err != nil {
-		s.log.Warn("Failed to set cover charge", zap.Error(err))
+		log.Warn("Failed to set cover charge", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to set cover charge")
+	}
+
+	if err = messaging.SendStatusMessage(
+		ctx,
+		s.messenger,
+		req.ChatId,
+		messaging.NewCoverChangedStatusContentBuilder(req.CoverCharge.Quarks),
+	); err != nil {
+		log.Warn("Failed to send status message", zap.Error(err))
 	}
 
 	return &chatpb.SetCoverChargeResponse{}, nil
@@ -659,6 +698,15 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 	if err = s.chats.RemoveMember(ctx, req.ChatId, req.UserId); err != nil {
 		log.Warn("Failed to remove member", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to remove chat member")
+	}
+
+	if err = messaging.SendStatusMessage(
+		ctx,
+		s.messenger,
+		req.ChatId,
+		messaging.NewUserRemovedStatusContentBuilder(ctx, s.profiles, req.UserId),
+	); err != nil {
+		log.Warn("Failed to send status message", zap.Error(err))
 	}
 
 	_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
