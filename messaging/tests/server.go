@@ -1,4 +1,4 @@
-package messaging
+package tests
 
 import (
 	"context"
@@ -19,8 +19,8 @@ import (
 	"github.com/code-payments/flipchat-server/protoutil"
 
 	"github.com/code-payments/flipchat-server/account"
-	"github.com/code-payments/flipchat-server/account/memory"
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/testutil"
 )
@@ -28,20 +28,45 @@ import (
 type testAuthn struct {
 }
 
-func TestServerHappy(t *testing.T) {
+func RunServerTests(
+	t *testing.T,
+	accounts account.Store,
+	messages messaging.MessageStore,
+	pointers messaging.PointerStore,
+	teardown func(),
+) {
+
+	for _, tf := range []func(
+		t *testing.T,
+		accounts account.Store,
+		messages messaging.MessageStore,
+		pointers messaging.PointerStore,
+	){
+		testServerHappy,
+		testServerDuplicateStreams,
+	} {
+		tf(t, accounts, messages, pointers)
+		teardown()
+	}
+}
+
+func testServerHappy(
+	t *testing.T,
+	accountStore account.Store,
+	messageDB messaging.MessageStore,
+	pointerDB messaging.PointerStore,
+) {
 	log := zap.Must(zap.NewDevelopment())
-	accountStore := memory.NewInMemory()
 	authz := account.NewAuthorizer(log, accountStore, auth.NewKeyPairAuthenticator())
 	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
 		return id.Value
 	})
 
-	store := NewMemory()
-	serv := NewServer(
+	serv := messaging.NewServer(
 		log,
 		authz,
-		store,
-		store,
+		messageDB,
+		pointerDB,
 		bus,
 	)
 
@@ -179,20 +204,23 @@ func TestServerHappy(t *testing.T) {
 	})
 }
 
-func TestServerDuplicateStreams(t *testing.T) {
+func testServerDuplicateStreams(
+	t *testing.T,
+	accountStore account.Store,
+	messageDB messaging.MessageStore,
+	pointerDB messaging.PointerStore,
+) {
 	log := zap.Must(zap.NewDevelopment())
-	accountStore := memory.NewInMemory()
 	authz := account.NewAuthorizer(log, accountStore, auth.NewKeyPairAuthenticator())
 	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
 		return id.Value
 	})
 
-	store := NewMemory()
-	serv := NewServer(
+	serv := messaging.NewServer(
 		log,
 		authz,
-		store,
-		store,
+		messageDB,
+		pointerDB,
 		bus,
 	)
 

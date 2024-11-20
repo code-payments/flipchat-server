@@ -1,4 +1,4 @@
-package messaging
+package tests
 
 import (
 	"context"
@@ -12,12 +12,32 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
+	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 )
 
-func TestPointerStore(t *testing.T) {
-	s := NewMemory()
+func RunStoreTests(
+	t *testing.T,
+	ms messaging.MessageStore,
+	ps messaging.PointerStore,
+	teardown func(),
+) {
+
+	for _, tf := range []func(
+		t *testing.T,
+		ms messaging.MessageStore,
+		ps messaging.PointerStore,
+	){
+		testPointerStore,
+		testMessageStore,
+	} {
+		tf(t, ms, ps)
+		teardown()
+	}
+}
+
+func testPointerStore(t *testing.T, _ messaging.MessageStore, s messaging.PointerStore) {
 	ctx := context.Background()
 	chatID := model.MustGenerateChatID()
 	userID := model.MustGenerateUserID()
@@ -34,11 +54,11 @@ func TestPointerStore(t *testing.T) {
 
 	t.Run("Advance", func(t *testing.T) {
 		var expectedPtrs []*messagingpb.Pointer
-		var expectedAll []UserPointer
+		var expectedAll []messaging.UserPointer
 		for ptrType := messagingpb.Pointer_SENT; ptrType < messagingpb.Pointer_READ; ptrType++ {
 			ptr := &messagingpb.Pointer{
 				Type:  ptrType,
-				Value: MustGenerateMessageID(),
+				Value: messaging.MustGenerateMessageID(),
 			}
 
 			advanced, err := s.AdvancePointer(ctx, chatID, userID, ptr)
@@ -46,7 +66,7 @@ func TestPointerStore(t *testing.T) {
 			require.True(t, advanced)
 
 			expectedPtrs = append(expectedPtrs, ptr)
-			expectedAll = append(expectedAll, UserPointer{
+			expectedAll = append(expectedAll, messaging.UserPointer{
 				UserID:  userID,
 				Pointer: ptr,
 			})
@@ -59,7 +79,7 @@ func TestPointerStore(t *testing.T) {
 		for ptrType := messagingpb.Pointer_SENT; ptrType < messagingpb.Pointer_READ; ptrType++ {
 			ptr := &messagingpb.Pointer{
 				Type:  ptrType,
-				Value: MustGenerateMessageIDFromTime(time.Now().Add(-time.Hour)),
+				Value: messaging.MustGenerateMessageIDFromTime(time.Now().Add(-time.Hour)),
 			}
 
 			advanced, err := s.AdvancePointer(ctx, chatID, userID, ptr)
@@ -82,8 +102,7 @@ func TestPointerStore(t *testing.T) {
 	})
 }
 
-func TestMessageStore(t *testing.T) {
-	s := NewMemory()
+func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.PointerStore) {
 	ctx := context.Background()
 	chatID := model.MustGenerateChatID()
 

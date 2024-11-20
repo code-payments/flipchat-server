@@ -9,10 +9,10 @@ import (
 
 	account "github.com/code-payments/flipchat-server/account/postgres"
 	intent "github.com/code-payments/flipchat-server/intent/postgres"
+	messaging "github.com/code-payments/flipchat-server/messaging/memory"
 	profile "github.com/code-payments/flipchat-server/profile/postgres"
 
 	"github.com/code-payments/flipchat-server/chat/tests"
-	"github.com/code-payments/flipchat-server/messaging"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
@@ -25,7 +25,7 @@ func TestChat_PostgresServer(t *testing.T) {
 	accounts := account.NewPostgres(client)
 	profiles := profile.NewPostgres(client)
 	intents := intent.NewPostgres(client)
-	messages := messaging.NewMemory() // TODO: Implement Postgres messaging
+	messages := messaging.NewInMemory() // TODO: Implement Postgres messaging
 
 	teardown := func() {
 		chats.(*store).reset()

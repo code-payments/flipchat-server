@@ -7,7 +7,7 @@ import (
 
 	account "github.com/code-payments/flipchat-server/account/memory"
 	intent "github.com/code-payments/flipchat-server/intent/memory"
-	messaging "github.com/code-payments/flipchat-server/messaging"
+	messaging "github.com/code-payments/flipchat-server/messaging/memory"
 	profile "github.com/code-payments/flipchat-server/profile/memory"
 )
 
@@ -16,7 +16,7 @@ func TestChat_MemoryServer(t *testing.T) {
 	accounts := account.NewInMemory()
 	profiles := profile.NewInMemory()
 	intents := intent.NewInMemory()
-	messages := messaging.NewMemory()
+	messages := messaging.NewInMemory()
 
 	teardown := func() {
 		//testStore.(*memory).reset()
