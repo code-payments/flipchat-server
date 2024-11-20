@@ -2,6 +2,7 @@ package push
 
 import (
 	"context"
+	"encoding/base64"
 
 	"firebase.google.com/go/v4/messaging"
 	"go.uber.org/zap"
@@ -11,12 +12,12 @@ import (
 
 type Pusher interface {
 	// SendPushes sends a basic visible push to a user.
-	SendPushes(ctx context.Context, members []*commonpb.UserId, title, body string, data map[string]string) error
+	SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, data map[string]string) error
 }
 
 type NoOpPusher struct{}
 
-func (n *NoOpPusher) SendPushes(_ context.Context, _ []*commonpb.UserId, _, _ string) error {
+func (n *NoOpPusher) SendPushes(_ context.Context, _ *commonpb.ChatId, _ []*commonpb.UserId, _, _ string) error {
 	return nil
 }
 
@@ -39,7 +40,7 @@ func NewFCMPusher(log *zap.Logger, tokens TokenStore, client FCMClient) *FCMPush
 	}
 }
 
-func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, title, body string, data map[string]string) error {
+func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, data map[string]string) error {
 	var allPushTokens []Token
 	for _, user := range users {
 		tokens, err := p.tokens.GetTokens(ctx, user)
@@ -65,6 +66,17 @@ func (p *FCMPusher) SendPushes(ctx context.Context, users []*commonpb.UserId, ti
 		Notification: &messaging.Notification{
 			Title: title,
 			Body:  body,
+		},
+		APNS: &messaging.APNSConfig{
+			Payload: &messaging.APNSPayload{
+				Aps: &messaging.Aps{
+					Alert: &messaging.ApsAlert{
+						Title: title,
+						Body:  body,
+					},
+					ThreadID: base64.StdEncoding.EncodeToString(chatID.Value),
+				},
+			},
 		},
 		Data: data,
 	}

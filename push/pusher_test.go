@@ -2,6 +2,7 @@ package push
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	pushpb "github.com/code-payments/flipchat-protobuf-api/generated/go/push/v1"
+	"github.com/code-payments/flipchat-server/model"
 )
 
 // testFCMClient captures the messages sent for verification
@@ -49,18 +51,25 @@ func TestFCMPusher_SendPush(t *testing.T) {
 	}
 
 	// Send push to first 3 users
+	chatID := model.MustGenerateChatID()
 	targetUsers := users[:3]
 	data := map[string]string{"my-data": "data is gold"}
-	err := pusher.SendPushes(ctx, targetUsers, "Test Title", "Test Body", data)
+	err := pusher.SendPushes(ctx, chatID, targetUsers, "Test Title", "Test Body", data)
 	require.NoError(t, err)
 
 	// Verify the message was sent with all 6 tokens (2 tokens * 3 users)
 	require.NotNil(t, fcmClient.sentMessage)
 	assert.Len(t, fcmClient.sentMessage.Tokens, 6)
 
-	// Verify message content
+	// Verify basic notification message content
 	assert.Equal(t, "Test Title", fcmClient.sentMessage.Notification.Title)
 	assert.Equal(t, "Test Body", fcmClient.sentMessage.Notification.Body)
+	assert.Equal(t, data, fcmClient.sentMessage.Data)
+
+	// Verify APS content
+	assert.Equal(t, "Test Title", fcmClient.sentMessage.APNS.Payload.Aps.Alert.Title)
+	assert.Equal(t, "Test Body", fcmClient.sentMessage.APNS.Payload.Aps.Alert.Body)
+	assert.Equal(t, base64.StdEncoding.EncodeToString(chatID.Value), fcmClient.sentMessage.APNS.Payload.Aps.ThreadID)
 	assert.Equal(t, data, fcmClient.sentMessage.Data)
 
 	// Verify the correct tokens were included
