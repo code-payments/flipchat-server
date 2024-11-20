@@ -303,6 +303,29 @@ func testServer(
 			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
 		})
 
+		t.Run("Remove user", func(t *testing.T) {
+			removedUser := otherUsers[0]
+			expectedMembers = expectedMembers[1:]
+
+			remove := &chatpb.RemoveUserRequest{
+				ChatId: created.Chat.GetChatId(),
+				UserId: otherUsers[0],
+			}
+			require.NoError(t, keyPair.Auth(remove, &remove.Auth))
+
+			removeResp, err := client.RemoveUser(context.Background(), remove)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.RemoveUserResponse_OK, removeResp.Result)
+
+			get, err = client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.Len(t, get.Members, len(expectedMembers))
+			for _, member := range get.Members {
+				require.NotEqual(t, removedUser.Value, member.UserId.Value)
+			}
+		})
+
 		t.Run("Set cover charge", func(t *testing.T) {
 			setCoverCharge := &chatpb.SetCoverChargeRequest{
 				ChatId:      created.Chat.ChatId,

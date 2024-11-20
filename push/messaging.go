@@ -118,7 +118,7 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	data := map[string]string{
 		"chat_id": base64.StdEncoding.EncodeToString(chatID.Value),
 	}
-	if err := h.pusher.SendPushes(ctx, pushMembers, title, body, data); err != nil {
+	if err := h.pusher.SendPushes(ctx, chatID, pushMembers, title, body, data); err != nil {
 		h.log.Warn("Failed to send pushes", zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)), zap.Error(err))
 	}
 

@@ -23,13 +23,15 @@ import (
 )
 
 type mockPusher struct {
+	lastChatID      *commonpb.ChatId
 	lastPushMembers []*commonpb.UserId
 	lastTitle       string
 	lastBody        string
 	lastData        map[string]string
 }
 
-func (m *mockPusher) SendPushes(ctx context.Context, members []*commonpb.UserId, title, body string, data map[string]string) error {
+func (m *mockPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, data map[string]string) error {
+	m.lastChatID = chatID
 	m.lastPushMembers = members
 	m.lastTitle = title
 	m.lastBody = body

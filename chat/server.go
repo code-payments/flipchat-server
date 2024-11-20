@@ -731,6 +731,11 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 	return &chatpb.RemoveUserResponse{}, nil
 }
 
+// todo: implement me
+func (s *Server) ReportUser(ctx context.Context, req *chatpb.ReportUserRequest) (*chatpb.ReportUserResponse, error) {
+	return &chatpb.ReportUserResponse{}, nil
+}
+
 func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
 	memberIDs, err := s.chats.GetMembers(context.Background(), chatID)
 	if err != nil {
