@@ -33,7 +33,7 @@ func (s *store) reset() {
 }
 
 func (s *store) IsFulfilled(ctx context.Context, id *commonpb.IntentId) (bool, error) {
-	encodedIntentID := pg.Encode(id.Value)
+	encodedIntentID := pg.Encode(id.Value, pg.Base58)
 
 	intent, err := s.client.Intent.FindFirst(
 		db.Intent.ID.Equals(encodedIntentID),
@@ -47,7 +47,7 @@ func (s *store) IsFulfilled(ctx context.Context, id *commonpb.IntentId) (bool, e
 }
 
 func (s *store) MarkFulfilled(ctx context.Context, id *commonpb.IntentId) error {
-	encodedIntentID := pg.Encode(id.Value)
+	encodedIntentID := pg.Encode(id.Value, pg.Base58)
 
 	ok, err := s.IsFulfilled(ctx, id)
 	if err != nil {

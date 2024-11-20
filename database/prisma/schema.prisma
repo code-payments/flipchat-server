@@ -108,3 +108,43 @@ model Member {
 
   @@map("flipchat_members")
 }
+
+model Message {
+  // Fields
+
+  id      String @id
+  chatId  String
+  senderId  String
+
+  content Bytes  // protobuf repeated "Content" message (min: 1, max: 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  // Constraints
+
+  @@map("flipchat_messages")
+
+}
+
+model Pointer {
+  // Fields
+
+  chatId    String
+  userId    String
+  messageId String
+  type      Int    @default(0) // PointerType enum: Unknown: 0, Sent: 1, Delivered: 2, Read: 3
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  // Constraints
+
+  @@id([chatId, userId, messageId, type])
+
+  @@map("flipchat_pointers")
+}
