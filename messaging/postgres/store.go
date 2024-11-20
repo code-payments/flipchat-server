@@ -163,82 +163,123 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 }
 
 func (s *store) AdvancePointer(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, pointer *messagingpb.Pointer) (bool, error) {
-	/*
-		chatPtrs, ok := m.pointers[string(chatID.Value)]
-		if !ok {
-			chatPtrs = map[string][]*messaging.UserPointer{}
-			m.pointers[string(chatID.Value)] = chatPtrs
-		}
 
-		// Note: This doesn't implicitly advance other pointers, which maybe we should consider.
-		userPtrs, ok := chatPtrs[string(userID.Value)]
-		for _, p := range userPtrs {
-			if p.Pointer.Type != pointer.Type {
-				continue
-			}
+	encodedChatID := pg.Encode(chatID.Value)
+	encodedUserID := pg.Encode(userID.Value)
+	encodedMessageId := pg.Encode(pointer.Value.Value)
 
-			if bytes.Compare(p.Pointer.Value.Value, pointer.Value.Value) < 0 {
-				p.Pointer.Value = proto.Clone(pointer.Value).(*messagingpb.MessageId)
-				return true, nil
-			} else {
-				return false, nil
-			}
-		}
+	// Find the existing pointer (if any)
+	existingPointer, err := s.client.Pointer.FindUnique(
+		db.Pointer.ChatIDUserIDType(
+			db.Pointer.ChatID.Equals(encodedChatID),
+			db.Pointer.UserID.Equals(encodedUserID),
+			db.Pointer.Type.Equals(int(pointer.Type)),
+		),
+	).Exec(ctx)
 
-		userPtrs = append(userPtrs, &messaging.UserPointer{
-			UserID:  proto.Clone(userID).(*commonpb.UserId),
-			Pointer: proto.Clone(pointer).(*messagingpb.Pointer),
-		})
+	if errors.Is(err, db.ErrNotFound) || existingPointer == nil {
+		// Pointer doesn't exist, create it
 
-		chatPtrs[string(userID.Value)] = userPtrs
-	*/
+		_, err := s.client.Pointer.CreateOne(
+			db.Pointer.ChatID.Set(encodedChatID),
+			db.Pointer.UserID.Set(encodedUserID),
+			db.Pointer.Value.Set(encodedMessageId),
+			db.Pointer.Type.Set(int(pointer.Type)),
+		).Exec(ctx)
+
+		return true, err
+	} else if err != nil {
+		return false, err
+	}
+
+	decodedExistingMessageId, err := pg.Decode(existingPointer.Value)
+	if err != nil {
+		return false, err
+	}
+
+	// If the existing pointer is already ahead of the new pointer, don't update
+	if bytes.Compare(decodedExistingMessageId, pointer.Value.Value) >= 0 {
+		return false, nil
+	}
+
+	// Update the pointer with the new value
+	s.client.Pointer.FindUnique(
+		db.Pointer.ChatIDUserIDType(
+			db.Pointer.ChatID.Equals(encodedChatID),
+			db.Pointer.UserID.Equals(encodedUserID),
+			db.Pointer.Type.Equals(int(pointer.Type)),
+		),
+	).Update(
+		db.Pointer.Value.Set(encodedMessageId),
+	).Exec(ctx)
 
 	return true, nil
 }
 
-func (s *store) GetPointers(_ context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) ([]*messagingpb.Pointer, error) {
-	/*
-		m.RLock()
-		defer m.RUnlock()
+func (s *store) GetPointers(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) ([]*messagingpb.Pointer, error) {
 
-		chatPtrs, ok := m.pointers[string(chatID.Value)]
-		if !ok {
-			return nil, nil
+	encodedChatID := pg.Encode(chatID.Value)
+	encodedUserID := pg.Encode(userID.Value)
+
+	pointers, err := s.client.Pointer.FindMany(
+		db.Pointer.ChatID.Equals(encodedChatID),
+		db.Pointer.UserID.Equals(encodedUserID),
+	).Exec(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	pgPointers := make([]*messagingpb.Pointer, len(pointers))
+
+	for i, pointer := range pointers {
+		decodedMessageId, err := pg.Decode(pointer.Value)
+		if err != nil {
+			return nil, err
 		}
 
-		// Note: This doesn't implicitly advance other pointers, which maybe we should consider.
-		userPtrs, ok := chatPtrs[string(userID.Value)]
-
-		var result []*messagingpb.Pointer
-		for _, p := range userPtrs {
-			result = append(result, proto.Clone(p.Pointer).(*messagingpb.Pointer))
+		pgPointers[i] = &messagingpb.Pointer{
+			Type:  messagingpb.Pointer_Type(pointer.Type),
+			Value: &messagingpb.MessageId{Value: decodedMessageId},
 		}
+	}
 
-		return result, nil
-	*/
-
-	return nil, nil
+	return pgPointers, nil
 }
 
-func (s *store) GetAllPointers(_ context.Context, chatID *commonpb.ChatId) ([]messaging.UserPointer, error) {
-	/*
-		m.RLock()
-		defer m.RUnlock()
+func (s *store) GetAllPointers(ctx context.Context, chatID *commonpb.ChatId) ([]messaging.UserPointer, error) {
 
-		chatPtrs := m.pointers[string(chatID.Value)]
+	encodedChatID := pg.Encode(chatID.Value)
 
-		var result []messaging.UserPointer
-		for _, userPtrs := range chatPtrs {
-			for _, ptr := range userPtrs {
-				result = append(result, messaging.UserPointer{
-					UserID:  proto.Clone(ptr.UserID).(*commonpb.UserId),
-					Pointer: proto.Clone(ptr.Pointer).(*messagingpb.Pointer),
-				})
-			}
+	pointers, err := s.client.Pointer.FindMany(
+		db.Pointer.ChatID.Equals(encodedChatID),
+	).Exec(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	pgPointers := make([]messaging.UserPointer, len(pointers))
+	for i, pointer := range pointers {
+
+		decodedUserId, err := pg.Decode(pointer.UserID)
+		if err != nil {
+			return nil, err
 		}
 
-		return result, nil
-	*/
+		decodedMessageId, err := pg.Decode(pointer.Value)
+		if err != nil {
+			return nil, err
+		}
 
-	return nil, nil
+		pgPointers[i] = messaging.UserPointer{
+			UserID: &commonpb.UserId{Value: decodedUserId},
+			Pointer: &messagingpb.Pointer{
+				Type:  messagingpb.Pointer_Type(pointer.Type),
+				Value: &messagingpb.MessageId{Value: decodedMessageId},
+			},
+		}
+	}
+
+	return pgPointers, nil
 }

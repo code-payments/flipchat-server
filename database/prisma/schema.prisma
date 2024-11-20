@@ -130,10 +130,11 @@ model Message {
 model Pointer {
   // Fields
 
-  chatId    String
-  userId    String
-  messageId String
-  type      Int    @default(0) // PointerType enum: Unknown: 0, Sent: 1, Delivered: 2, Read: 3
+  chatId String
+  userId String
+  type   Int    @default(0) // PointerType enum: Unknown: 0, Sent: 1, Delivered: 2, Read: 3
+
+  value String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -142,6 +143,6 @@ model Pointer {
 
   // Constraints
 
-  @@id([chatId, userId, messageId, type])
+  @@id([chatId, userId, type])
   @@map("flipchat_pointers")
 }

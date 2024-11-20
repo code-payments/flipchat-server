@@ -14,10 +14,10 @@ CREATE TABLE "flipchat_messages" (
 CREATE TABLE "flipchat_pointers" (
     "chatId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "messageId" TEXT NOT NULL,
     "type" INTEGER NOT NULL DEFAULT 0,
+    "value" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "flipchat_pointers_pkey" PRIMARY KEY ("chatId","userId","messageId","type")
+    CONSTRAINT "flipchat_pointers_pkey" PRIMARY KEY ("chatId","userId","type")
 );
