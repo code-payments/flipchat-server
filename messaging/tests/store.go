@@ -29,77 +29,12 @@ func RunStoreTests(
 		ms messaging.MessageStore,
 		ps messaging.PointerStore,
 	){
-		testPointerStore,
 		testMessageStore,
+		testPointerStore,
 	} {
 		tf(t, ms, ps)
 		teardown()
 	}
-}
-
-func testPointerStore(t *testing.T, _ messaging.MessageStore, s messaging.PointerStore) {
-	ctx := context.Background()
-	chatID := model.MustGenerateChatID()
-	userID := model.MustGenerateUserID()
-
-	t.Run("Empty", func(t *testing.T) {
-		ptrs, err := s.GetAllPointers(ctx, chatID)
-		require.NoError(t, err)
-		require.Empty(t, ptrs)
-
-		userPtrs, err := s.GetPointers(ctx, chatID, userID)
-		require.NoError(t, err)
-		require.Empty(t, userPtrs)
-	})
-
-	t.Run("Advance", func(t *testing.T) {
-		var expectedPtrs []*messagingpb.Pointer
-		var expectedAll []messaging.UserPointer
-		for ptrType := messagingpb.Pointer_SENT; ptrType < messagingpb.Pointer_READ; ptrType++ {
-			ptr := &messagingpb.Pointer{
-				Type:  ptrType,
-				Value: messaging.MustGenerateMessageID(),
-			}
-
-			advanced, err := s.AdvancePointer(ctx, chatID, userID, ptr)
-			require.NoError(t, err)
-			require.True(t, advanced)
-
-			expectedPtrs = append(expectedPtrs, ptr)
-			expectedAll = append(expectedAll, messaging.UserPointer{
-				UserID:  userID,
-				Pointer: ptr,
-			})
-
-			userPtrs, err := s.GetPointers(ctx, chatID, userID)
-			require.NoError(t, err)
-			require.NoError(t, protoutil.SliceEqualError(expectedPtrs, userPtrs))
-		}
-
-		for ptrType := messagingpb.Pointer_SENT; ptrType < messagingpb.Pointer_READ; ptrType++ {
-			ptr := &messagingpb.Pointer{
-				Type:  ptrType,
-				Value: messaging.MustGenerateMessageIDFromTime(time.Now().Add(-time.Hour)),
-			}
-
-			advanced, err := s.AdvancePointer(ctx, chatID, userID, ptr)
-			require.NoError(t, err)
-			require.False(t, advanced)
-
-			userPtrs, err := s.GetPointers(ctx, chatID, userID)
-			require.NoError(t, err)
-			require.NoError(t, protoutil.SliceEqualError(expectedPtrs, userPtrs))
-		}
-
-		allPtrs, err := s.GetAllPointers(ctx, chatID)
-		require.NoError(t, err)
-		require.Equal(t, len(expectedAll), len(allPtrs))
-
-		for i := range allPtrs {
-			require.NoError(t, protoutil.ProtoEqualError(expectedAll[i].UserID, allPtrs[i].UserID))
-			require.NoError(t, protoutil.ProtoEqualError(expectedAll[i].Pointer, allPtrs[i].Pointer))
-		}
-	})
 }
 
 func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.PointerStore) {
@@ -167,5 +102,70 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId)
 		require.NoError(t, err)
 		require.EqualValues(t, 5, unread)
+	})
+}
+
+func testPointerStore(t *testing.T, _ messaging.MessageStore, s messaging.PointerStore) {
+	ctx := context.Background()
+	chatID := model.MustGenerateChatID()
+	userID := model.MustGenerateUserID()
+
+	t.Run("Empty", func(t *testing.T) {
+		ptrs, err := s.GetAllPointers(ctx, chatID)
+		require.NoError(t, err)
+		require.Empty(t, ptrs)
+
+		userPtrs, err := s.GetPointers(ctx, chatID, userID)
+		require.NoError(t, err)
+		require.Empty(t, userPtrs)
+	})
+
+	t.Run("Advance", func(t *testing.T) {
+		var expectedPtrs []*messagingpb.Pointer
+		var expectedAll []messaging.UserPointer
+		for ptrType := messagingpb.Pointer_SENT; ptrType < messagingpb.Pointer_READ; ptrType++ {
+			ptr := &messagingpb.Pointer{
+				Type:  ptrType,
+				Value: messaging.MustGenerateMessageID(),
+			}
+
+			advanced, err := s.AdvancePointer(ctx, chatID, userID, ptr)
+			require.NoError(t, err)
+			require.True(t, advanced)
+
+			expectedPtrs = append(expectedPtrs, ptr)
+			expectedAll = append(expectedAll, messaging.UserPointer{
+				UserID:  userID,
+				Pointer: ptr,
+			})
+
+			userPtrs, err := s.GetPointers(ctx, chatID, userID)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.SliceEqualError(expectedPtrs, userPtrs))
+		}
+
+		for ptrType := messagingpb.Pointer_SENT; ptrType < messagingpb.Pointer_READ; ptrType++ {
+			ptr := &messagingpb.Pointer{
+				Type:  ptrType,
+				Value: messaging.MustGenerateMessageIDFromTime(time.Now().Add(-time.Hour)),
+			}
+
+			advanced, err := s.AdvancePointer(ctx, chatID, userID, ptr)
+			require.NoError(t, err)
+			require.False(t, advanced)
+
+			userPtrs, err := s.GetPointers(ctx, chatID, userID)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.SliceEqualError(expectedPtrs, userPtrs))
+		}
+
+		allPtrs, err := s.GetAllPointers(ctx, chatID)
+		require.NoError(t, err)
+		require.Equal(t, len(expectedAll), len(allPtrs))
+
+		for i := range allPtrs {
+			require.NoError(t, protoutil.ProtoEqualError(expectedAll[i].UserID, allPtrs[i].UserID))
+			require.NoError(t, protoutil.ProtoEqualError(expectedAll[i].Pointer, allPtrs[i].Pointer))
+		}
 	})
 }

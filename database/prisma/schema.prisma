@@ -97,7 +97,7 @@ model Member {
 
   // Relations
 
-  chat    Chat @relation(fields: [chatId], references: [id])
+  chat Chat @relation(fields: [chatId], references: [id])
 
   //user    User @relation(fields: [userId], references: [id], name: "member")
   //addedBy User? @relation(fields: [addedById], references: [id], name: "addedBy")
@@ -105,18 +105,17 @@ model Member {
   // Constraints
 
   @@id([chatId, userId])
-
   @@map("flipchat_members")
 }
 
 model Message {
   // Fields
 
-  id      String @id
-  chatId  String
-  senderId  String
+  id       String @id
+  chatId   String
+  senderId String
 
-  content Bytes  // protobuf repeated "Content" message (min: 1, max: 2)
+  content Bytes // protobuf repeated "Content" message (min: 1, max: 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,7 +125,6 @@ model Message {
   // Constraints
 
   @@map("flipchat_messages")
-
 }
 
 model Pointer {
@@ -145,6 +143,5 @@ model Pointer {
   // Constraints
 
   @@id([chatId, userId, messageId, type])
-
   @@map("flipchat_pointers")
 }
