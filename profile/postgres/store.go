@@ -22,6 +22,17 @@ func NewPostgres(client *db.PrismaClient) profile.Store {
 	}
 }
 
+func (s *store) reset() {
+	ctx := context.Background()
+
+	users := s.client.User.FindMany().Delete().Tx()
+
+	err := s.client.Prisma.Transaction(users).Exec(ctx)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func (s *store) GetProfile(ctx context.Context, id *commonpb.UserId) (*profilepb.UserProfile, error) {
 	encodedUserID := pg.Encode(id.Value)
 

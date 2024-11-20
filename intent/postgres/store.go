@@ -21,6 +21,17 @@ func NewPostgres(client *db.PrismaClient) intent.Store {
 	}
 }
 
+func (s *store) reset() {
+	ctx := context.Background()
+
+	intents := s.client.Intent.FindMany().Delete().Tx()
+
+	err := s.client.Prisma.Transaction(intents).Exec(ctx)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func (s *store) IsFulfilled(ctx context.Context, id *commonpb.IntentId) (bool, error) {
 	encodedIntentID := pg.Encode(id.Value)
 

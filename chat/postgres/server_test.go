@@ -1,4 +1,4 @@
-//go:build notimplemented
+//go:build integration
 
 package postgres
 
@@ -7,7 +7,12 @@ import (
 
 	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 
+	account "github.com/code-payments/flipchat-server/account/postgres"
+	intent "github.com/code-payments/flipchat-server/intent/postgres"
+	profile "github.com/code-payments/flipchat-server/profile/postgres"
+
 	"github.com/code-payments/flipchat-server/chat/tests"
+	"github.com/code-payments/flipchat-server/messaging"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
@@ -16,9 +21,16 @@ func TestChat_PostgresServer(t *testing.T) {
 	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
 	defer disconnect()
 
-	testStore := NewPostgres(client)
+	chats := NewPostgres(client)
+	accounts := account.NewPostgres(client)
+	profiles := profile.NewPostgres(client)
+	intents := intent.NewPostgres(client)
+	messages := messaging.NewMemory() // TODO: Implement Postgres messaging
+
 	teardown := func() {
-		testStore.(*store).reset()
+		chats.(*store).reset()
 	}
-	tests.RunServerTests(t, testStore, teardown)
+
+	tests.RunServerTests(
+		t, accounts, profiles, chats, messages, messages, intents, teardown)
 }

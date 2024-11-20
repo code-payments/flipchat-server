@@ -30,9 +30,3 @@ CREATE UNIQUE INDEX "flipchat_chats_roomNumber_key" ON "flipchat_chats"("roomNum
 
 -- AddForeignKey
 ALTER TABLE "flipchat_members" ADD CONSTRAINT "flipchat_members_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "flipchat_chats"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "flipchat_members" ADD CONSTRAINT "flipchat_members_userId_fkey" FOREIGN KEY ("userId") REFERENCES "flipchat_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "flipchat_members" ADD CONSTRAINT "flipchat_members_addedById_fkey" FOREIGN KEY ("addedById") REFERENCES "flipchat_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

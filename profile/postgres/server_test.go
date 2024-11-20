@@ -18,7 +18,7 @@ func TestProfile_PostgresServer(t *testing.T) {
 
 	testStore := NewPostgres(client)
 	teardown := func() {
-		//testStore.(*store).reset()
+		testStore.(*store).reset()
 	}
 	tests.RunServerTests(t, testStore, teardown)
 }

@@ -26,6 +26,29 @@ func NewPostgres(client *db.PrismaClient) chat.Store {
 	}
 }
 
+func (s *store) reset() {
+	ctx := context.Background()
+
+	members := s.client.Member.FindMany().Delete().Tx()
+	chats := s.client.Chat.FindMany().Delete().Tx()
+
+	err := s.client.Prisma.Transaction(members, chats).Exec(ctx)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func fromModelWithOwner(m *db.ChatModel, owner *commonpb.UserId) (*chatpb.Metadata, error) {
+	meta, err := fromModel(m)
+	if err != nil {
+		return nil, err
+	}
+
+	meta.Owner = proto.Clone(owner).(*commonpb.UserId)
+
+	return meta, nil
+}
+
 func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 	decodedChatID, err := pg.Decode(m.ID)
 
@@ -56,17 +79,6 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 
 		CoverCharge: coverCharge,
 	}, nil
-}
-
-func fromModelWithOwner(m *db.ChatModel, owner *commonpb.UserId) (*chatpb.Metadata, error) {
-	meta, err := fromModel(m)
-	if err != nil {
-		return nil, err
-	}
-
-	meta.Owner = proto.Clone(owner).(*commonpb.UserId)
-
-	return meta, nil
 }
 
 func (s *store) GetChatID(ctx context.Context, roomID uint64) (*commonpb.ChatId, error) {
@@ -220,6 +232,17 @@ func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*cha
 		pbMembers = append(pbMembers, pgMember)
 	}
 
+	// TODO: Use the DB to sort the results or get rid of the sorting on the
+	// memory store
+
+	// (Can't sort on the DB side because the memory_store uses bytes.Compare and
+	// the DB stores string values)
+	// Fails on line 207 of store_test.go without this
+
+	slices.SortFunc(pbMembers, func(a, b *chat.Member) int {
+		return bytes.Compare(a.UserID.Value, b.UserID.Value)
+	})
+
 	return pbMembers, nil
 }
 
@@ -303,9 +326,12 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 
 	// Find the next room number
 
-	// TODO: This is not efficient, but it's fine for now. Maybe an
-	// auto-incrementing field would be better, but thats not how the in-memory
-	// store works
+	// TODO: This is not efficient, but it's fine for now?
+
+	// Maybe an auto-incrementing field would be better, but thats not how the
+	// in-memory store works. The memory store assumes that the room number can
+	// be 0 multiple times indicating a chat without a room number. This would
+	// fail db constraints.
 
 	largest, err := s.client.Chat.FindFirst(
 		db.Chat.Not(db.Chat.RoomNumber.IsNull()),
@@ -342,6 +368,23 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		return nil, err
 	}
 
+	// Add the owner as a member if provided
+	if md.Owner != nil {
+		encodedOwnerID := pg.Encode(md.Owner.Value)
+
+		_, err = s.client.Member.CreateOne(
+			db.Member.UserID.Set(encodedOwnerID),
+			db.Member.Chat.Link(db.Chat.ID.Equals(encodedChatID)),
+			db.Member.IsHost.Set(true),
+		).Exec(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return fromModelWithOwner(res, md.Owner)
+	}
+
 	return fromModel(res)
 }
 
@@ -365,7 +408,6 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 			db.Member.UserID.Equals(encodedUserID),
 		),
 	).Exec(ctx)
-
 	if err == nil {
 		return nil
 	}
@@ -379,14 +421,17 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 	// Add AddedBy parameter conditionally
 	if member.AddedBy != nil {
 		encodedAddedBy := pg.Encode(member.AddedBy.Value)
-		createArgs = append(createArgs, db.Member.AddedBy.Link(db.User.ID.Equals(encodedAddedBy)))
+		createArgs = append(createArgs,
+			db.Member.AddedByID.Set(encodedAddedBy),
+		)
 	}
 
 	_, err = s.client.Member.CreateOne(
+		db.Member.UserID.Set(encodedUserID),
 		db.Member.Chat.Link(db.Chat.ID.Equals(encodedChatID)),
-		db.Member.User.Link(db.User.ID.Equals(encodedUserID)),
 		createArgs...,
 	).Exec(ctx)
+
 	return err
 }
 
@@ -394,11 +439,13 @@ func (s *store) RemoveMember(ctx context.Context, chatID *commonpb.ChatId, membe
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedUserID := pg.Encode(member.Value)
 
-	_, err := s.client.Member.FindUnique(
-		db.Member.ChatIDUserID(
-			db.Member.ChatID.Equals(encodedChatID),
-			db.Member.UserID.Equals(encodedUserID),
-		),
+	// Using FindMany().Delete() instead of FindUnique().Delete() because the
+	// latter doesn't work with line 326 of store_test.go which expects no error
+	// when deleting a non-existent member
+
+	_, err := s.client.Member.FindMany(
+		db.Member.ChatID.Equals(encodedChatID),
+		db.Member.UserID.Equals(encodedUserID),
 	).Delete().Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {

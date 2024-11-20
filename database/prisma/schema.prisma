@@ -25,8 +25,8 @@ model User {
 
   // Relations
 
-  chats   Member[] @relation("member")
-  addedBy Member[] @relation("addedBy")
+  //chats   Member[] @relation("member")
+  //addedBy Member[] @relation("addedBy")
 
   @@map("flipchat_users")
 }
@@ -98,8 +98,9 @@ model Member {
   // Relations
 
   chat    Chat @relation(fields: [chatId], references: [id])
-  user    User @relation(fields: [userId], references: [id], name: "member")
-  addedBy User? @relation(fields: [addedById], references: [id], name: "addedBy")
+
+  //user    User @relation(fields: [userId], references: [id], name: "member")
+  //addedBy User? @relation(fields: [addedById], references: [id], name: "addedBy")
 
   // Constraints
 
