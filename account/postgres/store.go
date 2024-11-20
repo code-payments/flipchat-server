@@ -15,7 +15,7 @@ type store struct {
 	client *db.PrismaClient
 }
 
-func NewPostgres(client *db.PrismaClient) account.Store {
+func NewInPostgres(client *db.PrismaClient) account.Store {
 	return &store{
 		client,
 	}

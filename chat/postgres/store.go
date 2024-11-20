@@ -20,7 +20,7 @@ type store struct {
 	client *db.PrismaClient
 }
 
-func NewPostgres(client *db.PrismaClient) chat.Store {
+func NewInPostgres(client *db.PrismaClient) chat.Store {
 	return &store{
 		client,
 	}

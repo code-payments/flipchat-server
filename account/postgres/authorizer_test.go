@@ -16,7 +16,7 @@ func TestAccount_PostgresAuthorizer(t *testing.T) {
 	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
 	defer disconnect()
 
-	testStore := NewPostgres(client)
+	testStore := NewInPostgres(client)
 	teardown := func() {
 		testStore.(*store).reset()
 	}
