@@ -9,5 +9,5 @@ import (
 var (
 	FeeDestination, _ = codecommon.NewAccountFromPublicKeyString("38u1jq3wpb8YGY5hPVZL7hRx7FUES4dGE9KR5XUeGC4b")
 
-	StartGroupFee = codekin.ToQuarks(200)
+	StartGroupFee = codekin.ToQuarks(100)
 )
