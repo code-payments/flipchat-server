@@ -90,7 +90,7 @@ model Member {
 
   isHost    Boolean @default(false)
   numUnread Int     @default(0)
-  isMuted  Boolean @default(false)
+  isMuted   Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -145,4 +145,24 @@ model Pointer {
 
   @@id([chatId, userId, type])
   @@map("flipchat_pointers")
+}
+
+model PushToken {
+  // Fields
+
+  userId       String
+  appInstallId String
+
+  token String
+  type  Int    @default(0) // PushTokenType enum: Unknown: 0, FCMAndroid: 1, FCMApns: 2
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  // Constraints
+
+  @@id([userId, appInstallId])
+  @@map("flipchat_pushtokens")
 }
