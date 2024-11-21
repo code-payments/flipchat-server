@@ -158,7 +158,6 @@ func (s *InMemoryStore) CreateChat(_ context.Context, md *chatpb.Metadata) (*cha
 		return nil, errors.New("cannot create chat with room number")
 	}
 
-	md.IsMuted = false
 	md.NumUnread = 0
 
 	s.mu.Lock()

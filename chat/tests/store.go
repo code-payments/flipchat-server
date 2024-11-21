@@ -42,14 +42,11 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 		Type:       chatpb.Metadata_GROUP,
 		Title:      "This is my chat!",
 		RoomNumber: 1,
-		IsMuted:    false,
-		Muteable:   true,
 		NumUnread:  0,
 	}
 
 	metadata := proto.Clone(expected).(*chatpb.Metadata)
 	metadata.RoomNumber = 0
-	metadata.IsMuted = true
 	metadata.NumUnread = 20
 
 	result, err := store.GetChatMetadata(context.Background(), chatID)

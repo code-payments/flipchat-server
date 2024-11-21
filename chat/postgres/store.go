@@ -73,9 +73,7 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		Title:      m.Title,
 		RoomNumber: room,
 
-		IsMuted:   false, // not stored in the DB on this model
-		Muteable:  true,  // not stored in the DB on this model
-		NumUnread: 0,     // not stored in the DB on this model
+		NumUnread: 0, // not stored in the DB on this model
 
 		CoverCharge: coverCharge,
 	}, nil

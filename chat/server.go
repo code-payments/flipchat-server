@@ -318,9 +318,8 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 	switch t := req.Parameters.(type) {
 	case *chatpb.StartChatRequest_TwoWayChat:
 		md = &chatpb.Metadata{
-			ChatId:   model.MustGenerateTwoWayChatID(userID, t.TwoWayChat.OtherUserId),
-			Type:     chatpb.Metadata_TWO_WAY,
-			Muteable: true,
+			ChatId: model.MustGenerateTwoWayChatID(userID, t.TwoWayChat.OtherUserId),
+			Type:   chatpb.Metadata_TWO_WAY,
 		}
 		users = []*commonpb.UserId{userID, t.TwoWayChat.OtherUserId}
 
@@ -361,7 +360,6 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			ChatId:      model.MustGenerateChatID(),
 			Type:        chatpb.Metadata_GROUP,
 			Title:       t.GroupChat.Title,
-			Muteable:    true,
 			Owner:       userID,
 			CoverCharge: &commonpb.PaymentAmount{Quarks: InitialCoverCharge},
 		}
@@ -812,14 +810,6 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 	if caller == nil {
 		return md, nil
 	}
-
-	member, err := s.chats.GetMember(ctx, chatID, caller)
-	if errors.Is(err, ErrMemberNotFound) {
-		return md, nil
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to get member for mute check: %w", err)
-	}
-	md.IsMuted = member.IsMuted
 
 	ptrs, err := s.pointers.GetPointers(ctx, chatID, caller)
 	if err != nil {
