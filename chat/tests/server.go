@@ -304,6 +304,8 @@ func testServer(
 		})
 
 		t.Run("Remove user", func(t *testing.T) {
+			t.Skip("feature disabled")
+
 			removedUser := otherUsers[0]
 			expectedMembers = expectedMembers[1:]
 
@@ -482,8 +484,8 @@ func testServer(
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]chat.Member{
-				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: true},
-				{UserID: userID, AddedBy: streamUser, HasMuted: false, IsHost: false},
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: true},
+				{UserID: userID, AddedBy: streamUser, IsMuted: false, IsHost: false},
 			},
 		)
 
@@ -498,7 +500,7 @@ func testServer(
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]chat.Member{
-				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: true},
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: true},
 			},
 		)
 
@@ -531,8 +533,8 @@ func testServer(
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]chat.Member{
-				{UserID: streamUser, AddedBy: streamUser, HasMuted: false, IsHost: false},
-				{UserID: userID, AddedBy: streamUser, HasMuted: false, IsHost: true},
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: false},
+				{UserID: userID, AddedBy: streamUser, IsMuted: false, IsHost: true},
 			},
 		)
 

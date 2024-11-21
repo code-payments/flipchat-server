@@ -22,10 +22,10 @@ var (
 )
 
 type Member struct {
-	UserID   *commonpb.UserId
-	AddedBy  *commonpb.UserId
-	HasMuted bool
-	IsHost   bool
+	UserID  *commonpb.UserId
+	AddedBy *commonpb.UserId
+	IsMuted bool
+	IsHost  bool
 }
 
 func (m *Member) Validate() error {
@@ -38,10 +38,10 @@ func (m *Member) Validate() error {
 
 func (m *Member) Clone() *Member {
 	return &Member{
-		UserID:   proto.Clone(m.UserID).(*commonpb.UserId),
-		AddedBy:  proto.Clone(m.AddedBy).(*commonpb.UserId),
-		HasMuted: m.HasMuted,
-		IsHost:   m.IsHost,
+		UserID:  proto.Clone(m.UserID).(*commonpb.UserId),
+		AddedBy: proto.Clone(m.AddedBy).(*commonpb.UserId),
+		IsMuted: m.IsMuted,
+		IsHost:  m.IsHost,
 	}
 }
 
@@ -72,7 +72,7 @@ type Store interface {
 	RemoveMember(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) error
 
 	SetMuteState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isMuted bool) error
-	GetMuteState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error)
+	IsUserMuted(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error)
 
 	SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error
 }

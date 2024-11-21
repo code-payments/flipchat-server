@@ -76,3 +76,21 @@ func NewUserRemovedAnnouncementContentBuilder(ctx context.Context, profiles prof
 		}, nil
 	}
 }
+
+func NewUserMutedAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, muter, mutee *commonpb.UserId) AnnouncementContentBuilder {
+	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
+		muterProfile, err := profiles.GetProfile(ctx, muter)
+		if err != nil {
+			return nil, err
+		}
+
+		muteeProfile, err := profiles.GetProfile(ctx, mutee)
+		if err != nil {
+			return nil, err
+		}
+
+		return &messagingpb.LocalizedAnnouncementContent{
+			KeyOrText: announcementPrinter.Sprintf("%s muted %s", muterProfile.DisplayName, muteeProfile.DisplayName),
+		}, nil
+	}
+}

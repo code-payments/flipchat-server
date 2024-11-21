@@ -154,14 +154,6 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				IsTyping:     e.IsTyping,
 			}
 
-			// Note: this is a bit hacky, but is probably the most robust
-			if mu := update.GetMetadata(); mu != nil {
-				mu.IsMuted, err = s.chats.GetMuteState(ctx, e.ChatID, userID)
-				if err != nil {
-					log.Warn("failed to correct mute state")
-				}
-			}
-
 			if refresh := update.GetMemberUpdate().GetRefresh(); refresh != nil {
 				for _, m := range refresh.Members {
 					m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
@@ -604,22 +596,6 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 	return &chatpb.LeaveChatResponse{}, nil
 }
 
-func (s *Server) SetMuteState(ctx context.Context, req *chatpb.SetMuteStateRequest) (*chatpb.SetMuteStateResponse, error) {
-	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
-	if err != nil {
-		return nil, err
-	}
-
-	err = s.chats.SetMuteState(ctx, req.ChatId, userID, req.IsMuted)
-	if errors.Is(err, ErrMemberNotFound) {
-		return &chatpb.SetMuteStateResponse{Result: chatpb.SetMuteStateResponse_DENIED}, nil
-	} else if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to set state")
-	}
-
-	return &chatpb.SetMuteStateResponse{}, nil
-}
-
 func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeRequest) (*chatpb.SetCoverChargeResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
@@ -664,8 +640,78 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 	return &chatpb.SetCoverChargeResponse{}, nil
 }
 
-// todo: this RPC needs tests
 func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) (*chatpb.RemoveUserResponse, error) {
+	return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+
+	/*
+		ownerID, err := s.authz.Authorize(ctx, req, &req.Auth)
+		if err != nil {
+			return nil, err
+		}
+
+		log := s.log.With(
+			zap.String("owner_id", model.UserIDString(ownerID)),
+			zap.String("user_id", model.UserIDString(req.UserId)),
+			zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+		)
+
+		if bytes.Equal(ownerID.Value, req.UserId.Value) {
+			return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+		}
+
+		md, err := s.getMetadata(ctx, req.ChatId, nil)
+		if err == ErrChatNotFound {
+			return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+		} else if err != nil {
+			log.Warn("Failed to get chat data", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to get chat data")
+		}
+
+		if md.Owner == nil || !bytes.Equal(md.Owner.Value, ownerID.Value) {
+			return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+		}
+
+		// todo: Return if no-op
+
+		if err = s.chats.RemoveMember(ctx, req.ChatId, req.UserId); err != nil {
+			log.Warn("Failed to remove member", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to remove chat member")
+		}
+
+		if err = messaging.SendAnnouncement(
+			ctx,
+			s.messenger,
+			req.ChatId,
+			messaging.NewUserRemovedAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
+		); err != nil {
+			log.Warn("Failed to send announcement", zap.Error(err))
+		}
+
+		_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
+		if err != nil {
+			log.Warn("Failed to get chat data", zap.Error(err))
+			return &chatpb.RemoveUserResponse{}, nil
+		}
+
+		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
+				Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+					Members: members,
+				},
+			},
+		}
+
+		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdate: mu})
+		if err != nil {
+			s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
+		}
+
+		return &chatpb.RemoveUserResponse{}, nil
+	*/
+}
+
+// todo: this RPC needs tests
+func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*chatpb.MuteUserResponse, error) {
 	ownerID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
 		return nil, err
@@ -678,33 +724,33 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 	)
 
 	if bytes.Equal(ownerID.Value, req.UserId.Value) {
-		return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+		return &chatpb.MuteUserResponse{Result: chatpb.MuteUserResponse_DENIED}, nil
 	}
 
 	md, err := s.getMetadata(ctx, req.ChatId, nil)
 	if err == ErrChatNotFound {
-		return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+		return &chatpb.MuteUserResponse{Result: chatpb.MuteUserResponse_DENIED}, nil
 	} else if err != nil {
 		log.Warn("Failed to get chat data", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to get chat data")
 	}
 
 	if md.Owner == nil || !bytes.Equal(md.Owner.Value, ownerID.Value) {
-		return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+		return &chatpb.MuteUserResponse{Result: chatpb.MuteUserResponse_DENIED}, nil
 	}
 
 	// todo: Return if no-op
 
-	if err = s.chats.RemoveMember(ctx, req.ChatId, req.UserId); err != nil {
-		log.Warn("Failed to remove member", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to remove chat member")
+	if err = s.chats.SetMuteState(ctx, req.ChatId, req.UserId, true); err != nil {
+		log.Warn("Failed to mute chat member", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to mute chat member")
 	}
 
 	if err = messaging.SendAnnouncement(
 		ctx,
 		s.messenger,
 		req.ChatId,
-		messaging.NewUserRemovedAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
+		messaging.NewUserMutedAnnouncementContentBuilder(ctx, s.profiles, ownerID, req.UserId),
 	); err != nil {
 		log.Warn("Failed to send announcement", zap.Error(err))
 	}
@@ -712,7 +758,7 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 	_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
 	if err != nil {
 		log.Warn("Failed to get chat data", zap.Error(err))
-		return &chatpb.RemoveUserResponse{}, nil
+		return &chatpb.MuteUserResponse{}, nil
 	}
 
 	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
@@ -728,7 +774,7 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 		s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
 	}
 
-	return &chatpb.RemoveUserResponse{}, nil
+	return &chatpb.MuteUserResponse{}, nil
 }
 
 // todo: implement me
@@ -773,7 +819,7 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get member for mute check: %w", err)
 	}
-	md.IsMuted = member.HasMuted
+	md.IsMuted = member.IsMuted
 
 	ptrs, err := s.pointers.GetPointers(ctx, chatID, caller)
 	if err != nil {

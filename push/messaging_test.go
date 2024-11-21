@@ -145,41 +145,6 @@ func TestEventHandler_HandleMessage(t *testing.T) {
 			expectedBody:   "Sender Name: Hello Group",
 			expectedPushes: []*commonpb.UserId{recipient},
 		},
-		{
-			name: "muted_recipient_no_push",
-			setupChat: func() (*chatpb.Metadata, error) {
-				chatID := model.MustGenerateChatID()
-				md, err := chatStore.CreateChat(ctx, &chatpb.Metadata{
-					ChatId: chatID,
-					Type:   chatpb.Metadata_TWO_WAY,
-				})
-				if err != nil {
-					return nil, err
-				}
-
-				for _, user := range []*commonpb.UserId{sender, recipient} {
-					err = chatStore.AddMember(ctx, chatID, chat.Member{UserID: user, HasMuted: true})
-					if err != nil {
-						return nil, err
-					}
-				}
-
-				return md, nil
-			},
-			message: &messagingpb.Message{
-				SenderId: sender,
-				Content: []*messagingpb.Content{
-					{
-						Type: &messagingpb.Content_Text{
-							Text: &messagingpb.TextContent{
-								Text: "Hello Muted",
-							},
-						},
-					},
-				},
-			},
-			expectedPushes: nil,
-		},
 	}
 
 	for i, tt := range tests {

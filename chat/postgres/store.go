@@ -215,9 +215,9 @@ func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*cha
 		}
 
 		pgMember := &chat.Member{
-			UserID:   &commonpb.UserId{Value: decodedUserId},
-			HasMuted: member.HasMuted,
-			IsHost:   member.IsHost,
+			UserID:  &commonpb.UserId{Value: decodedUserId},
+			IsMuted: member.IsMuted,
+			IsHost:  member.IsHost,
 		}
 
 		if addedByID, ok := member.AddedByID(); ok {
@@ -262,9 +262,9 @@ func (s *store) GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *
 	}
 
 	pgMember := &chat.Member{
-		UserID:   &commonpb.UserId{Value: userID.Value},
-		HasMuted: member.HasMuted,
-		IsHost:   member.IsHost,
+		UserID:  &commonpb.UserId{Value: userID.Value},
+		IsMuted: member.IsMuted,
+		IsHost:  member.IsHost,
 	}
 
 	if addedByID, ok := member.AddedByID(); ok {
@@ -414,7 +414,7 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 
 	// Create the member
 	createArgs := []db.MemberSetParam{
-		db.Member.HasMuted.Set(member.HasMuted),
+		db.Member.IsMuted.Set(member.IsMuted),
 		db.Member.IsHost.Set(member.IsHost),
 	}
 
@@ -465,7 +465,7 @@ func (s *store) SetMuteState(ctx context.Context, chatID *commonpb.ChatId, membe
 			db.Member.UserID.Equals(encodedUserID),
 		),
 	).Update(
-		db.Member.HasMuted.Set(isMuted),
+		db.Member.IsMuted.Set(isMuted),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
@@ -475,7 +475,7 @@ func (s *store) SetMuteState(ctx context.Context, chatID *commonpb.ChatId, membe
 	return err
 }
 
-func (s *store) GetMuteState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
+func (s *store) IsUserMuted(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedUserID := pg.Encode(member.Value)
 
@@ -490,7 +490,7 @@ func (s *store) GetMuteState(ctx context.Context, chatID *commonpb.ChatId, membe
 		return false, chat.ErrMemberNotFound
 	}
 
-	return res.HasMuted, nil
+	return res.IsMuted, nil
 }
 
 func (s *store) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {

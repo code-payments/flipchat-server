@@ -231,8 +231,10 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 	switch req.Content[0].Type.(type) {
 	case *messagingpb.Content_Text:
 	default:
-		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_INVALID_CONTENT_TYPE}, nil
+		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 	}
+
+	// todo: permission checks (is in chat, is muted, etc.)
 
 	msg := &messagingpb.Message{
 		SenderId: userID,
