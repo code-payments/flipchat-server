@@ -1,4 +1,4 @@
-package push
+package tests
 
 import (
 	"context"
@@ -13,13 +13,12 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
-	memChat "github.com/code-payments/flipchat-server/chat/memory"
-	memProfile "github.com/code-payments/flipchat-server/profile/memory"
-
 	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
+	"github.com/code-payments/flipchat-server/push"
 )
 
 type mockPusher struct {
@@ -45,15 +44,34 @@ func (m *mockPusher) reset() {
 	m.lastBody = ""
 }
 
-func TestEventHandler_HandleMessage(t *testing.T) {
+func RunMessagingTests(
+	t *testing.T,
+	pushes push.TokenStore,
+	profiles profile.Store,
+	chats chat.Store,
+	teardown func(),
+) {
+
+	for _, tf := range []func(
+		t *testing.T,
+		pushes push.TokenStore,
+		profiles profile.Store,
+		chats chat.Store,
+	){
+		testEventHandler_HandleMessage,
+	} {
+		tf(t, pushes, profiles, chats)
+		teardown()
+	}
+}
+
+func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStore profile.Store, chatStore chat.Store) {
 	ctx := context.Background()
 	logger := zaptest.NewLogger(t)
 
-	chatStore := memChat.NewInMemory()
-	profileStore := memProfile.NewInMemory()
 	pusher := &mockPusher{}
 
-	handler := NewPushEventHandler(logger, chatStore, profileStore, pusher)
+	handler := push.NewPushEventHandler(logger, chatStore, profileStore, pusher)
 
 	// Setup test data
 	sender := &commonpb.UserId{Value: []byte("sender")}

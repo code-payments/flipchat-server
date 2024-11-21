@@ -1,4 +1,4 @@
-package push
+package tests
 
 import (
 	"context"
@@ -14,14 +14,25 @@ import (
 
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/push"
 )
 
-func TestServer_AddToken(t *testing.T) {
+func RunServerTests(t *testing.T, s push.TokenStore, teardown func()) {
+	for _, tf := range []func(t *testing.T, s push.TokenStore){
+		testServer_AddToken,
+		testServer_DeleteToken,
+	} {
+		tf(t, s)
+		teardown()
+	}
+}
+
+func testServer_AddToken(t *testing.T, store push.TokenStore) {
 	ctx := context.Background()
 	log := zaptest.NewLogger(t)
-	store := NewMemory()
+
 	authz := auth.NewStaticAuthorizer()
-	server := NewServer(log, authz, store)
+	server := push.NewServer(log, authz, store)
 
 	userID := &commonpb.UserId{Value: []byte("test-user")}
 	keyPair := model.MustGenerateKeyPair()
@@ -85,12 +96,12 @@ func TestServer_AddToken(t *testing.T) {
 	}
 }
 
-func TestServer_DeleteToken(t *testing.T) {
+func testServer_DeleteToken(t *testing.T, store push.TokenStore) {
 	ctx := context.Background()
 	log := zaptest.NewLogger(t)
-	store := NewMemory()
+
 	authz := auth.NewStaticAuthorizer()
-	server := NewServer(log, authz, store)
+	server := push.NewServer(log, authz, store)
 
 	userID := &commonpb.UserId{Value: []byte("test-user")}
 	keyPair := model.MustGenerateKeyPair()

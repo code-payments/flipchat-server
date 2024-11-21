@@ -1,4 +1,4 @@
-package push
+package tests
 
 import (
 	"context"
@@ -13,7 +13,9 @@ import (
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	pushpb "github.com/code-payments/flipchat-protobuf-api/generated/go/push/v1"
+
 	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/push"
 )
 
 // testFCMClient captures the messages sent for verification
@@ -29,11 +31,20 @@ func (c *testFCMClient) SendEachForMulticast(_ context.Context, message *messagi
 	}, nil
 }
 
-func TestFCMPusher_SendPush(t *testing.T) {
+func RunPusherTests(t *testing.T, s push.TokenStore, teardown func()) {
+	for _, tf := range []func(t *testing.T, s push.TokenStore){
+		testFCMPusher_SendPush,
+	} {
+		tf(t, s)
+		teardown()
+	}
+}
+
+func testFCMPusher_SendPush(t *testing.T, store push.TokenStore) {
 	ctx := context.Background()
-	store := NewMemory()
+
 	fcmClient := &testFCMClient{}
-	pusher := NewFCMPusher(zap.NewNop(), store, fcmClient)
+	pusher := push.NewFCMPusher(zap.NewNop(), store, fcmClient)
 
 	// Create 5 users with 2 tokens each
 	users := make([]*commonpb.UserId, 5)
