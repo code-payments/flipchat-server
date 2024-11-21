@@ -47,8 +47,9 @@ func (m *Member) Clone() *Member {
 
 func (m *Member) ToProto(self *commonpb.UserId) *chatpb.Member {
 	member := &chatpb.Member{
-		UserId: m.UserID,
-		IsHost: m.IsHost,
+		UserId:  m.UserID,
+		IsHost:  m.IsHost,
+		IsMuted: m.IsMuted,
 	}
 
 	if self != nil {
