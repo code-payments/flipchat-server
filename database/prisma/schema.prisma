@@ -5,6 +5,7 @@ datasource db {
 
 generator db {
   provider = "go run github.com/steebchen/prisma-client-go"
+  binaryTargets = ["darwin-arm64","linux-static-x64"]
 }
 
 // Uncomment to generate Prisma Client JS (required for the studio)
