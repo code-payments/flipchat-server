@@ -118,7 +118,7 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		return nil, err
 	}
 
-	paidOwner, err := codecommon.NewAccountFromPublicKeyString(intentRecord.SendPrivatePaymentMetadata.DestinationOwnerAccount)
+	paidOwner, err := codecommon.NewAccountFromPublicKeyString(intentRecord.SendPublicPaymentMetadata.DestinationOwnerAccount)
 	if err != nil {
 		return nil, err
 	}
