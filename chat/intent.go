@@ -31,7 +31,7 @@ func NewStartGroupChatPaymentIntentHandler(accounts account.Store, chats Store) 
 	}
 }
 
-func (h *StartGroupChatPaymentIntentHandler) Validate(ctx context.Context, intentRecord codeintent.Record, customMetadata proto.Message) (*intent.ValidationResult, error) {
+func (h *StartGroupChatPaymentIntentHandler) Validate(ctx context.Context, intentRecord *codeintent.Record, customMetadata proto.Message) (*intent.ValidationResult, error) {
 	startGroupChatMetadata, ok := customMetadata.(*chatpb.StartGroupChatPaymentMetadata)
 	if !ok {
 		return nil, errors.New("unexepected custom metadata")
@@ -99,7 +99,7 @@ func NewJoinChatPaymentIntentHandler(accounts account.Store, chats Store) *JoinC
 	}
 }
 
-func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecord codeintent.Record, customMetadata proto.Message) (*intent.ValidationResult, error) {
+func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecord *codeintent.Record, customMetadata proto.Message) (*intent.ValidationResult, error) {
 	joinChatMetadata, ok := customMetadata.(*chatpb.JoinChatPaymentMetadata)
 	if !ok {
 		return nil, errors.New("unexepected custom metadata")

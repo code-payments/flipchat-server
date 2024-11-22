@@ -26,5 +26,5 @@ type ValidationResult struct {
 
 // todo: some way to register a handler to a proto URL
 type CustomHandler interface {
-	Validate(ctx context.Context, intentRecord codeintent.Record, customMetadata proto.Message) (*ValidationResult, error)
+	Validate(ctx context.Context, intentRecord *codeintent.Record, customMetadata proto.Message) (*ValidationResult, error)
 }
