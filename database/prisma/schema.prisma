@@ -114,7 +114,7 @@ model Message {
 
   id       String @id
   chatId   String
-  senderId String
+  senderId String?
 
   content Bytes // protobuf repeated "Content" message (min: 1, max: 2)
 

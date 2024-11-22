@@ -96,7 +96,6 @@ func (s *store) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *me
 
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedMessageId := pg.Encode(msg.MessageId.Value)
-	encodedSenderId := pg.Encode(msg.SenderId.Value)
 
 	// Note, we're storing the whole message as a serialized blob because we
 	// can't serialze just the content.
@@ -109,11 +108,17 @@ func (s *store) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *me
 		return err
 	}
 
+	opt := []db.MessageSetParam{}
+	if msg.SenderId != nil {
+		encodedSenderId := pg.Encode(msg.SenderId.Value)
+		opt = append(opt, db.Message.SenderID.Set(encodedSenderId))
+	}
+
 	_, err = s.client.Message.CreateOne(
 		db.Message.ID.Set(encodedMessageId),
 		db.Message.ChatID.Set(encodedChatID),
-		db.Message.SenderID.Set(encodedSenderId),
 		db.Message.Content.Set(serializedMessage),
+		opt...,
 	).Exec(ctx)
 
 	return err
