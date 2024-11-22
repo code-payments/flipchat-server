@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	account "github.com/code-payments/flipchat-server/account/postgres"
+	chat "github.com/code-payments/flipchat-server/chat/postgres"
 	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 
 	"github.com/code-payments/flipchat-server/messaging/tests"
@@ -18,6 +19,7 @@ func TestMessaging_PostgresServer(t *testing.T) {
 	defer disconnect()
 
 	accounts := account.NewInPostgres(client)
+	chats := chat.NewInPostgres(client)
 	messages := NewInPostgresMessages(client)
 	pointers := NewInPostgresPointers(client)
 
@@ -25,5 +27,5 @@ func TestMessaging_PostgresServer(t *testing.T) {
 		messages.(*store).reset()
 	}
 
-	tests.RunServerTests(t, accounts, messages, pointers, teardown)
+	tests.RunServerTests(t, accounts, messages, pointers, chats, teardown)
 }

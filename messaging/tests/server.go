@@ -15,24 +15,27 @@ import (
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
-	"github.com/code-payments/flipchat-server/event"
-	"github.com/code-payments/flipchat-server/protoutil"
 
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/chat"
+	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
 type testAuthn struct {
 }
 
+// todo: needs authz tests
 func RunServerTests(
 	t *testing.T,
 	accounts account.Store,
 	messages messaging.MessageStore,
 	pointers messaging.PointerStore,
+	chats chat.Store,
 	teardown func(),
 ) {
 
@@ -41,11 +44,12 @@ func RunServerTests(
 		accounts account.Store,
 		messages messaging.MessageStore,
 		pointers messaging.PointerStore,
+		chats chat.Store,
 	){
 		testServerHappy,
 		testServerDuplicateStreams,
 	} {
-		tf(t, accounts, messages, pointers)
+		tf(t, accounts, messages, pointers, chats)
 		teardown()
 	}
 }
@@ -55,6 +59,7 @@ func testServerHappy(
 	accountStore account.Store,
 	messageDB messaging.MessageStore,
 	pointerDB messaging.PointerStore,
+	chatsDB chat.Store,
 ) {
 	log := zap.Must(zap.NewDevelopment())
 	authz := account.NewAuthorizer(log, accountStore, auth.NewKeyPairAuthenticator())
@@ -65,6 +70,7 @@ func testServerHappy(
 	serv := messaging.NewServer(
 		log,
 		authz,
+		NewAlwaysAllowRpcAuthz(),
 		messageDB,
 		pointerDB,
 		bus,
@@ -209,6 +215,7 @@ func testServerDuplicateStreams(
 	accountStore account.Store,
 	messageDB messaging.MessageStore,
 	pointerDB messaging.PointerStore,
+	chatsDB chat.Store,
 ) {
 	log := zap.Must(zap.NewDevelopment())
 	authz := account.NewAuthorizer(log, accountStore, auth.NewKeyPairAuthenticator())
@@ -219,6 +226,7 @@ func testServerDuplicateStreams(
 	serv := messaging.NewServer(
 		log,
 		authz,
+		NewAlwaysAllowRpcAuthz(),
 		messageDB,
 		pointerDB,
 		bus,

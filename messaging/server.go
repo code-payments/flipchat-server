@@ -30,8 +30,9 @@ const (
 )
 
 type Server struct {
-	log   *zap.Logger
-	authz auth.Authorizer
+	log      *zap.Logger
+	authz    auth.Authorizer
+	rpcAuthz auth.Messaging
 
 	messages MessageStore
 	pointers PointerStore
@@ -46,13 +47,15 @@ type Server struct {
 func NewServer(
 	log *zap.Logger,
 	authz auth.Authorizer,
+	rpcAuthz auth.Messaging,
 	messages MessageStore,
 	pointers PointerStore,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
 ) *Server {
 	s := &Server{
-		log:   log,
-		authz: authz,
+		log:      log,
+		authz:    authz,
+		rpcAuthz: rpcAuthz,
 
 		messages: messages,
 		pointers: pointers,
@@ -93,7 +96,18 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		zap.String("user_id", model.UserIDString(userID)),
 	)
 
-	// TODO: ChatMember verifier
+	allow, err := s.rpcAuthz.CanStreamMessages(ctx, params.ChatId, userID)
+	if err != nil {
+		return status.Error(codes.Internal, "failed to do rpc authz checks")
+	} else if !allow {
+		return stream.Send(&messagingpb.StreamMessagesResponse{
+			Type: &messagingpb.StreamMessagesResponse_Error{
+				Error: &messagingpb.StreamMessagesResponse_StreamError{
+					Code: messagingpb.StreamMessagesResponse_StreamError_DENIED,
+				},
+			},
+		})
+	}
 
 	chatKey := string(params.ChatId.Value)
 	userKey := string(userID.Value)
@@ -204,12 +218,17 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 }
 
 func (s *Server) GetMessages(ctx context.Context, req *messagingpb.GetMessagesRequest) (*messagingpb.GetMessagesResponse, error) {
-	_, err := s.authz.Authorize(ctx, req, &req.Auth)
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: Membership check
+	allow, err := s.rpcAuthz.CanGetMessages(ctx, req.ChatId, userID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
+	} else if !allow {
+		return &messagingpb.GetMessagesResponse{Result: messagingpb.GetMessagesResponse_DENIED}, nil
+	}
 
 	messages, err := s.messages.GetMessages(ctx, req.ChatId)
 	if err != nil {
@@ -234,7 +253,12 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 	}
 
-	// todo: permission checks (is in chat, is muted, etc.)
+	allow, err := s.rpcAuthz.CanSendMessage(ctx, req.ChatId, userID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
+	} else if !allow {
+		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+	}
 
 	msg := &messagingpb.Message{
 		SenderId: userID,
@@ -274,6 +298,13 @@ func (s *Server) AdvancePointer(ctx context.Context, req *messagingpb.AdvancePoi
 		return nil, err
 	}
 
+	allow, err := s.rpcAuthz.CanAdvancePointer(ctx, req.ChatId, userID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
+	} else if !allow {
+		return &messagingpb.AdvancePointerResponse{Result: messagingpb.AdvancePointerResponse_DENIED}, nil
+	}
+
 	advanced, err := s.pointers.AdvancePointer(ctx, req.ChatId, userID, req.Pointer)
 	if err != nil {
 		s.log.Error("Failed to advance pointer", zap.Error(err))
@@ -302,7 +333,12 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 		return nil, err
 	}
 
-	// TODO: Auth
+	allow, err := s.rpcAuthz.CanNotifyIsTyping(ctx, req.ChatId, userID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
+	} else if !allow {
+		return &messagingpb.NotifyIsTypingResponse{Result: messagingpb.NotifyIsTypingResponse_DENIED}, nil
+	}
 
 	isTyping := &messagingpb.IsTyping{
 		UserId:   userID,
