@@ -147,8 +147,7 @@ func (s *store) RemoveKey(ctx context.Context, userID *commonpb.UserId, pubKey *
 	return err
 }
 
-func (s *store) IsAuthorized(_ context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (bool, error) {
-	ctx := context.Background()
+func (s *store) IsAuthorized(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (bool, error) {
 	encodedUserID := pg.Encode(userID.Value)
 	encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
 
