@@ -20,6 +20,20 @@ var (
 	ErrNotInTx     = errors.New("not executing in existing db tx")
 )
 
+// NullString converts a *string into an sql.NullString
+func NullString(s *string) sql.NullString {
+	if s == nil {
+		return sql.NullString{
+			String: "",
+			Valid:  false,
+		}
+	}
+	return sql.NullString{
+		String: *s,
+		Valid:  true,
+	}
+}
+
 // ExecuteRetryable Retry functions that perform non-transactional database operations.
 func ExecuteRetryable(fn func() error) error {
 	if err := fn(); err != nil {
