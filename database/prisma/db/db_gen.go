@@ -186,9 +186,9 @@ model Member {
 model Message {
   // Fields
 
-  id       String @id
+  id       String  @id
   chatId   String
-  senderId String
+  senderId String?
 
   content Bytes // protobuf repeated "Content" message (min: 1, max: 2)
 
@@ -1234,7 +1234,7 @@ type MessageModel struct {
 type InnerMessage struct {
 	ID        string   `json:"id"`
 	ChatID    string   `json:"chatId"`
-	SenderID  string   `json:"senderId"`
+	SenderID  *string  `json:"senderId,omitempty"`
 	Content   Bytes    `json:"content"`
 	CreatedAt DateTime `json:"createdAt"`
 	UpdatedAt DateTime `json:"updatedAt"`
@@ -1244,7 +1244,7 @@ type InnerMessage struct {
 type RawMessageModel struct {
 	ID        RawString   `json:"id"`
 	ChatID    RawString   `json:"chatId"`
-	SenderID  RawString   `json:"senderId"`
+	SenderID  *RawString  `json:"senderId,omitempty"`
 	Content   RawBytes    `json:"content"`
 	CreatedAt RawDateTime `json:"createdAt"`
 	UpdatedAt RawDateTime `json:"updatedAt"`
@@ -1252,6 +1252,13 @@ type RawMessageModel struct {
 
 // RelationsMessage holds the relation data separately
 type RelationsMessage struct {
+}
+
+func (r MessageModel) SenderID() (value String, ok bool) {
+	if r.InnerMessage.SenderID == nil {
+		return value, false
+	}
+	return *r.InnerMessage.SenderID, true
 }
 
 // PointerModel represents the Pointer model and is a wrapper for accessing fields and methods
@@ -10821,7 +10828,7 @@ type messageQuery struct {
 
 	// SenderID
 	//
-	// @required
+	// @optional
 	SenderID messageQuerySenderIDString
 
 	// Content
@@ -11588,10 +11595,10 @@ func (r messageQueryChatIDString) Field() messagePrismaFields {
 // base struct
 type messageQuerySenderIDString struct{}
 
-// Set the required value of SenderID
-func (r messageQuerySenderIDString) Set(value string) messageWithPrismaSenderIDSetParam {
+// Set the optional value of SenderID
+func (r messageQuerySenderIDString) Set(value string) messageSetParam {
 
-	return messageWithPrismaSenderIDSetParam{
+	return messageSetParam{
 		data: builder.Field{
 			Name:  "senderId",
 			Value: value,
@@ -11601,9 +11608,25 @@ func (r messageQuerySenderIDString) Set(value string) messageWithPrismaSenderIDS
 }
 
 // Set the optional value of SenderID dynamically
-func (r messageQuerySenderIDString) SetIfPresent(value *String) messageWithPrismaSenderIDSetParam {
+func (r messageQuerySenderIDString) SetIfPresent(value *String) messageSetParam {
 	if value == nil {
-		return messageWithPrismaSenderIDSetParam{}
+		return messageSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Set the optional value of SenderID dynamically
+func (r messageQuerySenderIDString) SetOptional(value *String) messageSetParam {
+	if value == nil {
+
+		var v *string
+		return messageSetParam{
+			data: builder.Field{
+				Name:  "senderId",
+				Value: v,
+			},
+		}
 	}
 
 	return r.Set(*value)
@@ -11629,6 +11652,35 @@ func (r messageQuerySenderIDString) EqualsIfPresent(value *string) messageWithPr
 		return messageWithPrismaSenderIDEqualsParam{}
 	}
 	return r.Equals(*value)
+}
+
+func (r messageQuerySenderIDString) EqualsOptional(value *String) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "senderId",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQuerySenderIDString) IsNull() messageDefaultParam {
+	var str *string = nil
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "senderId",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: str,
+				},
+			},
+		},
+	}
 }
 
 func (r messageQuerySenderIDString) Order(direction SortOrder) messageDefaultParam {
@@ -22626,7 +22678,6 @@ func (r memberCreateOne) Tx() MemberUniqueTxResult {
 func (r messageActions) CreateOne(
 	_id MessageWithPrismaIDSetParam,
 	_chatID MessageWithPrismaChatIDSetParam,
-	_senderID MessageWithPrismaSenderIDSetParam,
 	_content MessageWithPrismaContentSetParam,
 
 	optional ...MessageSetParam,
@@ -22644,7 +22695,6 @@ func (r messageActions) CreateOne(
 
 	fields = append(fields, _id.field())
 	fields = append(fields, _chatID.field())
-	fields = append(fields, _senderID.field())
 	fields = append(fields, _content.field())
 
 	for _, q := range optional {
@@ -31244,7 +31294,6 @@ func (r messageUpsertOne) Create(
 
 	_id MessageWithPrismaIDSetParam,
 	_chatID MessageWithPrismaChatIDSetParam,
-	_senderID MessageWithPrismaSenderIDSetParam,
 	_content MessageWithPrismaContentSetParam,
 
 	optional ...MessageSetParam,
@@ -31255,7 +31304,6 @@ func (r messageUpsertOne) Create(
 	var fields []builder.Field
 	fields = append(fields, _id.field())
 	fields = append(fields, _chatID.field())
-	fields = append(fields, _senderID.field())
 	fields = append(fields, _content.field())
 
 	for _, q := range optional {
