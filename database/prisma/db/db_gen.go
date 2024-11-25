@@ -143,7 +143,7 @@ model Chat {
   id          String @id
   title       String
   roomNumber  Int?   @unique
-  coverCharge Int    @default(0)
+  coverCharge BigInt @default(0)
   type        Int    @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
 
   createdBy String   @default("")
@@ -1143,7 +1143,7 @@ type InnerChat struct {
 	ID          string   `json:"id"`
 	Title       string   `json:"title"`
 	RoomNumber  *int     `json:"roomNumber,omitempty"`
-	CoverCharge int      `json:"coverCharge"`
+	CoverCharge BigInt   `json:"coverCharge"`
 	Type        int      `json:"type"`
 	CreatedBy   string   `json:"createdBy"`
 	CreatedAt   DateTime `json:"createdAt"`
@@ -1155,7 +1155,7 @@ type RawChatModel struct {
 	ID          RawString   `json:"id"`
 	Title       RawString   `json:"title"`
 	RoomNumber  *RawInt     `json:"roomNumber,omitempty"`
-	CoverCharge RawInt      `json:"coverCharge"`
+	CoverCharge RawBigInt   `json:"coverCharge"`
 	Type        RawInt      `json:"type"`
 	CreatedBy   RawString   `json:"createdBy"`
 	CreatedAt   RawDateTime `json:"createdAt"`
@@ -5566,7 +5566,7 @@ type chatQuery struct {
 	// CoverCharge
 	//
 	// @required
-	CoverCharge chatQueryCoverChargeInt
+	CoverCharge chatQueryCoverChargeBigInt
 
 	// Type
 	//
@@ -6781,10 +6781,10 @@ func (r chatQueryRoomNumberInt) Field() chatPrismaFields {
 }
 
 // base struct
-type chatQueryCoverChargeInt struct{}
+type chatQueryCoverChargeBigInt struct{}
 
 // Set the required value of CoverCharge
-func (r chatQueryCoverChargeInt) Set(value int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) Set(value BigInt) chatSetParam {
 
 	return chatSetParam{
 		data: builder.Field{
@@ -6796,7 +6796,7 @@ func (r chatQueryCoverChargeInt) Set(value int) chatSetParam {
 }
 
 // Set the optional value of CoverCharge dynamically
-func (r chatQueryCoverChargeInt) SetIfPresent(value *Int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) SetIfPresent(value *BigInt) chatSetParam {
 	if value == nil {
 		return chatSetParam{}
 	}
@@ -6805,7 +6805,7 @@ func (r chatQueryCoverChargeInt) SetIfPresent(value *Int) chatSetParam {
 }
 
 // Increment the required value of CoverCharge
-func (r chatQueryCoverChargeInt) Increment(value int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) Increment(value BigInt) chatSetParam {
 	return chatSetParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -6819,7 +6819,7 @@ func (r chatQueryCoverChargeInt) Increment(value int) chatSetParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) IncrementIfPresent(value *int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) IncrementIfPresent(value *BigInt) chatSetParam {
 	if value == nil {
 		return chatSetParam{}
 	}
@@ -6827,7 +6827,7 @@ func (r chatQueryCoverChargeInt) IncrementIfPresent(value *int) chatSetParam {
 }
 
 // Decrement the required value of CoverCharge
-func (r chatQueryCoverChargeInt) Decrement(value int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) Decrement(value BigInt) chatSetParam {
 	return chatSetParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -6841,7 +6841,7 @@ func (r chatQueryCoverChargeInt) Decrement(value int) chatSetParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) DecrementIfPresent(value *int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) DecrementIfPresent(value *BigInt) chatSetParam {
 	if value == nil {
 		return chatSetParam{}
 	}
@@ -6849,7 +6849,7 @@ func (r chatQueryCoverChargeInt) DecrementIfPresent(value *int) chatSetParam {
 }
 
 // Multiply the required value of CoverCharge
-func (r chatQueryCoverChargeInt) Multiply(value int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) Multiply(value BigInt) chatSetParam {
 	return chatSetParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -6863,7 +6863,7 @@ func (r chatQueryCoverChargeInt) Multiply(value int) chatSetParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) MultiplyIfPresent(value *int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) MultiplyIfPresent(value *BigInt) chatSetParam {
 	if value == nil {
 		return chatSetParam{}
 	}
@@ -6871,7 +6871,7 @@ func (r chatQueryCoverChargeInt) MultiplyIfPresent(value *int) chatSetParam {
 }
 
 // Divide the required value of CoverCharge
-func (r chatQueryCoverChargeInt) Divide(value int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) Divide(value BigInt) chatSetParam {
 	return chatSetParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -6885,14 +6885,14 @@ func (r chatQueryCoverChargeInt) Divide(value int) chatSetParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) DivideIfPresent(value *int) chatSetParam {
+func (r chatQueryCoverChargeBigInt) DivideIfPresent(value *BigInt) chatSetParam {
 	if value == nil {
 		return chatSetParam{}
 	}
 	return r.Divide(*value)
 }
 
-func (r chatQueryCoverChargeInt) Equals(value int) chatWithPrismaCoverChargeEqualsParam {
+func (r chatQueryCoverChargeBigInt) Equals(value BigInt) chatWithPrismaCoverChargeEqualsParam {
 
 	return chatWithPrismaCoverChargeEqualsParam{
 		data: builder.Field{
@@ -6907,14 +6907,14 @@ func (r chatQueryCoverChargeInt) Equals(value int) chatWithPrismaCoverChargeEqua
 	}
 }
 
-func (r chatQueryCoverChargeInt) EqualsIfPresent(value *int) chatWithPrismaCoverChargeEqualsParam {
+func (r chatQueryCoverChargeBigInt) EqualsIfPresent(value *BigInt) chatWithPrismaCoverChargeEqualsParam {
 	if value == nil {
 		return chatWithPrismaCoverChargeEqualsParam{}
 	}
 	return r.Equals(*value)
 }
 
-func (r chatQueryCoverChargeInt) Order(direction SortOrder) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) Order(direction SortOrder) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
 			Name:  "coverCharge",
@@ -6923,7 +6923,7 @@ func (r chatQueryCoverChargeInt) Order(direction SortOrder) chatDefaultParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) Cursor(cursor int) chatCursorParam {
+func (r chatQueryCoverChargeBigInt) Cursor(cursor BigInt) chatCursorParam {
 	return chatCursorParam{
 		data: builder.Field{
 			Name:  "coverCharge",
@@ -6932,7 +6932,7 @@ func (r chatQueryCoverChargeInt) Cursor(cursor int) chatCursorParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) In(value []int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) In(value []BigInt) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -6946,14 +6946,14 @@ func (r chatQueryCoverChargeInt) In(value []int) chatDefaultParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) InIfPresent(value []int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) InIfPresent(value []BigInt) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.In(value)
 }
 
-func (r chatQueryCoverChargeInt) NotIn(value []int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) NotIn(value []BigInt) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -6967,14 +6967,14 @@ func (r chatQueryCoverChargeInt) NotIn(value []int) chatDefaultParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) NotInIfPresent(value []int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) NotInIfPresent(value []BigInt) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.NotIn(value)
 }
 
-func (r chatQueryCoverChargeInt) Lt(value int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) Lt(value BigInt) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -6988,14 +6988,14 @@ func (r chatQueryCoverChargeInt) Lt(value int) chatDefaultParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) LtIfPresent(value *int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) LtIfPresent(value *BigInt) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Lt(*value)
 }
 
-func (r chatQueryCoverChargeInt) Lte(value int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) Lte(value BigInt) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -7009,14 +7009,14 @@ func (r chatQueryCoverChargeInt) Lte(value int) chatDefaultParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) LteIfPresent(value *int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) LteIfPresent(value *BigInt) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Lte(*value)
 }
 
-func (r chatQueryCoverChargeInt) Gt(value int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) Gt(value BigInt) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -7030,14 +7030,14 @@ func (r chatQueryCoverChargeInt) Gt(value int) chatDefaultParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) GtIfPresent(value *int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) GtIfPresent(value *BigInt) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Gt(*value)
 }
 
-func (r chatQueryCoverChargeInt) Gte(value int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) Gte(value BigInt) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -7051,14 +7051,14 @@ func (r chatQueryCoverChargeInt) Gte(value int) chatDefaultParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) GteIfPresent(value *int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) GteIfPresent(value *BigInt) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Gte(*value)
 }
 
-func (r chatQueryCoverChargeInt) Not(value int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) Not(value BigInt) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
 			Name: "coverCharge",
@@ -7072,110 +7072,14 @@ func (r chatQueryCoverChargeInt) Not(value int) chatDefaultParam {
 	}
 }
 
-func (r chatQueryCoverChargeInt) NotIfPresent(value *int) chatDefaultParam {
+func (r chatQueryCoverChargeBigInt) NotIfPresent(value *BigInt) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Not(*value)
 }
 
-// deprecated: Use Lt instead.
-
-func (r chatQueryCoverChargeInt) LT(value int) chatDefaultParam {
-	return chatDefaultParam{
-		data: builder.Field{
-			Name: "coverCharge",
-			Fields: []builder.Field{
-				{
-					Name:  "lt",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use LtIfPresent instead.
-func (r chatQueryCoverChargeInt) LTIfPresent(value *int) chatDefaultParam {
-	if value == nil {
-		return chatDefaultParam{}
-	}
-	return r.LT(*value)
-}
-
-// deprecated: Use Lte instead.
-
-func (r chatQueryCoverChargeInt) LTE(value int) chatDefaultParam {
-	return chatDefaultParam{
-		data: builder.Field{
-			Name: "coverCharge",
-			Fields: []builder.Field{
-				{
-					Name:  "lte",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use LteIfPresent instead.
-func (r chatQueryCoverChargeInt) LTEIfPresent(value *int) chatDefaultParam {
-	if value == nil {
-		return chatDefaultParam{}
-	}
-	return r.LTE(*value)
-}
-
-// deprecated: Use Gt instead.
-
-func (r chatQueryCoverChargeInt) GT(value int) chatDefaultParam {
-	return chatDefaultParam{
-		data: builder.Field{
-			Name: "coverCharge",
-			Fields: []builder.Field{
-				{
-					Name:  "gt",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use GtIfPresent instead.
-func (r chatQueryCoverChargeInt) GTIfPresent(value *int) chatDefaultParam {
-	if value == nil {
-		return chatDefaultParam{}
-	}
-	return r.GT(*value)
-}
-
-// deprecated: Use Gte instead.
-
-func (r chatQueryCoverChargeInt) GTE(value int) chatDefaultParam {
-	return chatDefaultParam{
-		data: builder.Field{
-			Name: "coverCharge",
-			Fields: []builder.Field{
-				{
-					Name:  "gte",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use GteIfPresent instead.
-func (r chatQueryCoverChargeInt) GTEIfPresent(value *int) chatDefaultParam {
-	if value == nil {
-		return chatDefaultParam{}
-	}
-	return r.GTE(*value)
-}
-
-func (r chatQueryCoverChargeInt) Field() chatPrismaFields {
+func (r chatQueryCoverChargeBigInt) Field() chatPrismaFields {
 	return chatFieldCoverCharge
 }
 

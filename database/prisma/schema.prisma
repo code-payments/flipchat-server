@@ -4,8 +4,8 @@ datasource db {
 }
 
 generator db {
-  provider = "go run github.com/steebchen/prisma-client-go"
-  binaryTargets = ["darwin-arm64","linux-static-x64"]
+  provider      = "go run github.com/steebchen/prisma-client-go"
+  binaryTargets = ["darwin-arm64", "linux-static-x64"]
 }
 
 // Uncomment to generate Prisma Client JS (required for the studio)
@@ -69,7 +69,7 @@ model Chat {
   id          String @id
   title       String
   roomNumber  Int?   @unique
-  coverCharge Int    @default(0)
+  coverCharge BigInt @default(0)
   type        Int    @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
 
   createdBy String   @default("")
@@ -113,7 +113,7 @@ model Member {
 model Message {
   // Fields
 
-  id       String @id
+  id       String  @id
   chatId   String
   senderId String?
 

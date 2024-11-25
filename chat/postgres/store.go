@@ -341,15 +341,15 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		}
 	}
 
-	coverCharge := int(0)
+	coverCharge := uint64(0)
 	if md.CoverCharge != nil {
-		coverCharge = int(md.CoverCharge.Quarks)
+		coverCharge = md.CoverCharge.Quarks
 	}
 
 	opt := []db.ChatSetParam{
 		db.Chat.RoomNumber.Set(int(nextNumber)),
 		db.Chat.Type.Set(int(md.Type)),
-		db.Chat.CoverCharge.Set(coverCharge),
+		db.Chat.CoverCharge.Set(db.BigInt(coverCharge)),
 	}
 
 	if md.Owner != nil {
@@ -502,7 +502,7 @@ func (s *store) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, cov
 	_, err := s.client.Chat.FindUnique(
 		db.Chat.ID.Equals(encodedChatID),
 	).Update(
-		db.Chat.CoverCharge.Set(int(coverCharge.Quarks)),
+		db.Chat.CoverCharge.Set(db.BigInt(coverCharge.Quarks)),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
