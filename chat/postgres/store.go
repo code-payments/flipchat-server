@@ -113,23 +113,16 @@ func (s *store) GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*
 	}
 
 	// Find the owner (host), currently assumed to only be one
-	owner, err := s.client.Member.FindFirst(
-		db.Member.ChatID.Equals(encodedChatID),
-		db.Member.IsHost.Equals(true),
-	).Exec(ctx)
+	if res.CreatedBy != "" {
+		decodedOwnerID, err := pg.Decode(res.CreatedBy)
+		if err != nil {
+			return nil, err
+		}
 
-	if errors.Is(err, db.ErrNotFound) || owner == nil {
-		return fromModel(res)
-	} else if err != nil {
-		return nil, err
+		return fromModelWithOwner(res, &commonpb.UserId{Value: decodedOwnerID})
 	}
 
-	decodedOwnerID, err := pg.Decode(owner.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	return fromModelWithOwner(res, &commonpb.UserId{Value: decodedOwnerID})
+	return fromModel(res)
 }
 
 func (s *store) GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
@@ -215,7 +208,7 @@ func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*cha
 		pgMember := &chat.Member{
 			UserID:  &commonpb.UserId{Value: decodedUserId},
 			IsMuted: member.IsMuted,
-			IsHost:  member.IsHost,
+			IsHost:  member.IsMod,
 		}
 
 		if addedByID, ok := member.AddedByID(); ok {
@@ -262,7 +255,7 @@ func (s *store) GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *
 	pgMember := &chat.Member{
 		UserID:  &commonpb.UserId{Value: userID.Value},
 		IsMuted: member.IsMuted,
-		IsHost:  member.IsHost,
+		IsHost:  member.IsMod,
 	}
 
 	if addedByID, ok := member.AddedByID(); ok {
@@ -353,13 +346,25 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		coverCharge = int(md.CoverCharge.Quarks)
 	}
 
+	opt := []db.ChatSetParam{
+		db.Chat.RoomNumber.Set(int(nextNumber)),
+		db.Chat.Type.Set(int(md.Type)),
+		db.Chat.CoverCharge.Set(coverCharge),
+	}
+
+	if md.Owner != nil {
+		encodedOwnerID := pg.Encode(md.Owner.Value)
+		opt = append(opt, db.Chat.CreatedBy.Set(encodedOwnerID))
+	}
+
+	// TODO: Creating a chat and adding the owner member should be done in a
+	// transaction
+
 	// Create the chat room
 	res, err = s.client.Chat.CreateOne(
 		db.Chat.ID.Set(encodedChatID),
 		db.Chat.Title.Set(md.Title),
-		db.Chat.RoomNumber.Set(int(nextNumber)),
-		db.Chat.Type.Set(int(md.Type)),
-		db.Chat.CoverCharge.Set(coverCharge),
+		opt...,
 	).Exec(ctx)
 
 	if err != nil {
@@ -373,7 +378,7 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		_, err = s.client.Member.CreateOne(
 			db.Member.UserID.Set(encodedOwnerID),
 			db.Member.Chat.Link(db.Chat.ID.Equals(encodedChatID)),
-			db.Member.IsHost.Set(true),
+			db.Member.IsMod.Set(true),
 		).Exec(ctx)
 
 		if err != nil {
@@ -413,7 +418,7 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 	// Create the member
 	createArgs := []db.MemberSetParam{
 		db.Member.IsMuted.Set(member.IsMuted),
-		db.Member.IsHost.Set(member.IsHost),
+		db.Member.IsMod.Set(member.IsHost),
 	}
 
 	// Add AddedBy parameter conditionally

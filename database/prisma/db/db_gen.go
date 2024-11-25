@@ -146,6 +146,7 @@ model Chat {
   coverCharge Int    @default(0)
   type        Int    @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
 
+  createdBy String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -163,9 +164,9 @@ model Member {
   userId    String
   addedById String?
 
-  isHost    Boolean @default(false)
   numUnread Int     @default(0)
   isMuted   Boolean @default(false)
+  isMod     Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -408,6 +409,7 @@ const (
 	ChatScalarFieldEnumRoomNumber  ChatScalarFieldEnum = "roomNumber"
 	ChatScalarFieldEnumCoverCharge ChatScalarFieldEnum = "coverCharge"
 	ChatScalarFieldEnumType        ChatScalarFieldEnum = "type"
+	ChatScalarFieldEnumCreatedBy   ChatScalarFieldEnum = "createdBy"
 	ChatScalarFieldEnumCreatedAt   ChatScalarFieldEnum = "createdAt"
 	ChatScalarFieldEnumUpdatedAt   ChatScalarFieldEnum = "updatedAt"
 )
@@ -418,9 +420,9 @@ const (
 	MemberScalarFieldEnumChatID    MemberScalarFieldEnum = "chatId"
 	MemberScalarFieldEnumUserID    MemberScalarFieldEnum = "userId"
 	MemberScalarFieldEnumAddedByID MemberScalarFieldEnum = "addedById"
-	MemberScalarFieldEnumIsHost    MemberScalarFieldEnum = "isHost"
 	MemberScalarFieldEnumNumUnread MemberScalarFieldEnum = "numUnread"
 	MemberScalarFieldEnumIsMuted   MemberScalarFieldEnum = "isMuted"
+	MemberScalarFieldEnumIsMod     MemberScalarFieldEnum = "isMod"
 	MemberScalarFieldEnumCreatedAt MemberScalarFieldEnum = "createdAt"
 	MemberScalarFieldEnumUpdatedAt MemberScalarFieldEnum = "updatedAt"
 )
@@ -556,6 +558,8 @@ const chatFieldCoverCharge chatPrismaFields = "coverCharge"
 
 const chatFieldType chatPrismaFields = "type"
 
+const chatFieldCreatedBy chatPrismaFields = "createdBy"
+
 const chatFieldCreatedAt chatPrismaFields = "createdAt"
 
 const chatFieldUpdatedAt chatPrismaFields = "updatedAt"
@@ -570,11 +574,11 @@ const memberFieldUserID memberPrismaFields = "userId"
 
 const memberFieldAddedByID memberPrismaFields = "addedById"
 
-const memberFieldIsHost memberPrismaFields = "isHost"
-
 const memberFieldNumUnread memberPrismaFields = "numUnread"
 
 const memberFieldIsMuted memberPrismaFields = "isMuted"
+
+const memberFieldIsMod memberPrismaFields = "isMod"
 
 const memberFieldCreatedAt memberPrismaFields = "createdAt"
 
@@ -1141,6 +1145,7 @@ type InnerChat struct {
 	RoomNumber  *int     `json:"roomNumber,omitempty"`
 	CoverCharge int      `json:"coverCharge"`
 	Type        int      `json:"type"`
+	CreatedBy   string   `json:"createdBy"`
 	CreatedAt   DateTime `json:"createdAt"`
 	UpdatedAt   DateTime `json:"updatedAt"`
 }
@@ -1152,6 +1157,7 @@ type RawChatModel struct {
 	RoomNumber  *RawInt     `json:"roomNumber,omitempty"`
 	CoverCharge RawInt      `json:"coverCharge"`
 	Type        RawInt      `json:"type"`
+	CreatedBy   RawString   `json:"createdBy"`
 	CreatedAt   RawDateTime `json:"createdAt"`
 	UpdatedAt   RawDateTime `json:"updatedAt"`
 }
@@ -1186,9 +1192,9 @@ type InnerMember struct {
 	ChatID    string   `json:"chatId"`
 	UserID    string   `json:"userId"`
 	AddedByID *string  `json:"addedById,omitempty"`
-	IsHost    bool     `json:"isHost"`
 	NumUnread int      `json:"numUnread"`
 	IsMuted   bool     `json:"isMuted"`
+	IsMod     bool     `json:"isMod"`
 	CreatedAt DateTime `json:"createdAt"`
 	UpdatedAt DateTime `json:"updatedAt"`
 }
@@ -1198,9 +1204,9 @@ type RawMemberModel struct {
 	ChatID    RawString   `json:"chatId"`
 	UserID    RawString   `json:"userId"`
 	AddedByID *RawString  `json:"addedById,omitempty"`
-	IsHost    RawBoolean  `json:"isHost"`
 	NumUnread RawInt      `json:"numUnread"`
 	IsMuted   RawBoolean  `json:"isMuted"`
+	IsMod     RawBoolean  `json:"isMod"`
 	CreatedAt RawDateTime `json:"createdAt"`
 	UpdatedAt RawDateTime `json:"updatedAt"`
 }
@@ -5567,6 +5573,11 @@ type chatQuery struct {
 	// @required
 	Type chatQueryTypeInt
 
+	// CreatedBy
+	//
+	// @required
+	CreatedBy chatQueryCreatedByString
+
 	// CreatedAt
 	//
 	// @required
@@ -7568,6 +7579,353 @@ func (r chatQueryTypeInt) Field() chatPrismaFields {
 }
 
 // base struct
+type chatQueryCreatedByString struct{}
+
+// Set the required value of CreatedBy
+func (r chatQueryCreatedByString) Set(value string) chatSetParam {
+
+	return chatSetParam{
+		data: builder.Field{
+			Name:  "createdBy",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of CreatedBy dynamically
+func (r chatQueryCreatedByString) SetIfPresent(value *String) chatSetParam {
+	if value == nil {
+		return chatSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r chatQueryCreatedByString) Equals(value string) chatWithPrismaCreatedByEqualsParam {
+
+	return chatWithPrismaCreatedByEqualsParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) EqualsIfPresent(value *string) chatWithPrismaCreatedByEqualsParam {
+	if value == nil {
+		return chatWithPrismaCreatedByEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r chatQueryCreatedByString) Order(direction SortOrder) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name:  "createdBy",
+			Value: direction,
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) Cursor(cursor string) chatCursorParam {
+	return chatCursorParam{
+		data: builder.Field{
+			Name:  "createdBy",
+			Value: cursor,
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) In(value []string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) InIfPresent(value []string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r chatQueryCreatedByString) NotIn(value []string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) NotInIfPresent(value []string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r chatQueryCreatedByString) Lt(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) LtIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r chatQueryCreatedByString) Lte(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) LteIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r chatQueryCreatedByString) Gt(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) GtIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r chatQueryCreatedByString) Gte(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) GteIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r chatQueryCreatedByString) Contains(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) ContainsIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r chatQueryCreatedByString) StartsWith(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) StartsWithIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r chatQueryCreatedByString) EndsWith(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) EndsWithIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r chatQueryCreatedByString) Mode(value QueryMode) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) ModeIfPresent(value *QueryMode) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r chatQueryCreatedByString) Not(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryCreatedByString) NotIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r chatQueryCreatedByString) HasPrefix(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r chatQueryCreatedByString) HasPrefixIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r chatQueryCreatedByString) HasSuffix(value string) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "createdBy",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r chatQueryCreatedByString) HasSuffixIfPresent(value *string) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r chatQueryCreatedByString) Field() chatPrismaFields {
+	return chatFieldCreatedBy
+}
+
+// base struct
 type chatQueryCreatedAtDateTime struct{}
 
 // Set the required value of CreatedAt
@@ -8382,11 +8740,6 @@ type memberQuery struct {
 	// @optional
 	AddedByID memberQueryAddedByIDString
 
-	// IsHost
-	//
-	// @required
-	IsHost memberQueryIsHostBoolean
-
 	// NumUnread
 	//
 	// @required
@@ -8396,6 +8749,11 @@ type memberQuery struct {
 	//
 	// @required
 	IsMuted memberQueryIsMutedBoolean
+
+	// IsMod
+	//
+	// @required
+	IsMod memberQueryIsModBoolean
 
 	// CreatedAt
 	//
@@ -9566,74 +9924,6 @@ func (r memberQueryAddedByIDString) Field() memberPrismaFields {
 }
 
 // base struct
-type memberQueryIsHostBoolean struct{}
-
-// Set the required value of IsHost
-func (r memberQueryIsHostBoolean) Set(value bool) memberSetParam {
-
-	return memberSetParam{
-		data: builder.Field{
-			Name:  "isHost",
-			Value: value,
-		},
-	}
-
-}
-
-// Set the optional value of IsHost dynamically
-func (r memberQueryIsHostBoolean) SetIfPresent(value *Boolean) memberSetParam {
-	if value == nil {
-		return memberSetParam{}
-	}
-
-	return r.Set(*value)
-}
-
-func (r memberQueryIsHostBoolean) Equals(value bool) memberWithPrismaIsHostEqualsParam {
-
-	return memberWithPrismaIsHostEqualsParam{
-		data: builder.Field{
-			Name: "isHost",
-			Fields: []builder.Field{
-				{
-					Name:  "equals",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryIsHostBoolean) EqualsIfPresent(value *bool) memberWithPrismaIsHostEqualsParam {
-	if value == nil {
-		return memberWithPrismaIsHostEqualsParam{}
-	}
-	return r.Equals(*value)
-}
-
-func (r memberQueryIsHostBoolean) Order(direction SortOrder) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name:  "isHost",
-			Value: direction,
-		},
-	}
-}
-
-func (r memberQueryIsHostBoolean) Cursor(cursor bool) memberCursorParam {
-	return memberCursorParam{
-		data: builder.Field{
-			Name:  "isHost",
-			Value: cursor,
-		},
-	}
-}
-
-func (r memberQueryIsHostBoolean) Field() memberPrismaFields {
-	return memberFieldIsHost
-}
-
-// base struct
 type memberQueryNumUnreadInt struct{}
 
 // Set the required value of NumUnread
@@ -10098,6 +10388,74 @@ func (r memberQueryIsMutedBoolean) Cursor(cursor bool) memberCursorParam {
 
 func (r memberQueryIsMutedBoolean) Field() memberPrismaFields {
 	return memberFieldIsMuted
+}
+
+// base struct
+type memberQueryIsModBoolean struct{}
+
+// Set the required value of IsMod
+func (r memberQueryIsModBoolean) Set(value bool) memberSetParam {
+
+	return memberSetParam{
+		data: builder.Field{
+			Name:  "isMod",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of IsMod dynamically
+func (r memberQueryIsModBoolean) SetIfPresent(value *Boolean) memberSetParam {
+	if value == nil {
+		return memberSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r memberQueryIsModBoolean) Equals(value bool) memberWithPrismaIsModEqualsParam {
+
+	return memberWithPrismaIsModEqualsParam{
+		data: builder.Field{
+			Name: "isMod",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r memberQueryIsModBoolean) EqualsIfPresent(value *bool) memberWithPrismaIsModEqualsParam {
+	if value == nil {
+		return memberWithPrismaIsModEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r memberQueryIsModBoolean) Order(direction SortOrder) memberDefaultParam {
+	return memberDefaultParam{
+		data: builder.Field{
+			Name:  "isMod",
+			Value: direction,
+		},
+	}
+}
+
+func (r memberQueryIsModBoolean) Cursor(cursor bool) memberCursorParam {
+	return memberCursorParam{
+		data: builder.Field{
+			Name:  "isMod",
+			Value: cursor,
+		},
+	}
+}
+
+func (r memberQueryIsModBoolean) Field() memberPrismaFields {
+	return memberFieldIsMod
 }
 
 // base struct
@@ -18712,6 +19070,7 @@ var chatOutput = []builder.Output{
 	{Name: "roomNumber"},
 	{Name: "coverCharge"},
 	{Name: "type"},
+	{Name: "createdBy"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -19270,6 +19629,84 @@ func (p chatWithPrismaTypeEqualsUniqueParam) typeField() {}
 func (chatWithPrismaTypeEqualsUniqueParam) unique() {}
 func (chatWithPrismaTypeEqualsUniqueParam) equals() {}
 
+type ChatWithPrismaCreatedByEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	chatModel()
+	createdByField()
+}
+
+type ChatWithPrismaCreatedBySetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	chatModel()
+	createdByField()
+}
+
+type chatWithPrismaCreatedBySetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaCreatedBySetParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaCreatedBySetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaCreatedBySetParam) chatModel() {}
+
+func (p chatWithPrismaCreatedBySetParam) createdByField() {}
+
+type ChatWithPrismaCreatedByWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	chatModel()
+	createdByField()
+}
+
+type chatWithPrismaCreatedByEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaCreatedByEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaCreatedByEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaCreatedByEqualsParam) chatModel() {}
+
+func (p chatWithPrismaCreatedByEqualsParam) createdByField() {}
+
+func (chatWithPrismaCreatedBySetParam) settable()  {}
+func (chatWithPrismaCreatedByEqualsParam) equals() {}
+
+type chatWithPrismaCreatedByEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaCreatedByEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaCreatedByEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaCreatedByEqualsUniqueParam) chatModel()      {}
+func (p chatWithPrismaCreatedByEqualsUniqueParam) createdByField() {}
+
+func (chatWithPrismaCreatedByEqualsUniqueParam) unique() {}
+func (chatWithPrismaCreatedByEqualsUniqueParam) equals() {}
+
 type ChatWithPrismaCreatedAtEqualsSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
@@ -19513,9 +19950,9 @@ var memberOutput = []builder.Output{
 	{Name: "chatId"},
 	{Name: "userId"},
 	{Name: "addedById"},
-	{Name: "isHost"},
 	{Name: "numUnread"},
 	{Name: "isMuted"},
+	{Name: "isMod"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -19918,84 +20355,6 @@ func (p memberWithPrismaAddedByIDEqualsUniqueParam) addedByIDField() {}
 func (memberWithPrismaAddedByIDEqualsUniqueParam) unique() {}
 func (memberWithPrismaAddedByIDEqualsUniqueParam) equals() {}
 
-type MemberWithPrismaIsHostEqualsSetParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	equals()
-	memberModel()
-	isHostField()
-}
-
-type MemberWithPrismaIsHostSetParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	memberModel()
-	isHostField()
-}
-
-type memberWithPrismaIsHostSetParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaIsHostSetParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaIsHostSetParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaIsHostSetParam) memberModel() {}
-
-func (p memberWithPrismaIsHostSetParam) isHostField() {}
-
-type MemberWithPrismaIsHostWhereParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	memberModel()
-	isHostField()
-}
-
-type memberWithPrismaIsHostEqualsParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaIsHostEqualsParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaIsHostEqualsParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaIsHostEqualsParam) memberModel() {}
-
-func (p memberWithPrismaIsHostEqualsParam) isHostField() {}
-
-func (memberWithPrismaIsHostSetParam) settable()  {}
-func (memberWithPrismaIsHostEqualsParam) equals() {}
-
-type memberWithPrismaIsHostEqualsUniqueParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaIsHostEqualsUniqueParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaIsHostEqualsUniqueParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaIsHostEqualsUniqueParam) memberModel() {}
-func (p memberWithPrismaIsHostEqualsUniqueParam) isHostField() {}
-
-func (memberWithPrismaIsHostEqualsUniqueParam) unique() {}
-func (memberWithPrismaIsHostEqualsUniqueParam) equals() {}
-
 type MemberWithPrismaNumUnreadEqualsSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
@@ -20151,6 +20510,84 @@ func (p memberWithPrismaIsMutedEqualsUniqueParam) isMutedField() {}
 
 func (memberWithPrismaIsMutedEqualsUniqueParam) unique() {}
 func (memberWithPrismaIsMutedEqualsUniqueParam) equals() {}
+
+type MemberWithPrismaIsModEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	memberModel()
+	isModField()
+}
+
+type MemberWithPrismaIsModSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	isModField()
+}
+
+type memberWithPrismaIsModSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsModSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsModSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsModSetParam) memberModel() {}
+
+func (p memberWithPrismaIsModSetParam) isModField() {}
+
+type MemberWithPrismaIsModWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	isModField()
+}
+
+type memberWithPrismaIsModEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsModEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsModEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsModEqualsParam) memberModel() {}
+
+func (p memberWithPrismaIsModEqualsParam) isModField() {}
+
+func (memberWithPrismaIsModSetParam) settable()  {}
+func (memberWithPrismaIsModEqualsParam) equals() {}
+
+type memberWithPrismaIsModEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsModEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsModEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsModEqualsUniqueParam) memberModel() {}
+func (p memberWithPrismaIsModEqualsUniqueParam) isModField()  {}
+
+func (memberWithPrismaIsModEqualsUniqueParam) unique() {}
+func (memberWithPrismaIsModEqualsUniqueParam) equals() {}
 
 type MemberWithPrismaCreatedAtEqualsSetParam interface {
 	field() builder.Field
