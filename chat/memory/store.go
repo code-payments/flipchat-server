@@ -195,7 +195,7 @@ func (s *InMemoryStore) AddMember(_ context.Context, chatID *commonpb.ChatId, me
 	newMember := member.Clone()
 	newMember.IsPushEnabled = true
 
-	members = append(members, member.Clone())
+	members = append(members, newMember)
 	slices.SortFunc(members, func(a, b *chat.Member) int {
 		return bytes.Compare(a.UserID.Value, b.UserID.Value)
 	})
