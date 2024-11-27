@@ -325,34 +325,31 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 
 	case *chatpb.StartChatRequest_GroupChat:
 		if t.GroupChat.PaymentIntent == nil {
-			// todo: make payment mandatory once it's rolled out, and remove the next if statement
-			//return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
 		}
 
-		if t.GroupChat.PaymentIntent != nil {
-			paymentIntent = t.GroupChat.PaymentIntent
+		paymentIntent = t.GroupChat.PaymentIntent
 
-			isFulfilled, err := s.intents.IsFulfilled(ctx, paymentIntent)
-			if err != nil {
-				s.log.Warn("Failed to check if intent is already fulfilled", zap.Error(err))
-				return nil, status.Errorf(codes.Internal, "failed to check if intent is already fulfilled")
-			} else if isFulfilled {
-				return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
-			}
+		isFulfilled, err := s.intents.IsFulfilled(ctx, paymentIntent)
+		if err != nil {
+			s.log.Warn("Failed to check if intent is already fulfilled", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to check if intent is already fulfilled")
+		} else if isFulfilled {
+			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+		}
 
-			var paymentMetadata chatpb.StartGroupChatPaymentMetadata
-			err = intent.LoadPaymentMetadata(ctx, s.codeData, t.GroupChat.PaymentIntent, &paymentMetadata)
-			if err == intent.ErrNoPaymentMetadata {
-				return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
-			} else if err != nil {
-				s.log.Warn("Failed to get payment metadata", zap.Error(err))
-				return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
-			}
+		var paymentMetadata chatpb.StartGroupChatPaymentMetadata
+		err = intent.LoadPaymentMetadata(ctx, s.codeData, t.GroupChat.PaymentIntent, &paymentMetadata)
+		if err == intent.ErrNoPaymentMetadata {
+			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get payment metadata", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
+		}
 
-			// Verify the provided payment is for this user to create a new group.
-			if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
-				return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
-			}
+		// Verify the provided payment is for this user to create a new group.
+		if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
+			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
 		}
 
 		// Need to do this transactionally...but we've lost it...so...heh :)
