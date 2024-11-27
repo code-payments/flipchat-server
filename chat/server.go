@@ -370,6 +370,9 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		return nil, status.Errorf(codes.InvalidArgument, "unsupported type")
 	}
 
+	md.IsPushEnabled = true
+	md.CanDisablePush = true
+
 	md, err = s.chats.CreateChat(ctx, md)
 	if err != nil && !errors.Is(err, ErrChatExists) {
 		s.log.Warn("Failed to put chat metadata", zap.Error(err))
