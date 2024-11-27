@@ -85,7 +85,6 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	pushMembers := make([]*commonpb.UserId, 0, len(members))
 	for _, member := range members {
 		if !member.IsPushEnabled {
-			// todo: needs testing
 			continue
 		}
 		if bytes.Equal(member.UserID.Value, msg.SenderId.Value) {
