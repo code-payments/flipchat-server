@@ -130,12 +130,22 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		userKey,
 		streamBufferSize,
 		func(e *event.ChatEvent) (*messagingpb.StreamMessagesResponse_MessageBatch, bool) {
-			if e.MessageUpdate == nil {
+			var messages []*messagingpb.Message
+
+			if e.MessageUpdate != nil {
+				messages = append(messages, e.MessageUpdate)
+			}
+
+			if len(e.FlushedMessages) > 0 {
+				messages = append(messages, e.FlushedMessages...)
+			}
+
+			if len(messages) == 0 {
 				return nil, false
 			}
 
 			return &messagingpb.StreamMessagesResponse_MessageBatch{
-				Messages: []*messagingpb.Message{e.MessageUpdate},
+				Messages: messages,
 			}, true
 		},
 	)
@@ -364,8 +374,22 @@ func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, use
 		return
 	}
 
-	for _, msg := range messages {
-		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, MessageUpdate: msg}, streamTimeout); err != nil {
+	var batch []*messagingpb.Message
+
+	for _, message := range messages {
+		batch = append(batch, message)
+
+		if len(batch) >= 1024 {
+			if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
+				log.Info("Failed to send message to stream", zap.Error(err))
+				return
+			}
+			batch = nil
+		}
+	}
+
+	if len(batch) > 0 {
+		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
 			log.Info("Failed to send message to stream", zap.Error(err))
 			return
 		}

@@ -13,11 +13,12 @@ type ChatEvent struct {
 	ChatID    *commonpb.ChatId
 	Timestamp time.Time
 
-	ChatUpdate    *chatpb.Metadata
-	PointerUpdate *chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate
-	MemberUpdate  *chatpb.StreamChatEventsResponse_MemberUpdate
-	MessageUpdate *messagingpb.Message
-	IsTyping      *messagingpb.IsTyping
+	ChatUpdate      *chatpb.Metadata
+	PointerUpdate   *chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate
+	MemberUpdate    *chatpb.StreamChatEventsResponse_MemberUpdate
+	MessageUpdate   *messagingpb.Message
+	FlushedMessages []*messagingpb.Message
+	IsTyping        *messagingpb.IsTyping
 }
 
 type Handler[Key, Event any] interface {
