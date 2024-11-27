@@ -114,7 +114,7 @@ model Member {
 model Message {
   // Fields
 
-  id       String  @id
+  id       Bytes   @id
   chatId   String
   senderId String?
 

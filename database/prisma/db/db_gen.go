@@ -188,7 +188,7 @@ model Member {
 model Message {
   // Fields
 
-  id       String  @id
+  id       Bytes   @id
   chatId   String
   senderId String?
 
@@ -1244,7 +1244,7 @@ type MessageModel struct {
 
 // InnerMessage holds the actual data
 type InnerMessage struct {
-	ID        string   `json:"id"`
+	ID        Bytes    `json:"id"`
 	ChatID    string   `json:"chatId"`
 	SenderID  *string  `json:"senderId,omitempty"`
 	Content   Bytes    `json:"content"`
@@ -1254,7 +1254,7 @@ type InnerMessage struct {
 
 // RawMessageModel is a struct for Message when used in raw queries
 type RawMessageModel struct {
-	ID        RawString   `json:"id"`
+	ID        RawBytes    `json:"id"`
 	ChatID    RawString   `json:"chatId"`
 	SenderID  *RawString  `json:"senderId,omitempty"`
 	Content   RawBytes    `json:"content"`
@@ -11160,7 +11160,7 @@ type messageQuery struct {
 	// ID
 	//
 	// @required
-	ID messageQueryIDString
+	ID messageQueryIDBytes
 
 	// ChatID
 	//
@@ -11240,10 +11240,10 @@ func (messageQuery) And(params ...MessageWhereParam) messageDefaultParam {
 }
 
 // base struct
-type messageQueryIDString struct{}
+type messageQueryIDBytes struct{}
 
 // Set the required value of ID
-func (r messageQueryIDString) Set(value string) messageWithPrismaIDSetParam {
+func (r messageQueryIDBytes) Set(value Bytes) messageWithPrismaIDSetParam {
 
 	return messageWithPrismaIDSetParam{
 		data: builder.Field{
@@ -11255,7 +11255,7 @@ func (r messageQueryIDString) Set(value string) messageWithPrismaIDSetParam {
 }
 
 // Set the optional value of ID dynamically
-func (r messageQueryIDString) SetIfPresent(value *String) messageWithPrismaIDSetParam {
+func (r messageQueryIDBytes) SetIfPresent(value *Bytes) messageWithPrismaIDSetParam {
 	if value == nil {
 		return messageWithPrismaIDSetParam{}
 	}
@@ -11263,7 +11263,7 @@ func (r messageQueryIDString) SetIfPresent(value *String) messageWithPrismaIDSet
 	return r.Set(*value)
 }
 
-func (r messageQueryIDString) Equals(value string) messageWithPrismaIDEqualsUniqueParam {
+func (r messageQueryIDBytes) Equals(value Bytes) messageWithPrismaIDEqualsUniqueParam {
 
 	return messageWithPrismaIDEqualsUniqueParam{
 		data: builder.Field{
@@ -11278,14 +11278,14 @@ func (r messageQueryIDString) Equals(value string) messageWithPrismaIDEqualsUniq
 	}
 }
 
-func (r messageQueryIDString) EqualsIfPresent(value *string) messageWithPrismaIDEqualsUniqueParam {
+func (r messageQueryIDBytes) EqualsIfPresent(value *Bytes) messageWithPrismaIDEqualsUniqueParam {
 	if value == nil {
 		return messageWithPrismaIDEqualsUniqueParam{}
 	}
 	return r.Equals(*value)
 }
 
-func (r messageQueryIDString) Order(direction SortOrder) messageDefaultParam {
+func (r messageQueryIDBytes) Order(direction SortOrder) messageDefaultParam {
 	return messageDefaultParam{
 		data: builder.Field{
 			Name:  "id",
@@ -11294,7 +11294,7 @@ func (r messageQueryIDString) Order(direction SortOrder) messageDefaultParam {
 	}
 }
 
-func (r messageQueryIDString) Cursor(cursor string) messageCursorParam {
+func (r messageQueryIDBytes) Cursor(cursor Bytes) messageCursorParam {
 	return messageCursorParam{
 		data: builder.Field{
 			Name:  "id",
@@ -11303,7 +11303,7 @@ func (r messageQueryIDString) Cursor(cursor string) messageCursorParam {
 	}
 }
 
-func (r messageQueryIDString) In(value []string) messageParamUnique {
+func (r messageQueryIDBytes) In(value []Bytes) messageParamUnique {
 	return messageParamUnique{
 		data: builder.Field{
 			Name: "id",
@@ -11317,14 +11317,14 @@ func (r messageQueryIDString) In(value []string) messageParamUnique {
 	}
 }
 
-func (r messageQueryIDString) InIfPresent(value []string) messageParamUnique {
+func (r messageQueryIDBytes) InIfPresent(value []Bytes) messageParamUnique {
 	if value == nil {
 		return messageParamUnique{}
 	}
 	return r.In(value)
 }
 
-func (r messageQueryIDString) NotIn(value []string) messageParamUnique {
+func (r messageQueryIDBytes) NotIn(value []Bytes) messageParamUnique {
 	return messageParamUnique{
 		data: builder.Field{
 			Name: "id",
@@ -11338,182 +11338,14 @@ func (r messageQueryIDString) NotIn(value []string) messageParamUnique {
 	}
 }
 
-func (r messageQueryIDString) NotInIfPresent(value []string) messageParamUnique {
+func (r messageQueryIDBytes) NotInIfPresent(value []Bytes) messageParamUnique {
 	if value == nil {
 		return messageParamUnique{}
 	}
 	return r.NotIn(value)
 }
 
-func (r messageQueryIDString) Lt(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "lt",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r messageQueryIDString) LtIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.Lt(*value)
-}
-
-func (r messageQueryIDString) Lte(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "lte",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r messageQueryIDString) LteIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.Lte(*value)
-}
-
-func (r messageQueryIDString) Gt(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "gt",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r messageQueryIDString) GtIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.Gt(*value)
-}
-
-func (r messageQueryIDString) Gte(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "gte",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r messageQueryIDString) GteIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.Gte(*value)
-}
-
-func (r messageQueryIDString) Contains(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "contains",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r messageQueryIDString) ContainsIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.Contains(*value)
-}
-
-func (r messageQueryIDString) StartsWith(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "startsWith",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r messageQueryIDString) StartsWithIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.StartsWith(*value)
-}
-
-func (r messageQueryIDString) EndsWith(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "endsWith",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r messageQueryIDString) EndsWithIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.EndsWith(*value)
-}
-
-func (r messageQueryIDString) Mode(value QueryMode) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "mode",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r messageQueryIDString) ModeIfPresent(value *QueryMode) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.Mode(*value)
-}
-
-func (r messageQueryIDString) Not(value string) messageParamUnique {
+func (r messageQueryIDBytes) Not(value Bytes) messageParamUnique {
 	return messageParamUnique{
 		data: builder.Field{
 			Name: "id",
@@ -11527,62 +11359,14 @@ func (r messageQueryIDString) Not(value string) messageParamUnique {
 	}
 }
 
-func (r messageQueryIDString) NotIfPresent(value *string) messageParamUnique {
+func (r messageQueryIDBytes) NotIfPresent(value *Bytes) messageParamUnique {
 	if value == nil {
 		return messageParamUnique{}
 	}
 	return r.Not(*value)
 }
 
-// deprecated: Use StartsWith instead.
-
-func (r messageQueryIDString) HasPrefix(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "starts_with",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use StartsWithIfPresent instead.
-func (r messageQueryIDString) HasPrefixIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.HasPrefix(*value)
-}
-
-// deprecated: Use EndsWith instead.
-
-func (r messageQueryIDString) HasSuffix(value string) messageParamUnique {
-	return messageParamUnique{
-		data: builder.Field{
-			Name: "id",
-			Fields: []builder.Field{
-				{
-					Name:  "ends_with",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use EndsWithIfPresent instead.
-func (r messageQueryIDString) HasSuffixIfPresent(value *string) messageParamUnique {
-	if value == nil {
-		return messageParamUnique{}
-	}
-	return r.HasSuffix(*value)
-}
-
-func (r messageQueryIDString) Field() messagePrismaFields {
+func (r messageQueryIDBytes) Field() messagePrismaFields {
 	return messageFieldID
 }
 

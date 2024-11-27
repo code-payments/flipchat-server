@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"slices"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
@@ -47,8 +46,12 @@ func (s *store) reset() {
 func (s *store) GetMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
 	encodedChatID := pg.Encode(chatID.Value)
 
+	// TODO: Add pagination
+
 	messages, err := s.client.Message.FindMany(
 		db.Message.ChatID.Equals(encodedChatID),
+	).OrderBy(
+		db.Message.ID.Order(db.SortOrderAsc),
 	).Exec(ctx)
 
 	if err != nil {
@@ -72,18 +75,6 @@ func (s *store) GetMessages(ctx context.Context, chatID *commonpb.ChatId, option
 		result[i] = pgMessage
 	}
 
-	// TODO: Add pagination
-	// TODO: Consider sorting in the database query.
-
-	// We're sorting here because the in-memory version uses a byte level sort
-	// on the message id. The database can't do that. Consider changing the
-	// in-memory version to use a time based sort instead. Or use an
-	// auto-incrementing id.
-
-	slices.SortFunc(result, func(a, b *messagingpb.Message) int {
-		return bytes.Compare(a.MessageId.Value, b.MessageId.Value)
-	})
-
 	return result, nil
 }
 
@@ -95,7 +86,6 @@ func (s *store) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *me
 	msg.MessageId = messaging.MustGenerateMessageID()
 
 	encodedChatID := pg.Encode(chatID.Value)
-	encodedMessageId := pg.Encode(msg.MessageId.Value)
 
 	// Note, we're storing the whole message as a serialized blob because we
 	// can't serialze just the content.
@@ -115,7 +105,7 @@ func (s *store) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *me
 	}
 
 	_, err = s.client.Message.CreateOne(
-		db.Message.ID.Set(encodedMessageId),
+		db.Message.ID.Set(msg.MessageId.Value),
 		db.Message.ChatID.Set(encodedChatID),
 		db.Message.Content.Set(serializedMessage),
 		opt...,
@@ -136,9 +126,8 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 
 	// Conditionally add the createdAt condition if lastRead is provided
 	if lastRead != nil {
-		encodedMessageId := pg.Encode(lastRead.Value)
 		msg, err := s.client.Message.FindUnique(
-			db.Message.ID.Equals(encodedMessageId),
+			db.Message.ID.Equals(lastRead.Value),
 		).Exec(ctx)
 		if err != nil {
 			return 0, err
