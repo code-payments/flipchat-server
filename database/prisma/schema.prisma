@@ -90,9 +90,10 @@ model Member {
   userId    String
   addedById String?
 
-  numUnread Int     @default(0)
-  isMuted   Boolean @default(false)
-  isMod     Boolean @default(false)
+  numUnread     Int     @default(0)
+  isMuted       Boolean @default(false) // Has the host muted this member?
+  isMod         Boolean @default(false) // Is this member a moderator (aka host)?
+  isPushEnabled Boolean @default(true) // Are push notifications enabled for this member?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

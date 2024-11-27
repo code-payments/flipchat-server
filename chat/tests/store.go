@@ -26,6 +26,7 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 		testChatStore_GetChatMembers,
 		testChatStore_IsChatMember,
 		testChatStore_SetChatMuteState,
+		testChatStore_SetChatPushState,
 		testChatStore_JoinLeave,
 		testChatStore_AddRemove,
 	} {
@@ -197,13 +198,15 @@ func testChatStore_GetChatMembers(t *testing.T, store chat.Store) {
 
 	members, err := store.GetMembers(context.Background(), chatID)
 	require.NoError(t, err)
-
 	require.Equal(t, len(expectedMembers), len(members))
 
 	for i := range expectedMembers {
 		require.NoError(t, protoutil.ProtoEqualError(expectedMembers[i].UserID, members[i].UserID))
 		require.NoError(t, protoutil.ProtoEqualError(expectedMembers[i].AddedBy, members[i].AddedBy))
 		require.Equal(t, expectedMembers[i].IsMuted, members[i].IsMuted)
+
+		// Expect push to be enabled by default
+		require.True(t, members[i].IsPushEnabled)
 	}
 
 }
@@ -256,6 +259,31 @@ func testChatStore_SetChatMuteState(t *testing.T, store chat.Store) {
 	members, err = store.GetMembers(context.Background(), chatID)
 	require.NoError(t, err)
 	require.True(t, members[0].IsMuted)
+}
+
+func testChatStore_SetChatPushState(t *testing.T, store chat.Store) {
+	chatID := model.MustGenerateChatID()
+	memberID := model.MustGenerateUserID()
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId: chatID,
+		Type:   chatpb.Metadata_GROUP,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
+		UserID: memberID,
+	}))
+
+	members, err := store.GetMembers(context.Background(), chatID)
+	require.NoError(t, err)
+	require.True(t, members[0].IsPushEnabled) // Default to true
+
+	require.NoError(t, store.SetPushState(context.Background(), chatID, memberID, false))
+
+	members, err = store.GetMembers(context.Background(), chatID)
+	require.NoError(t, err)
+	require.False(t, members[0].IsPushEnabled)
 }
 
 func testChatStore_JoinLeave(t *testing.T, store chat.Store) {

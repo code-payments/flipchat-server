@@ -22,10 +22,11 @@ var (
 )
 
 type Member struct {
-	UserID  *commonpb.UserId
-	AddedBy *commonpb.UserId
-	IsMuted bool
-	IsHost  bool
+	UserID        *commonpb.UserId
+	AddedBy       *commonpb.UserId
+	IsPushEnabled bool
+	IsMuted       bool
+	IsHost        bool
 }
 
 func (m *Member) Validate() error {

@@ -191,6 +191,10 @@ func (s *InMemoryStore) AddMember(_ context.Context, chatID *commonpb.ChatId, me
 		}
 	}
 
+	// Default for IsPushEnabled is true.
+	newMember := member.Clone()
+	newMember.IsPushEnabled = true
+
 	members = append(members, member.Clone())
 	slices.SortFunc(members, func(a, b *chat.Member) int {
 		return bytes.Compare(a.UserID.Value, b.UserID.Value)
@@ -228,6 +232,20 @@ func (s *InMemoryStore) RemoveMember(_ context.Context, chatID *commonpb.ChatId,
 	return nil
 }
 
+func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	md, ok := s.chats[string(chatID.Value)]
+	if !ok {
+		return chat.ErrChatNotFound
+	}
+
+	md.CoverCharge = proto.Clone(coverCharge).(*commonpb.PaymentAmount)
+
+	return nil
+}
+
 func (s *InMemoryStore) SetMuteState(_ context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isMuted bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -257,16 +275,31 @@ func (s *InMemoryStore) IsUserMuted(_ context.Context, chatID *commonpb.ChatId, 
 	return false, chat.ErrMemberNotFound
 }
 
-func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
+func (s *InMemoryStore) SetPushState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isPushEnabled bool) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	md, ok := s.chats[string(chatID.Value)]
-	if !ok {
-		return chat.ErrChatNotFound
+	members := s.members[string(chatID.Value)]
+	for _, m := range members {
+		if bytes.Equal(m.UserID.Value, member.Value) {
+			m.IsPushEnabled = isPushEnabled
+			return nil
+		}
 	}
 
-	md.CoverCharge = proto.Clone(coverCharge).(*commonpb.PaymentAmount)
+	return chat.ErrMemberNotFound
+}
 
-	return nil
+func (s *InMemoryStore) IsPushEnabled(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	members := s.members[string(chatID.Value)]
+	for _, m := range members {
+		if bytes.Equal(m.UserID.Value, member.Value) {
+			return m.IsPushEnabled, nil
+		}
+	}
+
+	return false, chat.ErrMemberNotFound
 }

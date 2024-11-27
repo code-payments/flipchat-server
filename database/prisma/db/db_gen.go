@@ -164,9 +164,10 @@ model Member {
   userId    String
   addedById String?
 
-  numUnread Int     @default(0)
-  isMuted   Boolean @default(false)
-  isMod     Boolean @default(false)
+  numUnread     Int     @default(0)
+  isMuted       Boolean @default(false) // Has the host muted this member?
+  isMod         Boolean @default(false) // Is this member a moderator (aka host)?
+  isPushEnabled Boolean @default(true) // Are push notifications enabled for this member?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -417,14 +418,15 @@ const (
 type MemberScalarFieldEnum string
 
 const (
-	MemberScalarFieldEnumChatID    MemberScalarFieldEnum = "chatId"
-	MemberScalarFieldEnumUserID    MemberScalarFieldEnum = "userId"
-	MemberScalarFieldEnumAddedByID MemberScalarFieldEnum = "addedById"
-	MemberScalarFieldEnumNumUnread MemberScalarFieldEnum = "numUnread"
-	MemberScalarFieldEnumIsMuted   MemberScalarFieldEnum = "isMuted"
-	MemberScalarFieldEnumIsMod     MemberScalarFieldEnum = "isMod"
-	MemberScalarFieldEnumCreatedAt MemberScalarFieldEnum = "createdAt"
-	MemberScalarFieldEnumUpdatedAt MemberScalarFieldEnum = "updatedAt"
+	MemberScalarFieldEnumChatID        MemberScalarFieldEnum = "chatId"
+	MemberScalarFieldEnumUserID        MemberScalarFieldEnum = "userId"
+	MemberScalarFieldEnumAddedByID     MemberScalarFieldEnum = "addedById"
+	MemberScalarFieldEnumNumUnread     MemberScalarFieldEnum = "numUnread"
+	MemberScalarFieldEnumIsMuted       MemberScalarFieldEnum = "isMuted"
+	MemberScalarFieldEnumIsMod         MemberScalarFieldEnum = "isMod"
+	MemberScalarFieldEnumIsPushEnabled MemberScalarFieldEnum = "isPushEnabled"
+	MemberScalarFieldEnumCreatedAt     MemberScalarFieldEnum = "createdAt"
+	MemberScalarFieldEnumUpdatedAt     MemberScalarFieldEnum = "updatedAt"
 )
 
 type MessageScalarFieldEnum string
@@ -579,6 +581,8 @@ const memberFieldNumUnread memberPrismaFields = "numUnread"
 const memberFieldIsMuted memberPrismaFields = "isMuted"
 
 const memberFieldIsMod memberPrismaFields = "isMod"
+
+const memberFieldIsPushEnabled memberPrismaFields = "isPushEnabled"
 
 const memberFieldCreatedAt memberPrismaFields = "createdAt"
 
@@ -1189,26 +1193,28 @@ type MemberModel struct {
 
 // InnerMember holds the actual data
 type InnerMember struct {
-	ChatID    string   `json:"chatId"`
-	UserID    string   `json:"userId"`
-	AddedByID *string  `json:"addedById,omitempty"`
-	NumUnread int      `json:"numUnread"`
-	IsMuted   bool     `json:"isMuted"`
-	IsMod     bool     `json:"isMod"`
-	CreatedAt DateTime `json:"createdAt"`
-	UpdatedAt DateTime `json:"updatedAt"`
+	ChatID        string   `json:"chatId"`
+	UserID        string   `json:"userId"`
+	AddedByID     *string  `json:"addedById,omitempty"`
+	NumUnread     int      `json:"numUnread"`
+	IsMuted       bool     `json:"isMuted"`
+	IsMod         bool     `json:"isMod"`
+	IsPushEnabled bool     `json:"isPushEnabled"`
+	CreatedAt     DateTime `json:"createdAt"`
+	UpdatedAt     DateTime `json:"updatedAt"`
 }
 
 // RawMemberModel is a struct for Member when used in raw queries
 type RawMemberModel struct {
-	ChatID    RawString   `json:"chatId"`
-	UserID    RawString   `json:"userId"`
-	AddedByID *RawString  `json:"addedById,omitempty"`
-	NumUnread RawInt      `json:"numUnread"`
-	IsMuted   RawBoolean  `json:"isMuted"`
-	IsMod     RawBoolean  `json:"isMod"`
-	CreatedAt RawDateTime `json:"createdAt"`
-	UpdatedAt RawDateTime `json:"updatedAt"`
+	ChatID        RawString   `json:"chatId"`
+	UserID        RawString   `json:"userId"`
+	AddedByID     *RawString  `json:"addedById,omitempty"`
+	NumUnread     RawInt      `json:"numUnread"`
+	IsMuted       RawBoolean  `json:"isMuted"`
+	IsMod         RawBoolean  `json:"isMod"`
+	IsPushEnabled RawBoolean  `json:"isPushEnabled"`
+	CreatedAt     RawDateTime `json:"createdAt"`
+	UpdatedAt     RawDateTime `json:"updatedAt"`
 }
 
 // RelationsMember holds the relation data separately
@@ -8659,6 +8665,11 @@ type memberQuery struct {
 	// @required
 	IsMod memberQueryIsModBoolean
 
+	// IsPushEnabled
+	//
+	// @required
+	IsPushEnabled memberQueryIsPushEnabledBoolean
+
 	// CreatedAt
 	//
 	// @required
@@ -10360,6 +10371,74 @@ func (r memberQueryIsModBoolean) Cursor(cursor bool) memberCursorParam {
 
 func (r memberQueryIsModBoolean) Field() memberPrismaFields {
 	return memberFieldIsMod
+}
+
+// base struct
+type memberQueryIsPushEnabledBoolean struct{}
+
+// Set the required value of IsPushEnabled
+func (r memberQueryIsPushEnabledBoolean) Set(value bool) memberSetParam {
+
+	return memberSetParam{
+		data: builder.Field{
+			Name:  "isPushEnabled",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of IsPushEnabled dynamically
+func (r memberQueryIsPushEnabledBoolean) SetIfPresent(value *Boolean) memberSetParam {
+	if value == nil {
+		return memberSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r memberQueryIsPushEnabledBoolean) Equals(value bool) memberWithPrismaIsPushEnabledEqualsParam {
+
+	return memberWithPrismaIsPushEnabledEqualsParam{
+		data: builder.Field{
+			Name: "isPushEnabled",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r memberQueryIsPushEnabledBoolean) EqualsIfPresent(value *bool) memberWithPrismaIsPushEnabledEqualsParam {
+	if value == nil {
+		return memberWithPrismaIsPushEnabledEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r memberQueryIsPushEnabledBoolean) Order(direction SortOrder) memberDefaultParam {
+	return memberDefaultParam{
+		data: builder.Field{
+			Name:  "isPushEnabled",
+			Value: direction,
+		},
+	}
+}
+
+func (r memberQueryIsPushEnabledBoolean) Cursor(cursor bool) memberCursorParam {
+	return memberCursorParam{
+		data: builder.Field{
+			Name:  "isPushEnabled",
+			Value: cursor,
+		},
+	}
+}
+
+func (r memberQueryIsPushEnabledBoolean) Field() memberPrismaFields {
+	return memberFieldIsPushEnabled
 }
 
 // base struct
@@ -19857,6 +19936,7 @@ var memberOutput = []builder.Output{
 	{Name: "numUnread"},
 	{Name: "isMuted"},
 	{Name: "isMod"},
+	{Name: "isPushEnabled"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -20492,6 +20572,84 @@ func (p memberWithPrismaIsModEqualsUniqueParam) isModField()  {}
 
 func (memberWithPrismaIsModEqualsUniqueParam) unique() {}
 func (memberWithPrismaIsModEqualsUniqueParam) equals() {}
+
+type MemberWithPrismaIsPushEnabledEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	memberModel()
+	isPushEnabledField()
+}
+
+type MemberWithPrismaIsPushEnabledSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	isPushEnabledField()
+}
+
+type memberWithPrismaIsPushEnabledSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsPushEnabledSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsPushEnabledSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsPushEnabledSetParam) memberModel() {}
+
+func (p memberWithPrismaIsPushEnabledSetParam) isPushEnabledField() {}
+
+type MemberWithPrismaIsPushEnabledWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	isPushEnabledField()
+}
+
+type memberWithPrismaIsPushEnabledEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsPushEnabledEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsPushEnabledEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsPushEnabledEqualsParam) memberModel() {}
+
+func (p memberWithPrismaIsPushEnabledEqualsParam) isPushEnabledField() {}
+
+func (memberWithPrismaIsPushEnabledSetParam) settable()  {}
+func (memberWithPrismaIsPushEnabledEqualsParam) equals() {}
+
+type memberWithPrismaIsPushEnabledEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsPushEnabledEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsPushEnabledEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsPushEnabledEqualsUniqueParam) memberModel()        {}
+func (p memberWithPrismaIsPushEnabledEqualsUniqueParam) isPushEnabledField() {}
+
+func (memberWithPrismaIsPushEnabledEqualsUniqueParam) unique() {}
+func (memberWithPrismaIsPushEnabledEqualsUniqueParam) equals() {}
 
 type MemberWithPrismaCreatedAtEqualsSetParam interface {
 	field() builder.Field

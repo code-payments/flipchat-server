@@ -206,9 +206,10 @@ func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*cha
 		}
 
 		pgMember := &chat.Member{
-			UserID:  &commonpb.UserId{Value: decodedUserId},
-			IsMuted: member.IsMuted,
-			IsHost:  member.IsMod,
+			UserID:        &commonpb.UserId{Value: decodedUserId},
+			IsPushEnabled: member.IsPushEnabled,
+			IsMuted:       member.IsMuted,
+			IsHost:        member.IsMod,
 		}
 
 		if addedByID, ok := member.AddedByID(); ok {
@@ -253,9 +254,10 @@ func (s *store) GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *
 	}
 
 	pgMember := &chat.Member{
-		UserID:  &commonpb.UserId{Value: userID.Value},
-		IsMuted: member.IsMuted,
-		IsHost:  member.IsMod,
+		UserID:        &commonpb.UserId{Value: userID.Value},
+		IsPushEnabled: member.IsPushEnabled,
+		IsMuted:       member.IsMuted,
+		IsHost:        member.IsMod,
 	}
 
 	if addedByID, ok := member.AddedByID(); ok {
@@ -417,6 +419,7 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 
 	// Create the member
 	createArgs := []db.MemberSetParam{
+		db.Member.IsPushEnabled.Set(true),
 		db.Member.IsMuted.Set(member.IsMuted),
 		db.Member.IsMod.Set(member.IsHost),
 	}
@@ -453,6 +456,22 @@ func (s *store) RemoveMember(ctx context.Context, chatID *commonpb.ChatId, membe
 
 	if errors.Is(err, db.ErrNotFound) {
 		return chat.ErrMemberNotFound
+	}
+
+	return err
+}
+
+func (s *store) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
+	encodedChatID := pg.Encode(chatID.Value)
+
+	_, err := s.client.Chat.FindUnique(
+		db.Chat.ID.Equals(encodedChatID),
+	).Update(
+		db.Chat.CoverCharge.Set(db.BigInt(coverCharge.Quarks)),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return chat.ErrChatNotFound
 	}
 
 	return err
@@ -496,18 +515,40 @@ func (s *store) IsUserMuted(ctx context.Context, chatID *commonpb.ChatId, member
 	return res.IsMuted, nil
 }
 
-func (s *store) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
+func (s *store) SetPushState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isPushEnabled bool) error {
 	encodedChatID := pg.Encode(chatID.Value)
+	encodedUserID := pg.Encode(member.Value)
 
-	_, err := s.client.Chat.FindUnique(
-		db.Chat.ID.Equals(encodedChatID),
+	_, err := s.client.Member.FindUnique(
+		db.Member.ChatIDUserID(
+			db.Member.ChatID.Equals(encodedChatID),
+			db.Member.UserID.Equals(encodedUserID),
+		),
 	).Update(
-		db.Chat.CoverCharge.Set(db.BigInt(coverCharge.Quarks)),
+		db.Member.IsPushEnabled.Set(isPushEnabled),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
-		return chat.ErrChatNotFound
+		return chat.ErrMemberNotFound
 	}
 
 	return err
+}
+
+func (s *store) IsPushEnabled(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
+	encodedChatID := pg.Encode(chatID.Value)
+	encodedUserID := pg.Encode(member.Value)
+
+	res, err := s.client.Member.FindUnique(
+		db.Member.ChatIDUserID(
+			db.Member.ChatID.Equals(encodedChatID),
+			db.Member.UserID.Equals(encodedUserID),
+		),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) || res == nil {
+		return false, chat.ErrMemberNotFound
+	}
+
+	return res.IsPushEnabled, nil
 }
