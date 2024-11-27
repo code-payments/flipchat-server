@@ -36,12 +36,12 @@ generate:
 	go run github.com/steebchen/prisma-client-go generate
 
 # Sync database with schema (development)
-push:
-	go run github.com/steebchen/prisma-client-go db push
+# push:
+# 	go run github.com/steebchen/prisma-client-go db push
 
 # Pull the database schema into Prisma schema
-pull:
-	go run github.com/steebchen/prisma-client-go db pull
+# pull:
+# 	go run github.com/steebchen/prisma-client-go db pull
 
 # Run a local test database using Docker
 # (don't use this running golang tests, those spin up their own db)
