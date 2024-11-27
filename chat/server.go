@@ -775,6 +775,16 @@ func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*ch
 	return &chatpb.MuteUserResponse{}, nil
 }
 
+// todo: this RPC needs tests
+func (s *Server) MuteChat(ctx context.Context, req *chatpb.MuteChatRequest) (*chatpb.MuteChatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+// todo: this RPC needs tests
+func (s *Server) UnmuteChat(ctx context.Context, req *chatpb.UnmuteChatRequest) (*chatpb.UnmuteChatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
 // todo: implement me
 func (s *Server) ReportUser(ctx context.Context, req *chatpb.ReportUserRequest) (*chatpb.ReportUserResponse, error) {
 	return &chatpb.ReportUserResponse{}, nil
