@@ -890,7 +890,9 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 	md.NumUnread = uint32(unread)
 
 	isPushEnabled, err := s.chats.IsPushEnabled(ctx, chatID, caller)
-	if err != nil {
+	if err == ErrMemberNotFound {
+		isPushEnabled = true
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to get push state: %w", err)
 	}
 	md.IsPushEnabled = isPushEnabled
