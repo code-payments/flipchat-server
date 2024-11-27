@@ -39,10 +39,11 @@ func (m *Member) Validate() error {
 
 func (m *Member) Clone() *Member {
 	return &Member{
-		UserID:  proto.Clone(m.UserID).(*commonpb.UserId),
-		AddedBy: proto.Clone(m.AddedBy).(*commonpb.UserId),
-		IsMuted: m.IsMuted,
-		IsHost:  m.IsHost,
+		UserID:        proto.Clone(m.UserID).(*commonpb.UserId),
+		AddedBy:       proto.Clone(m.AddedBy).(*commonpb.UserId),
+		IsPushEnabled: m.IsPushEnabled,
+		IsMuted:       m.IsMuted,
+		IsHost:        m.IsHost,
 	}
 }
 
