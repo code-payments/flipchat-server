@@ -494,7 +494,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 		}
 	} else {
-		chatMetadata, err := s.chats.GetChatMetadata(ctx, chatID)
+		chatMetadata, err := s.getMetadata(ctx, chatID, nil)
 		if err != nil {
 			s.log.Warn("Failed to get chat", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to get chat")
@@ -777,12 +777,58 @@ func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*ch
 
 // todo: this RPC needs tests
 func (s *Server) MuteChat(ctx context.Context, req *chatpb.MuteChatRequest) (*chatpb.MuteChatResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	isMember, err := s.chats.IsMember(ctx, req.ChatId, userID)
+	if err != nil {
+		log.Warn("Failed to get chat membership", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat membership")
+	} else if !isMember {
+		return &chatpb.MuteChatResponse{Result: chatpb.MuteChatResponse_DENIED}, nil
+	}
+
+	if err = s.chats.SetPushState(ctx, req.ChatId, userID, false); err != nil {
+		log.Warn("Failed to mute chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to mute chat")
+	}
+
+	return &chatpb.MuteChatResponse{}, nil
 }
 
 // todo: this RPC needs tests
 func (s *Server) UnmuteChat(ctx context.Context, req *chatpb.UnmuteChatRequest) (*chatpb.UnmuteChatResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "")
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	isMember, err := s.chats.IsMember(ctx, req.ChatId, userID)
+	if err != nil {
+		log.Warn("Failed to get chat membership", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat membership")
+	} else if !isMember {
+		return &chatpb.UnmuteChatResponse{Result: chatpb.UnmuteChatResponse_DENIED}, nil
+	}
+
+	if err = s.chats.SetPushState(ctx, req.ChatId, userID, true); err != nil {
+		log.Warn("Failed to mute chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to unmute chat")
+	}
+
+	return &chatpb.UnmuteChatResponse{}, nil
 }
 
 // todo: implement me
@@ -809,11 +855,14 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
 	}
 }
 
+// todo: push state needs testing
 func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId) (*chatpb.Metadata, error) {
 	md, err := s.chats.GetChatMetadata(ctx, chatID)
 	if err != nil {
 		return nil, err
 	}
+
+	md.CanDisablePush = true
 
 	// If the caller is not specified, _or_ the caller isn't a member, we don't need to fill out
 	// caller specific fields.
@@ -839,6 +888,12 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 		return nil, fmt.Errorf("failed to count unread messages: %w", err)
 	}
 	md.NumUnread = uint32(unread)
+
+	isPushEnabled, err := s.chats.IsPushEnabled(ctx, chatID, caller)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get push state: %w", err)
+	}
+	md.IsPushEnabled = isPushEnabled
 
 	return md, nil
 }
