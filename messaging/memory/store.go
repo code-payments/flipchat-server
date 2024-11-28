@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sort"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
@@ -15,6 +16,14 @@ import (
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/query"
 )
+
+type MessagesById []*messagingpb.Message
+
+func (a MessagesById) Len() int      { return len(a) }
+func (a MessagesById) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a MessagesById) Less(i, j int) bool {
+	return bytes.Compare(a[i].MessageId.Value, a[j].MessageId.Value) < 0
+}
 
 type Memory struct {
 	sync.RWMutex
@@ -31,6 +40,8 @@ func NewInMemory() *Memory {
 }
 
 func (m *Memory) GetMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
+	appliedOptions := query.ApplyOptions(options...)
+
 	m.RLock()
 	defer m.RUnlock()
 
@@ -39,12 +50,29 @@ func (m *Memory) GetMessages(ctx context.Context, chatID *commonpb.ChatId, optio
 		return nil, nil
 	}
 
-	cloned := make([]*messagingpb.Message, len(messages))
-	for i, message := range messages {
-		cloned[i] = proto.Clone(message).(*messagingpb.Message)
+	cloned := make([]*messagingpb.Message, 0)
+	for _, message := range messages {
+		if appliedOptions.Token != nil && appliedOptions.Order == commonpb.QueryOptions_ASC && bytes.Compare(message.MessageId.Value, appliedOptions.Token.Value) < 0 {
+			continue
+		}
+
+		if appliedOptions.Token != nil && appliedOptions.Order == commonpb.QueryOptions_DESC && bytes.Compare(message.MessageId.Value, appliedOptions.Token.Value) > 0 {
+			continue
+		}
+
+		cloned = append(cloned, proto.Clone(message).(*messagingpb.Message))
 	}
 
-	return messages, nil
+	sorted := MessagesById(cloned)
+	if appliedOptions.Order == commonpb.QueryOptions_DESC {
+		sort.Sort(sort.Reverse(sorted))
+	}
+
+	limited := sorted
+	if len(limited) > appliedOptions.Limit {
+		limited = limited[:appliedOptions.Limit]
+	}
+	return limited, nil
 }
 
 func (m *Memory) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {

@@ -1,12 +1,17 @@
 package query
 
-import commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+import (
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	"github.com/code-payments/flipchat-server/database/prisma/db"
+)
 
 type Option func(*Options)
 
 func WithLimit(limit int) Option {
 	return func(o *Options) {
-		o.Limit = limit
+		if limit > 0 {
+			o.Limit = limit
+		}
 	}
 }
 
@@ -44,5 +49,22 @@ func DefaultOptions() Options {
 	return Options{
 		Limit: 100,
 		Order: commonpb.QueryOptions_ASC,
+	}
+}
+
+func ApplyOptions(options ...Option) Options {
+	applied := DefaultOptions()
+	for _, option := range options {
+		option(&applied)
+	}
+	return applied
+}
+
+func ToPrismaSortOrder(protoSortOrder commonpb.QueryOptions_Order) db.SortOrder {
+	switch protoSortOrder {
+	case commonpb.QueryOptions_DESC:
+		return db.SortOrderDesc
+	default:
+		return db.SortOrderAsc
 	}
 }

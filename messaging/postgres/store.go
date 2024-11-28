@@ -46,12 +46,20 @@ func (s *store) reset() {
 func (s *store) GetMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
 	encodedChatID := pg.Encode(chatID.Value)
 
-	// TODO: Add pagination
+	appliedOptions := query.ApplyOptions(options...)
 
-	messages, err := s.client.Message.FindMany(
+	findMany := s.client.Message.FindMany(
 		db.Message.ChatID.Equals(encodedChatID),
-	).OrderBy(
-		db.Message.ID.Order(db.SortOrderAsc),
+	)
+	if appliedOptions.Token != nil {
+		findMany = findMany.Cursor(
+			db.Message.ID.Cursor(appliedOptions.Token.Value),
+		)
+	}
+	messages, err := findMany.OrderBy(
+		db.Message.ID.Order(query.ToPrismaSortOrder(appliedOptions.Order)),
+	).Take(
+		appliedOptions.Limit,
 	).Exec(ctx)
 
 	if err != nil {

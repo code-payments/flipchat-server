@@ -15,6 +15,7 @@ import (
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
+	"github.com/code-payments/flipchat-server/query"
 )
 
 func RunStoreTests(
@@ -57,6 +58,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 	}
 
 	var messages []*messagingpb.Message
+	var reversedMessages []*messagingpb.Message
 
 	t.Run("Append", func(t *testing.T) {
 		for i := range 10 {
@@ -83,6 +85,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 				require.NotNil(t, msg.MessageId)
 
 				messages = append(messages, msg)
+				reversedMessages = append([]*messagingpb.Message{msg}, reversedMessages...)
 			}
 		}
 	})
@@ -90,8 +93,50 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 	t.Run("GetMessages", func(t *testing.T) {
 		actual, err := s.GetMessages(ctx, chatID)
 		require.NoError(t, err)
-
 		require.NoError(t, protoutil.SliceEqualError(messages, actual))
+
+		actual, err = s.GetMessages(
+			ctx,
+			chatID,
+			query.WithOrder(commonpb.QueryOptions_DESC),
+		)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages, actual))
+
+		actual, err = s.GetMessages(
+			ctx,
+			chatID,
+			query.WithLimit(5),
+		)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.SliceEqualError(messages[:5], actual))
+
+		actual, err = s.GetMessages(
+			ctx,
+			chatID,
+			query.WithToken(&commonpb.PagingToken{Value: messages[3].MessageId.Value}),
+		)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.SliceEqualError(messages[3:], actual))
+
+		actual, err = s.GetMessages(
+			ctx,
+			chatID,
+			query.WithToken(&commonpb.PagingToken{Value: messages[3].MessageId.Value}),
+			query.WithOrder(commonpb.QueryOptions_DESC),
+		)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages[16:], actual))
+
+		actual, err = s.GetMessages(
+			ctx,
+			chatID,
+			query.WithToken(&commonpb.PagingToken{Value: messages[15].MessageId.Value}),
+			query.WithOrder(commonpb.QueryOptions_DESC),
+			query.WithLimit(10),
+		)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages[4:14], actual))
 	})
 
 	t.Run("Unread", func(t *testing.T) {
