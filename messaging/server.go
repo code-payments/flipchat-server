@@ -181,7 +181,13 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		return t.GetPong() != nil
 	})
 
-	go s.flushMessages(ctx, params.ChatId, userID, ss)
+	var resumeFrom *messagingpb.MessageId
+	switch typed := params.Resume.(type) {
+	case *messagingpb.StreamMessagesRequest_Params_LastKnownMessageId:
+		resumeFrom = typed.LastKnownMessageId // todo: this needs tests
+	}
+
+	go s.flushMessages(ctx, params.ChatId, userID, resumeFrom, ss)
 
 	for {
 		select {
@@ -363,13 +369,17 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 	return &messagingpb.NotifyIsTypingResponse{}, nil
 }
 
-func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, stream event.Stream[*event.ChatEvent]) {
+func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, resumeFrom *messagingpb.MessageId, stream event.Stream[*event.ChatEvent]) {
 	log := s.log.With(
 		zap.String("user_id", model.UserIDString(userID)),
 		zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)),
 	)
 
-	messages, err := s.messages.GetMessages(ctx, chatID)
+	queryOptions := []query.Option{query.WithLimit(10240)} // todo: paged calls
+	if resumeFrom != nil {
+		queryOptions = append(queryOptions, query.WithToken(&commonpb.PagingToken{Value: resumeFrom.Value}))
+	}
+	messages, err := s.messages.GetMessages(ctx, chatID, queryOptions...)
 	if err != nil {
 		log.Warn("Failed to get messages for flush", zap.Error(err))
 		return
