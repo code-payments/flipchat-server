@@ -181,13 +181,18 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		return t.GetPong() != nil
 	})
 
+	var latestOnly bool
 	var resumeFrom *messagingpb.MessageId
 	switch typed := params.Resume.(type) {
 	case *messagingpb.StreamMessagesRequest_Params_LastKnownMessageId:
 		resumeFrom = typed.LastKnownMessageId // todo: this needs tests
+	case *messagingpb.StreamMessagesRequest_Params_LatestOnly:
+		latestOnly = typed.LatestOnly // todo: this needs tests
 	}
 
-	go s.flushMessages(ctx, params.ChatId, userID, resumeFrom, ss)
+	if !latestOnly {
+		go s.flushMessages(ctx, params.ChatId, userID, resumeFrom, ss)
+	}
 
 	for {
 		select {
