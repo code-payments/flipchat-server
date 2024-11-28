@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/code-payments/flipchat-server/chat"
 	pg "github.com/code-payments/flipchat-server/database/postgres"
@@ -76,6 +78,8 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		NumUnread: 0, // not stored in the DB on this model
 
 		CoverCharge: coverCharge,
+
+		LastActivity: timestamppb.New(m.LastActivityAt),
 	}, nil
 }
 
@@ -352,6 +356,7 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		db.Chat.RoomNumber.Set(int(nextNumber)),
 		db.Chat.Type.Set(int(md.Type)),
 		db.Chat.CoverCharge.Set(db.BigInt(coverCharge)),
+		db.Chat.LastActivityAt.Set(md.LastActivity.AsTime()),
 	}
 
 	if md.Owner != nil {
@@ -551,4 +556,20 @@ func (s *store) IsPushEnabled(ctx context.Context, chatID *commonpb.ChatId, memb
 	}
 
 	return res.IsPushEnabled, nil
+}
+
+func (s *store) AdvanceLastChatActivity(ctx context.Context, chatID *commonpb.ChatId, ts time.Time) error {
+	encodedChatID := pg.Encode(chatID.Value)
+
+	_, err := s.client.Chat.FindUnique(
+		db.Chat.ID.Equals(encodedChatID),
+	).Update(
+		db.Chat.LastActivityAt.Set(ts),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return chat.ErrChatNotFound
+	}
+
+	return nil
 }

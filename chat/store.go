@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -81,4 +82,6 @@ type Store interface {
 	IsPushEnabled(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error)
 
 	SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error
+
+	AdvanceLastChatActivity(ctx context.Context, chatID *commonpb.ChatId, ts time.Time) error
 }

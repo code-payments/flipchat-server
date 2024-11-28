@@ -5,9 +5,11 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
@@ -29,6 +31,7 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 		testChatStore_SetChatPushState,
 		testChatStore_JoinLeave,
 		testChatStore_AddRemove,
+		testChatStore_AdvanceLastChatActivity,
 	} {
 		tf(t, s)
 		teardown()
@@ -36,14 +39,14 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 }
 
 func testChatStore_Metadata(t *testing.T, store chat.Store) {
-
 	chatID := model.MustGenerateChatID()
 	expected := &chatpb.Metadata{
-		ChatId:     chatID,
-		Type:       chatpb.Metadata_GROUP,
-		Title:      "This is my chat!",
-		RoomNumber: 1,
-		NumUnread:  0,
+		ChatId:       chatID,
+		Type:         chatpb.Metadata_GROUP,
+		Title:        "This is my chat!",
+		RoomNumber:   1,
+		NumUnread:    0,
+		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
 
 	metadata := proto.Clone(expected).(*chatpb.Metadata)
@@ -358,4 +361,24 @@ func testChatStore_AddRemove(t *testing.T, store chat.Store) {
 		require.NoError(t, protoutil.ProtoEqualError(members[i].UserID, actual[i].UserID))
 		require.NoError(t, protoutil.ProtoEqualError(members[i].AddedBy, actual[i].AddedBy))
 	}
+}
+
+func testChatStore_AdvanceLastChatActivity(t *testing.T, store chat.Store) {
+	chatID := model.MustGenerateChatID()
+
+	ts := time.Now().Add(30 * time.Second)
+
+	require.ErrorIs(t, chat.ErrChatNotFound, store.AdvanceLastChatActivity(context.Background(), chatID, ts))
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId: chatID,
+		Type:   chatpb.Metadata_GROUP,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.AdvanceLastChatActivity(context.Background(), chatID, ts))
+
+	result, err := store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, ts.Unix(), result.LastActivity.Seconds)
 }

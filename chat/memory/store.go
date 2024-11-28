@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
@@ -233,8 +235,8 @@ func (s *InMemoryStore) RemoveMember(_ context.Context, chatID *commonpb.ChatId,
 }
 
 func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	md, ok := s.chats[string(chatID.Value)]
 	if !ok {
@@ -276,8 +278,8 @@ func (s *InMemoryStore) IsUserMuted(_ context.Context, chatID *commonpb.ChatId, 
 }
 
 func (s *InMemoryStore) SetPushState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isPushEnabled bool) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
@@ -302,4 +304,22 @@ func (s *InMemoryStore) IsPushEnabled(ctx context.Context, chatID *commonpb.Chat
 	}
 
 	return false, chat.ErrMemberNotFound
+}
+
+func (s *InMemoryStore) AdvanceLastChatActivity(ctx context.Context, chatID *commonpb.ChatId, ts time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	md, ok := s.chats[string(chatID.Value)]
+	if !ok {
+		return chat.ErrChatNotFound
+	}
+
+	if ts.Before(md.LastActivity.AsTime()) {
+		return nil
+	}
+
+	md.LastActivity = timestamppb.New(ts)
+
+	return nil
 }

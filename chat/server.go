@@ -367,14 +367,17 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		return nil, status.Errorf(codes.InvalidArgument, "unsupported type")
 	}
 
-	md.IsPushEnabled = true
-	md.CanDisablePush = true
+	md.LastActivity = timestamppb.Now()
 
 	md, err = s.chats.CreateChat(ctx, md)
 	if err != nil && !errors.Is(err, ErrChatExists) {
 		s.log.Warn("Failed to put chat metadata", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to put chat")
 	}
+
+	// Push state is not persisted in the chat metadata
+	md.IsPushEnabled = true
+	md.CanDisablePush = true
 
 	// todo: put this logic in a DB transaction alongside chat creation
 	if paymentIntent != nil {
@@ -588,7 +591,7 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 
 	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdate: mu})
 	if err != nil {
-		s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
+		s.log.Warn("Failed to notify member leaving", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
 	}
 
 	return &chatpb.LeaveChatResponse{}, nil
@@ -701,7 +704,7 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 
 		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdate: mu})
 		if err != nil {
-			s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
+			s.log.Warn("Failed to notify removed member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
 		}
 
 		return &chatpb.RemoveUserResponse{}, nil
@@ -769,7 +772,7 @@ func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*ch
 
 	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdate: mu})
 	if err != nil {
-		s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
+		s.log.Warn("Failed to notify muted member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
 	}
 
 	return &chatpb.MuteUserResponse{}, nil
@@ -841,6 +844,18 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
 	if err != nil {
 		s.log.Warn("Failed to get chat members for notification", zap.Error(err))
 		return
+	}
+
+	if event.MessageUpdate != nil {
+		// todo: needs tests
+		err := s.chats.AdvanceLastChatActivity(context.Background(), chatID, event.MessageUpdate.Ts.AsTime())
+		if err != nil {
+			s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
+		}
+
+		if event.ChatUpdate != nil {
+			event.ChatUpdate.LastActivity = event.MessageUpdate.Ts
+		}
 	}
 
 	s.streamsMu.RLock()

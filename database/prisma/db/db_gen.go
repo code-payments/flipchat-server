@@ -146,9 +146,10 @@ model Chat {
   coverCharge BigInt @default(0)
   type        Int    @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
 
-  createdBy String   @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdBy      String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastActivityAt DateTime @default(now())
 
   // Relations
 
@@ -405,14 +406,15 @@ const (
 type ChatScalarFieldEnum string
 
 const (
-	ChatScalarFieldEnumID          ChatScalarFieldEnum = "id"
-	ChatScalarFieldEnumTitle       ChatScalarFieldEnum = "title"
-	ChatScalarFieldEnumRoomNumber  ChatScalarFieldEnum = "roomNumber"
-	ChatScalarFieldEnumCoverCharge ChatScalarFieldEnum = "coverCharge"
-	ChatScalarFieldEnumType        ChatScalarFieldEnum = "type"
-	ChatScalarFieldEnumCreatedBy   ChatScalarFieldEnum = "createdBy"
-	ChatScalarFieldEnumCreatedAt   ChatScalarFieldEnum = "createdAt"
-	ChatScalarFieldEnumUpdatedAt   ChatScalarFieldEnum = "updatedAt"
+	ChatScalarFieldEnumID             ChatScalarFieldEnum = "id"
+	ChatScalarFieldEnumTitle          ChatScalarFieldEnum = "title"
+	ChatScalarFieldEnumRoomNumber     ChatScalarFieldEnum = "roomNumber"
+	ChatScalarFieldEnumCoverCharge    ChatScalarFieldEnum = "coverCharge"
+	ChatScalarFieldEnumType           ChatScalarFieldEnum = "type"
+	ChatScalarFieldEnumCreatedBy      ChatScalarFieldEnum = "createdBy"
+	ChatScalarFieldEnumCreatedAt      ChatScalarFieldEnum = "createdAt"
+	ChatScalarFieldEnumUpdatedAt      ChatScalarFieldEnum = "updatedAt"
+	ChatScalarFieldEnumLastActivityAt ChatScalarFieldEnum = "lastActivityAt"
 )
 
 type MemberScalarFieldEnum string
@@ -565,6 +567,8 @@ const chatFieldCreatedBy chatPrismaFields = "createdBy"
 const chatFieldCreatedAt chatPrismaFields = "createdAt"
 
 const chatFieldUpdatedAt chatPrismaFields = "updatedAt"
+
+const chatFieldLastActivityAt chatPrismaFields = "lastActivityAt"
 
 const chatFieldMembers chatPrismaFields = "members"
 
@@ -1144,26 +1148,28 @@ type ChatModel struct {
 
 // InnerChat holds the actual data
 type InnerChat struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	RoomNumber  *int     `json:"roomNumber,omitempty"`
-	CoverCharge BigInt   `json:"coverCharge"`
-	Type        int      `json:"type"`
-	CreatedBy   string   `json:"createdBy"`
-	CreatedAt   DateTime `json:"createdAt"`
-	UpdatedAt   DateTime `json:"updatedAt"`
+	ID             string   `json:"id"`
+	Title          string   `json:"title"`
+	RoomNumber     *int     `json:"roomNumber,omitempty"`
+	CoverCharge    BigInt   `json:"coverCharge"`
+	Type           int      `json:"type"`
+	CreatedBy      string   `json:"createdBy"`
+	CreatedAt      DateTime `json:"createdAt"`
+	UpdatedAt      DateTime `json:"updatedAt"`
+	LastActivityAt DateTime `json:"lastActivityAt"`
 }
 
 // RawChatModel is a struct for Chat when used in raw queries
 type RawChatModel struct {
-	ID          RawString   `json:"id"`
-	Title       RawString   `json:"title"`
-	RoomNumber  *RawInt     `json:"roomNumber,omitempty"`
-	CoverCharge RawBigInt   `json:"coverCharge"`
-	Type        RawInt      `json:"type"`
-	CreatedBy   RawString   `json:"createdBy"`
-	CreatedAt   RawDateTime `json:"createdAt"`
-	UpdatedAt   RawDateTime `json:"updatedAt"`
+	ID             RawString   `json:"id"`
+	Title          RawString   `json:"title"`
+	RoomNumber     *RawInt     `json:"roomNumber,omitempty"`
+	CoverCharge    RawBigInt   `json:"coverCharge"`
+	Type           RawInt      `json:"type"`
+	CreatedBy      RawString   `json:"createdBy"`
+	CreatedAt      RawDateTime `json:"createdAt"`
+	UpdatedAt      RawDateTime `json:"updatedAt"`
+	LastActivityAt RawDateTime `json:"lastActivityAt"`
 }
 
 // RelationsChat holds the relation data separately
@@ -5594,6 +5600,11 @@ type chatQuery struct {
 	// @required
 	UpdatedAt chatQueryUpdatedAtDateTime
 
+	// LastActivityAt
+	//
+	// @required
+	LastActivityAt chatQueryLastActivityAtDateTime
+
 	Members chatQueryMembersRelations
 }
 
@@ -8455,6 +8466,317 @@ func (r chatQueryUpdatedAtDateTime) AfterEqualsIfPresent(value *DateTime) chatDe
 
 func (r chatQueryUpdatedAtDateTime) Field() chatPrismaFields {
 	return chatFieldUpdatedAt
+}
+
+// base struct
+type chatQueryLastActivityAtDateTime struct{}
+
+// Set the required value of LastActivityAt
+func (r chatQueryLastActivityAtDateTime) Set(value DateTime) chatSetParam {
+
+	return chatSetParam{
+		data: builder.Field{
+			Name:  "lastActivityAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of LastActivityAt dynamically
+func (r chatQueryLastActivityAtDateTime) SetIfPresent(value *DateTime) chatSetParam {
+	if value == nil {
+		return chatSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r chatQueryLastActivityAtDateTime) Equals(value DateTime) chatWithPrismaLastActivityAtEqualsParam {
+
+	return chatWithPrismaLastActivityAtEqualsParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) EqualsIfPresent(value *DateTime) chatWithPrismaLastActivityAtEqualsParam {
+	if value == nil {
+		return chatWithPrismaLastActivityAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r chatQueryLastActivityAtDateTime) Order(direction SortOrder) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name:  "lastActivityAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) Cursor(cursor DateTime) chatCursorParam {
+	return chatCursorParam{
+		data: builder.Field{
+			Name:  "lastActivityAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) In(value []DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) InIfPresent(value []DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r chatQueryLastActivityAtDateTime) NotIn(value []DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) NotInIfPresent(value []DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r chatQueryLastActivityAtDateTime) Lt(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) LtIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r chatQueryLastActivityAtDateTime) Lte(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) LteIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r chatQueryLastActivityAtDateTime) Gt(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) GtIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r chatQueryLastActivityAtDateTime) Gte(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) GteIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r chatQueryLastActivityAtDateTime) Not(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryLastActivityAtDateTime) NotIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r chatQueryLastActivityAtDateTime) Before(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r chatQueryLastActivityAtDateTime) BeforeIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r chatQueryLastActivityAtDateTime) After(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r chatQueryLastActivityAtDateTime) AfterIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r chatQueryLastActivityAtDateTime) BeforeEquals(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r chatQueryLastActivityAtDateTime) BeforeEqualsIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r chatQueryLastActivityAtDateTime) AfterEquals(value DateTime) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "lastActivityAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r chatQueryLastActivityAtDateTime) AfterEqualsIfPresent(value *DateTime) chatDefaultParam {
+	if value == nil {
+		return chatDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r chatQueryLastActivityAtDateTime) Field() chatPrismaFields {
+	return chatFieldLastActivityAt
 }
 
 // base struct
@@ -18840,6 +19162,7 @@ var chatOutput = []builder.Output{
 	{Name: "createdBy"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
+	{Name: "lastActivityAt"},
 }
 
 type ChatRelationWith interface {
@@ -19629,6 +19952,84 @@ func (p chatWithPrismaUpdatedAtEqualsUniqueParam) updatedAtField() {}
 
 func (chatWithPrismaUpdatedAtEqualsUniqueParam) unique() {}
 func (chatWithPrismaUpdatedAtEqualsUniqueParam) equals() {}
+
+type ChatWithPrismaLastActivityAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	chatModel()
+	lastActivityAtField()
+}
+
+type ChatWithPrismaLastActivityAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	chatModel()
+	lastActivityAtField()
+}
+
+type chatWithPrismaLastActivityAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaLastActivityAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaLastActivityAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaLastActivityAtSetParam) chatModel() {}
+
+func (p chatWithPrismaLastActivityAtSetParam) lastActivityAtField() {}
+
+type ChatWithPrismaLastActivityAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	chatModel()
+	lastActivityAtField()
+}
+
+type chatWithPrismaLastActivityAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaLastActivityAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaLastActivityAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaLastActivityAtEqualsParam) chatModel() {}
+
+func (p chatWithPrismaLastActivityAtEqualsParam) lastActivityAtField() {}
+
+func (chatWithPrismaLastActivityAtSetParam) settable()  {}
+func (chatWithPrismaLastActivityAtEqualsParam) equals() {}
+
+type chatWithPrismaLastActivityAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaLastActivityAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaLastActivityAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaLastActivityAtEqualsUniqueParam) chatModel()           {}
+func (p chatWithPrismaLastActivityAtEqualsUniqueParam) lastActivityAtField() {}
+
+func (chatWithPrismaLastActivityAtEqualsUniqueParam) unique() {}
+func (chatWithPrismaLastActivityAtEqualsUniqueParam) equals() {}
 
 type ChatWithPrismaMembersEqualsSetParam interface {
 	field() builder.Field
