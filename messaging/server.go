@@ -21,6 +21,7 @@ import (
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
+	"github.com/code-payments/flipchat-server/query"
 )
 
 const (
@@ -240,7 +241,7 @@ func (s *Server) GetMessages(ctx context.Context, req *messagingpb.GetMessagesRe
 		return &messagingpb.GetMessagesResponse{Result: messagingpb.GetMessagesResponse_DENIED}, nil
 	}
 
-	messages, err := s.messages.GetMessages(ctx, req.ChatId)
+	messages, err := s.messages.GetMessages(ctx, req.ChatId, query.FromProtoOptions(req.QueryOptions)...)
 	if err != nil {
 		s.log.Error("Failed to get all messages", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to get messages")

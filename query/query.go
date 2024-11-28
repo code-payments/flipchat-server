@@ -60,6 +60,24 @@ func ApplyOptions(options ...Option) Options {
 	return applied
 }
 
+func FromProtoOptions(protoOptions *commonpb.QueryOptions) []Option {
+	if protoOptions == nil {
+		return nil
+	}
+
+	options := []Option{WithOrder(protoOptions.Order)}
+
+	if protoOptions.PageSize > 0 {
+		options = append(options, WithLimit(int(protoOptions.PageSize)))
+	}
+
+	if protoOptions.PagingToken != nil {
+		options = append(options, WithToken(protoOptions.PagingToken))
+	}
+
+	return options
+}
+
 func ToPrismaSortOrder(protoSortOrder commonpb.QueryOptions_Order) db.SortOrder {
 	switch protoSortOrder {
 	case commonpb.QueryOptions_DESC:

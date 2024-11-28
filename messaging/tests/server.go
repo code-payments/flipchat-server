@@ -168,6 +168,8 @@ func testServerHappy(
 		require.NoError(t, err)
 		require.Equal(t, messagingpb.GetMessagesResponse_OK, messages.Result)
 		require.NoError(t, protoutil.SliceEqualError(expected, messages.Messages))
+
+		// todo: test paging parameters, but those are well-covered in store tests
 	})
 
 	t.Run("Notify Typing", func(t *testing.T) {
