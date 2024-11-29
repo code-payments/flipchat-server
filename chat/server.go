@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -42,6 +41,7 @@ const (
 
 var (
 	InitialCoverCharge = codekin.ToQuarks(100)
+	MaxUnreadCount     = uint32(99)
 )
 
 type Server struct {
@@ -145,13 +145,28 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				return nil, false
 			}
 
+			clonedEvent := e.Clone()
+
 			update := &chatpb.StreamChatEventsResponse_ChatUpdate{
-				ChatId:       e.ChatID,
-				Metadata:     proto.Clone(e.ChatUpdate).(*chatpb.Metadata),
-				MemberUpdate: proto.Clone(e.MemberUpdate).(*chatpb.StreamChatEventsResponse_MemberUpdate),
-				LastMessage:  e.MessageUpdate,
-				Pointer:      e.PointerUpdate,
-				IsTyping:     e.IsTyping,
+				ChatId:       clonedEvent.ChatID,
+				Metadata:     clonedEvent.ChatUpdate,
+				MemberUpdate: clonedEvent.MemberUpdate,
+				LastMessage:  clonedEvent.MessageUpdate,
+				Pointer:      clonedEvent.PointerUpdate,
+				IsTyping:     clonedEvent.IsTyping,
+			}
+
+			// todo: this section needs tests
+			if update.LastMessage != nil {
+				// Notably, to propagate unread counts after sending a message
+				//
+				// todo: Should we have updates for a limited view of a chat so we don't need to fetch entire metadata?
+				md, err := s.getMetadata(ctx, e.ChatID, userID)
+				if err == nil {
+					update.Metadata = md
+				} else {
+					log.Warn("Failed to get metadata", zap.Error(err))
+				}
 			}
 
 			if refresh := update.GetMemberUpdate().GetRefresh(); refresh != nil {
@@ -406,7 +421,6 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		}
 	}
 
-	var members []Member
 	var memberProtos []*chatpb.Member
 	for _, m := range users {
 		member := Member{UserID: m, AddedBy: userID}
@@ -414,14 +428,13 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			member.IsHost = true
 		}
 
-		members = append(members, member)
 		memberProtos = append(memberProtos, member.ToProto(userID))
 
 		err = s.chats.AddMember(ctx, md.ChatId, member)
 		if errors.Is(err, ErrMemberExists) {
 			continue
 		} else if err != nil {
-			log.Warn("Failed to put chat metadata", zap.Error(err))
+			log.Warn("Failed to put chat member", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to put chat member")
 		}
 	}
@@ -840,37 +853,37 @@ func (s *Server) ReportUser(ctx context.Context, req *chatpb.ReportUserRequest) 
 }
 
 func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
-	memberIDs, err := s.chats.GetMembers(context.Background(), chatID)
+	clonedEvent := event.Clone()
+
+	members, err := s.chats.GetMembers(context.Background(), chatID)
 	if err != nil {
 		s.log.Warn("Failed to get chat members for notification", zap.Error(err))
 		return
 	}
 
-	if event.MessageUpdate != nil {
-		// todo: needs tests
-		err := s.chats.AdvanceLastChatActivity(context.Background(), chatID, event.MessageUpdate.Ts.AsTime())
+	// todo: this section needs tests
+	if clonedEvent.MessageUpdate != nil {
+		err := s.chats.AdvanceLastChatActivity(context.Background(), chatID, clonedEvent.MessageUpdate.Ts.AsTime())
 		if err != nil {
 			s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
-		}
-
-		if event.ChatUpdate != nil {
-			event.ChatUpdate.LastActivity = event.MessageUpdate.Ts
+		} else if clonedEvent.ChatUpdate != nil {
+			clonedEvent.ChatUpdate.LastActivity = clonedEvent.MessageUpdate.Ts
 		}
 	}
 
-	s.streamsMu.RLock()
-	defer s.streamsMu.RUnlock()
+	for _, member := range members {
+		s.streamsMu.RLock()
+		stream, exists := s.streams[string(member.UserID.Value)]
+		s.streamsMu.RUnlock()
 
-	for _, memberID := range memberIDs {
-		if stream, exists := s.streams[string(memberID.UserID.Value)]; exists {
-			if err = stream.Notify(event, StreamTimeout); err != nil {
+		if exists {
+			if err = stream.Notify(clonedEvent, StreamTimeout); err != nil {
 				s.log.Warn("Failed to send event", zap.Error(err))
 			}
 		}
 	}
 }
 
-// todo: push state needs testing
 func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId) (*chatpb.Metadata, error) {
 	md, err := s.chats.GetChatMetadata(ctx, chatID)
 	if err != nil {
@@ -898,12 +911,18 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 		}
 	}
 
-	unread, err := s.messages.CountUnread(ctx, chatID, caller, rPtr)
+	// todo: this needs testing
+	unread, err := s.messages.CountUnread(ctx, chatID, caller, rPtr, int64(MaxUnreadCount+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to count unread messages: %w", err)
 	}
 	md.NumUnread = uint32(unread)
+	if md.NumUnread > MaxUnreadCount {
+		md.NumUnread = uint32(MaxUnreadCount)
+		md.HasMoreUnread = true
+	}
 
+	// todo: this needs testing
 	isPushEnabled, err := s.chats.IsPushEnabled(ctx, chatID, caller)
 	if err == ErrMemberNotFound {
 		isPushEnabled = true
@@ -922,6 +941,12 @@ func (s *Server) getMetadataWithMembers(ctx context.Context, chatID *commonpb.Ch
 	}
 
 	members, err := s.chats.GetMembers(ctx, chatID)
+	if err == ErrMemberNotFound {
+		return md, nil, nil
+	} else if err != nil {
+		return nil, nil, fmt.Errorf("failed to get members: %w", err)
+	}
+
 	memberProtos := make([]*chatpb.Member, 0, len(members))
 	for _, member := range members {
 		p := member.ToProto(caller)
@@ -993,7 +1018,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 
 		messages, err := s.messages.GetMessages(ctx, chatID, query.WithDescending(), query.WithLimit(1))
 		if err != nil {
-			log.Warn("Failed to get last message for chat (steam flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
+			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
 		}
 		if len(messages) > 0 {
 			event.MessageUpdate = messages[len(messages)-1]

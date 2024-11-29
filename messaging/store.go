@@ -17,7 +17,7 @@ type UserPointer struct {
 type MessageStore interface {
 	GetMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error)
 	PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error
-	CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId) (int64, error)
+	CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId, maxValue int64) (int64, error)
 }
 
 type PointerStore interface {

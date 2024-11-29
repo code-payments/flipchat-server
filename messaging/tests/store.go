@@ -47,7 +47,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		require.NoError(t, err)
 		require.Empty(t, messages)
 
-		unread, err := s.CountUnread(ctx, chatID, model.MustGenerateUserID(), nil)
+		unread, err := s.CountUnread(ctx, chatID, model.MustGenerateUserID(), nil, -1)
 		require.NoError(t, err)
 		require.Zero(t, unread)
 	})
@@ -140,11 +140,15 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 	})
 
 	t.Run("Unread", func(t *testing.T) {
-		unread, err := s.CountUnread(ctx, chatID, users[0], nil)
+		unread, err := s.CountUnread(ctx, chatID, users[0], nil, -1)
 		require.NoError(t, err)
 		require.EqualValues(t, 10, unread)
 
-		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId)
+		unread, err = s.CountUnread(ctx, chatID, users[0], nil, 3)
+		require.NoError(t, err)
+		require.EqualValues(t, 3, unread)
+
+		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId, -1)
 		require.NoError(t, err)
 		require.EqualValues(t, 5, unread)
 	})

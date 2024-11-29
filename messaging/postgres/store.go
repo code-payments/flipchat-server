@@ -128,7 +128,7 @@ func (s *store) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *me
 	return err
 }
 
-func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId) (int64, error) {
+func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId, maxValue int64) (int64, error) {
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedUserID := pg.Encode(userID.Value)
 
@@ -155,13 +155,19 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 	// query at some point. For now, we'll just fetch all the messages and count
 	// them. Using a Select() to reduce the amount of data fetched.
 
-	messages, err := s.client.Message.FindMany(
+	findMany := s.client.Message.FindMany(
 		queryArgs...,
 	).OrderBy(
 		db.Message.CreatedAt.Order(db.SortOrderAsc),
 	).Select(
 		db.Chat.ID.Field(),
-	).Exec(ctx)
+	)
+
+	if maxValue >= 0 {
+		findMany = findMany.Take(int(maxValue))
+	}
+
+	messages, err := findMany.Exec(ctx)
 
 	if err != nil {
 		return 0, err

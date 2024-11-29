@@ -4,9 +4,12 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
+	"github.com/code-payments/flipchat-server/protoutil"
 )
 
 type ChatEvent struct {
@@ -19,6 +22,20 @@ type ChatEvent struct {
 	MessageUpdate   *messagingpb.Message
 	FlushedMessages []*messagingpb.Message
 	IsTyping        *messagingpb.IsTyping
+}
+
+func (e *ChatEvent) Clone() *ChatEvent {
+	return &ChatEvent{
+		ChatID:    proto.Clone(e.ChatID).(*commonpb.ChatId),
+		Timestamp: e.Timestamp,
+
+		ChatUpdate:      proto.Clone(e.ChatUpdate).(*chatpb.Metadata),
+		PointerUpdate:   proto.Clone(e.PointerUpdate).(*chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate),
+		MemberUpdate:    proto.Clone(e.MemberUpdate).(*chatpb.StreamChatEventsResponse_MemberUpdate),
+		MessageUpdate:   proto.Clone(e.MessageUpdate).(*messagingpb.Message),
+		FlushedMessages: protoutil.SliceClone(e.FlushedMessages),
+		IsTyping:        proto.Clone(e.IsTyping).(*messagingpb.IsTyping),
+	}
 }
 
 type Handler[Key, Event any] interface {

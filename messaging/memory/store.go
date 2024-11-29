@@ -93,7 +93,7 @@ func (m *Memory) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *m
 	return nil
 }
 
-func (m *Memory) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId) (int64, error) {
+func (m *Memory) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId, maxValue int64) (int64, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -111,6 +111,9 @@ func (m *Memory) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userI
 		unread++
 	}
 
+	if maxValue >= 0 && int64(unread) > maxValue {
+		return maxValue, nil
+	}
 	return int64(unread), nil
 }
 
