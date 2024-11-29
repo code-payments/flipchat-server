@@ -992,8 +992,12 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
 
 	chatIDs, err := s.chats.GetChatsForUser(ctx, userID)
-	if err != nil {
-		log.Warn("Failed to get chats for user (steam flush)", zap.Error(err))
+	switch err {
+	case nil:
+	case ErrChatNotFound:
+		return
+	default:
+		log.Warn("Failed to get chats for user (stream flush)", zap.Error(err))
 		return
 	}
 
