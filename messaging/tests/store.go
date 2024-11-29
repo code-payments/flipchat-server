@@ -151,6 +151,10 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId, -1)
 		require.NoError(t, err)
 		require.EqualValues(t, 5, unread)
+
+		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId, 2)
+		require.NoError(t, err)
+		require.EqualValues(t, 2, unread)
 	})
 }
 

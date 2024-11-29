@@ -138,15 +138,8 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 		db.Message.SenderID.Not(encodedUserID),
 	}
 
-	// Conditionally add the createdAt condition if lastRead is provided
 	if lastRead != nil {
-		msg, err := s.client.Message.FindUnique(
-			db.Message.ID.Equals(lastRead.Value),
-		).Exec(ctx)
-		if err != nil {
-			return 0, err
-		}
-		queryArgs = append(queryArgs, db.Message.CreatedAt.Gt(msg.CreatedAt))
+		db.Message.ID.Not(lastRead.Value)
 	}
 
 	// Perform the query
@@ -157,11 +150,13 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 
 	findMany := s.client.Message.FindMany(
 		queryArgs...,
-	).OrderBy(
-		db.Message.CreatedAt.Order(db.SortOrderAsc),
 	).Select(
 		db.Chat.ID.Field(),
 	)
+
+	if lastRead != nil {
+		findMany = findMany.Cursor(db.Message.ID.Cursor(lastRead.Value))
+	}
 
 	if maxValue >= 0 {
 		findMany = findMany.Take(int(maxValue))
