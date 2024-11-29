@@ -139,7 +139,7 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 	}
 
 	if lastRead != nil {
-		db.Message.ID.Not(lastRead.Value)
+		queryArgs = append(queryArgs, db.Message.ID.Not(lastRead.Value))
 	}
 
 	// Perform the query
