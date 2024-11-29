@@ -117,7 +117,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 			query.WithToken(&commonpb.PagingToken{Value: messages[3].MessageId.Value}),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(messages[3:], actual))
+		require.NoError(t, protoutil.SliceEqualError(messages[4:], actual))
 
 		actual, err = s.GetMessages(
 			ctx,
@@ -126,7 +126,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 			query.WithOrder(commonpb.QueryOptions_DESC),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(reversedMessages[16:], actual))
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages[17:], actual))
 
 		actual, err = s.GetMessages(
 			ctx,
@@ -136,7 +136,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 			query.WithLimit(10),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(reversedMessages[4:14], actual))
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages[5:15], actual))
 	})
 
 	t.Run("Unread", func(t *testing.T) {

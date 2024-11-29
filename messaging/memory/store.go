@@ -52,11 +52,11 @@ func (m *Memory) GetMessages(ctx context.Context, chatID *commonpb.ChatId, optio
 
 	cloned := make([]*messagingpb.Message, 0)
 	for _, message := range messages {
-		if appliedOptions.Token != nil && appliedOptions.Order == commonpb.QueryOptions_ASC && bytes.Compare(message.MessageId.Value, appliedOptions.Token.Value) < 0 {
+		if appliedOptions.Token != nil && appliedOptions.Order == commonpb.QueryOptions_ASC && bytes.Compare(message.MessageId.Value, appliedOptions.Token.Value) <= 0 {
 			continue
 		}
 
-		if appliedOptions.Token != nil && appliedOptions.Order == commonpb.QueryOptions_DESC && bytes.Compare(message.MessageId.Value, appliedOptions.Token.Value) > 0 {
+		if appliedOptions.Token != nil && appliedOptions.Order == commonpb.QueryOptions_DESC && bytes.Compare(message.MessageId.Value, appliedOptions.Token.Value) >= 0 {
 			continue
 		}
 

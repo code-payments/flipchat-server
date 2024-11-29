@@ -59,7 +59,7 @@ func (s *store) GetMessages(ctx context.Context, chatID *commonpb.ChatId, option
 	messages, err := findMany.OrderBy(
 		db.Message.ID.Order(query.ToPrismaSortOrder(appliedOptions.Order)),
 	).Take(
-		appliedOptions.Limit,
+		appliedOptions.Limit + 1, // Because cursor returns the row associated with the ID
 	).Exec(ctx)
 
 	if err != nil {
@@ -70,19 +70,25 @@ func (s *store) GetMessages(ctx context.Context, chatID *commonpb.ChatId, option
 		return nil, nil
 	}
 
-	result := make([]*messagingpb.Message, len(messages))
-	for i, message := range messages {
+	result := make([]*messagingpb.Message, 0)
+	for _, message := range messages {
+		if appliedOptions.Token != nil && bytes.Equal(appliedOptions.Token.Value, message.ID) {
+			continue
+		}
 
-		pgMessage := &messagingpb.Message{}
+		protoMessage := &messagingpb.Message{}
 
-		err := proto.Unmarshal(message.Content, pgMessage)
+		err := proto.Unmarshal(message.Content, protoMessage)
 		if err != nil {
 			return nil, err
 		}
 
-		result[i] = pgMessage
+		result = append(result, protoMessage)
 	}
 
+	if len(result) > appliedOptions.Limit {
+		result = result[:appliedOptions.Limit]
+	}
 	return result, nil
 }
 
