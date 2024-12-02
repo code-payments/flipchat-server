@@ -167,8 +167,10 @@ model Member {
 
   numUnread     Int     @default(0)
   isMuted       Boolean @default(false) // Has the host muted this member?
-  isMod         Boolean @default(false) // Is this member a moderator (aka host)?
   isPushEnabled Boolean @default(true) // Are push notifications enabled for this member?
+
+  hasModPermission  Boolean @default(false) // Is this member a moderator (aka host)?
+  hasSendPermission Boolean @default(false) // Can this member send messages?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -420,15 +422,16 @@ const (
 type MemberScalarFieldEnum string
 
 const (
-	MemberScalarFieldEnumChatID        MemberScalarFieldEnum = "chatId"
-	MemberScalarFieldEnumUserID        MemberScalarFieldEnum = "userId"
-	MemberScalarFieldEnumAddedByID     MemberScalarFieldEnum = "addedById"
-	MemberScalarFieldEnumNumUnread     MemberScalarFieldEnum = "numUnread"
-	MemberScalarFieldEnumIsMuted       MemberScalarFieldEnum = "isMuted"
-	MemberScalarFieldEnumIsMod         MemberScalarFieldEnum = "isMod"
-	MemberScalarFieldEnumIsPushEnabled MemberScalarFieldEnum = "isPushEnabled"
-	MemberScalarFieldEnumCreatedAt     MemberScalarFieldEnum = "createdAt"
-	MemberScalarFieldEnumUpdatedAt     MemberScalarFieldEnum = "updatedAt"
+	MemberScalarFieldEnumChatID            MemberScalarFieldEnum = "chatId"
+	MemberScalarFieldEnumUserID            MemberScalarFieldEnum = "userId"
+	MemberScalarFieldEnumAddedByID         MemberScalarFieldEnum = "addedById"
+	MemberScalarFieldEnumNumUnread         MemberScalarFieldEnum = "numUnread"
+	MemberScalarFieldEnumIsMuted           MemberScalarFieldEnum = "isMuted"
+	MemberScalarFieldEnumIsPushEnabled     MemberScalarFieldEnum = "isPushEnabled"
+	MemberScalarFieldEnumHasModPermission  MemberScalarFieldEnum = "hasModPermission"
+	MemberScalarFieldEnumHasSendPermission MemberScalarFieldEnum = "hasSendPermission"
+	MemberScalarFieldEnumCreatedAt         MemberScalarFieldEnum = "createdAt"
+	MemberScalarFieldEnumUpdatedAt         MemberScalarFieldEnum = "updatedAt"
 )
 
 type MessageScalarFieldEnum string
@@ -584,9 +587,11 @@ const memberFieldNumUnread memberPrismaFields = "numUnread"
 
 const memberFieldIsMuted memberPrismaFields = "isMuted"
 
-const memberFieldIsMod memberPrismaFields = "isMod"
-
 const memberFieldIsPushEnabled memberPrismaFields = "isPushEnabled"
+
+const memberFieldHasModPermission memberPrismaFields = "hasModPermission"
+
+const memberFieldHasSendPermission memberPrismaFields = "hasSendPermission"
 
 const memberFieldCreatedAt memberPrismaFields = "createdAt"
 
@@ -1199,28 +1204,30 @@ type MemberModel struct {
 
 // InnerMember holds the actual data
 type InnerMember struct {
-	ChatID        string   `json:"chatId"`
-	UserID        string   `json:"userId"`
-	AddedByID     *string  `json:"addedById,omitempty"`
-	NumUnread     int      `json:"numUnread"`
-	IsMuted       bool     `json:"isMuted"`
-	IsMod         bool     `json:"isMod"`
-	IsPushEnabled bool     `json:"isPushEnabled"`
-	CreatedAt     DateTime `json:"createdAt"`
-	UpdatedAt     DateTime `json:"updatedAt"`
+	ChatID            string   `json:"chatId"`
+	UserID            string   `json:"userId"`
+	AddedByID         *string  `json:"addedById,omitempty"`
+	NumUnread         int      `json:"numUnread"`
+	IsMuted           bool     `json:"isMuted"`
+	IsPushEnabled     bool     `json:"isPushEnabled"`
+	HasModPermission  bool     `json:"hasModPermission"`
+	HasSendPermission bool     `json:"hasSendPermission"`
+	CreatedAt         DateTime `json:"createdAt"`
+	UpdatedAt         DateTime `json:"updatedAt"`
 }
 
 // RawMemberModel is a struct for Member when used in raw queries
 type RawMemberModel struct {
-	ChatID        RawString   `json:"chatId"`
-	UserID        RawString   `json:"userId"`
-	AddedByID     *RawString  `json:"addedById,omitempty"`
-	NumUnread     RawInt      `json:"numUnread"`
-	IsMuted       RawBoolean  `json:"isMuted"`
-	IsMod         RawBoolean  `json:"isMod"`
-	IsPushEnabled RawBoolean  `json:"isPushEnabled"`
-	CreatedAt     RawDateTime `json:"createdAt"`
-	UpdatedAt     RawDateTime `json:"updatedAt"`
+	ChatID            RawString   `json:"chatId"`
+	UserID            RawString   `json:"userId"`
+	AddedByID         *RawString  `json:"addedById,omitempty"`
+	NumUnread         RawInt      `json:"numUnread"`
+	IsMuted           RawBoolean  `json:"isMuted"`
+	IsPushEnabled     RawBoolean  `json:"isPushEnabled"`
+	HasModPermission  RawBoolean  `json:"hasModPermission"`
+	HasSendPermission RawBoolean  `json:"hasSendPermission"`
+	CreatedAt         RawDateTime `json:"createdAt"`
+	UpdatedAt         RawDateTime `json:"updatedAt"`
 }
 
 // RelationsMember holds the relation data separately
@@ -8982,15 +8989,20 @@ type memberQuery struct {
 	// @required
 	IsMuted memberQueryIsMutedBoolean
 
-	// IsMod
-	//
-	// @required
-	IsMod memberQueryIsModBoolean
-
 	// IsPushEnabled
 	//
 	// @required
 	IsPushEnabled memberQueryIsPushEnabledBoolean
+
+	// HasModPermission
+	//
+	// @required
+	HasModPermission memberQueryHasModPermissionBoolean
+
+	// HasSendPermission
+	//
+	// @required
+	HasSendPermission memberQueryHasSendPermissionBoolean
 
 	// CreatedAt
 	//
@@ -10628,74 +10640,6 @@ func (r memberQueryIsMutedBoolean) Field() memberPrismaFields {
 }
 
 // base struct
-type memberQueryIsModBoolean struct{}
-
-// Set the required value of IsMod
-func (r memberQueryIsModBoolean) Set(value bool) memberSetParam {
-
-	return memberSetParam{
-		data: builder.Field{
-			Name:  "isMod",
-			Value: value,
-		},
-	}
-
-}
-
-// Set the optional value of IsMod dynamically
-func (r memberQueryIsModBoolean) SetIfPresent(value *Boolean) memberSetParam {
-	if value == nil {
-		return memberSetParam{}
-	}
-
-	return r.Set(*value)
-}
-
-func (r memberQueryIsModBoolean) Equals(value bool) memberWithPrismaIsModEqualsParam {
-
-	return memberWithPrismaIsModEqualsParam{
-		data: builder.Field{
-			Name: "isMod",
-			Fields: []builder.Field{
-				{
-					Name:  "equals",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryIsModBoolean) EqualsIfPresent(value *bool) memberWithPrismaIsModEqualsParam {
-	if value == nil {
-		return memberWithPrismaIsModEqualsParam{}
-	}
-	return r.Equals(*value)
-}
-
-func (r memberQueryIsModBoolean) Order(direction SortOrder) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name:  "isMod",
-			Value: direction,
-		},
-	}
-}
-
-func (r memberQueryIsModBoolean) Cursor(cursor bool) memberCursorParam {
-	return memberCursorParam{
-		data: builder.Field{
-			Name:  "isMod",
-			Value: cursor,
-		},
-	}
-}
-
-func (r memberQueryIsModBoolean) Field() memberPrismaFields {
-	return memberFieldIsMod
-}
-
-// base struct
 type memberQueryIsPushEnabledBoolean struct{}
 
 // Set the required value of IsPushEnabled
@@ -10761,6 +10705,142 @@ func (r memberQueryIsPushEnabledBoolean) Cursor(cursor bool) memberCursorParam {
 
 func (r memberQueryIsPushEnabledBoolean) Field() memberPrismaFields {
 	return memberFieldIsPushEnabled
+}
+
+// base struct
+type memberQueryHasModPermissionBoolean struct{}
+
+// Set the required value of HasModPermission
+func (r memberQueryHasModPermissionBoolean) Set(value bool) memberSetParam {
+
+	return memberSetParam{
+		data: builder.Field{
+			Name:  "hasModPermission",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of HasModPermission dynamically
+func (r memberQueryHasModPermissionBoolean) SetIfPresent(value *Boolean) memberSetParam {
+	if value == nil {
+		return memberSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r memberQueryHasModPermissionBoolean) Equals(value bool) memberWithPrismaHasModPermissionEqualsParam {
+
+	return memberWithPrismaHasModPermissionEqualsParam{
+		data: builder.Field{
+			Name: "hasModPermission",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r memberQueryHasModPermissionBoolean) EqualsIfPresent(value *bool) memberWithPrismaHasModPermissionEqualsParam {
+	if value == nil {
+		return memberWithPrismaHasModPermissionEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r memberQueryHasModPermissionBoolean) Order(direction SortOrder) memberDefaultParam {
+	return memberDefaultParam{
+		data: builder.Field{
+			Name:  "hasModPermission",
+			Value: direction,
+		},
+	}
+}
+
+func (r memberQueryHasModPermissionBoolean) Cursor(cursor bool) memberCursorParam {
+	return memberCursorParam{
+		data: builder.Field{
+			Name:  "hasModPermission",
+			Value: cursor,
+		},
+	}
+}
+
+func (r memberQueryHasModPermissionBoolean) Field() memberPrismaFields {
+	return memberFieldHasModPermission
+}
+
+// base struct
+type memberQueryHasSendPermissionBoolean struct{}
+
+// Set the required value of HasSendPermission
+func (r memberQueryHasSendPermissionBoolean) Set(value bool) memberSetParam {
+
+	return memberSetParam{
+		data: builder.Field{
+			Name:  "hasSendPermission",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of HasSendPermission dynamically
+func (r memberQueryHasSendPermissionBoolean) SetIfPresent(value *Boolean) memberSetParam {
+	if value == nil {
+		return memberSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r memberQueryHasSendPermissionBoolean) Equals(value bool) memberWithPrismaHasSendPermissionEqualsParam {
+
+	return memberWithPrismaHasSendPermissionEqualsParam{
+		data: builder.Field{
+			Name: "hasSendPermission",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r memberQueryHasSendPermissionBoolean) EqualsIfPresent(value *bool) memberWithPrismaHasSendPermissionEqualsParam {
+	if value == nil {
+		return memberWithPrismaHasSendPermissionEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r memberQueryHasSendPermissionBoolean) Order(direction SortOrder) memberDefaultParam {
+	return memberDefaultParam{
+		data: builder.Field{
+			Name:  "hasSendPermission",
+			Value: direction,
+		},
+	}
+}
+
+func (r memberQueryHasSendPermissionBoolean) Cursor(cursor bool) memberCursorParam {
+	return memberCursorParam{
+		data: builder.Field{
+			Name:  "hasSendPermission",
+			Value: cursor,
+		},
+	}
+}
+
+func (r memberQueryHasSendPermissionBoolean) Field() memberPrismaFields {
+	return memberFieldHasSendPermission
 }
 
 // base struct
@@ -20120,8 +20200,9 @@ var memberOutput = []builder.Output{
 	{Name: "addedById"},
 	{Name: "numUnread"},
 	{Name: "isMuted"},
-	{Name: "isMod"},
 	{Name: "isPushEnabled"},
+	{Name: "hasModPermission"},
+	{Name: "hasSendPermission"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -20680,84 +20761,6 @@ func (p memberWithPrismaIsMutedEqualsUniqueParam) isMutedField() {}
 func (memberWithPrismaIsMutedEqualsUniqueParam) unique() {}
 func (memberWithPrismaIsMutedEqualsUniqueParam) equals() {}
 
-type MemberWithPrismaIsModEqualsSetParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	equals()
-	memberModel()
-	isModField()
-}
-
-type MemberWithPrismaIsModSetParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	memberModel()
-	isModField()
-}
-
-type memberWithPrismaIsModSetParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaIsModSetParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaIsModSetParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaIsModSetParam) memberModel() {}
-
-func (p memberWithPrismaIsModSetParam) isModField() {}
-
-type MemberWithPrismaIsModWhereParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	memberModel()
-	isModField()
-}
-
-type memberWithPrismaIsModEqualsParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaIsModEqualsParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaIsModEqualsParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaIsModEqualsParam) memberModel() {}
-
-func (p memberWithPrismaIsModEqualsParam) isModField() {}
-
-func (memberWithPrismaIsModSetParam) settable()  {}
-func (memberWithPrismaIsModEqualsParam) equals() {}
-
-type memberWithPrismaIsModEqualsUniqueParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaIsModEqualsUniqueParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaIsModEqualsUniqueParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaIsModEqualsUniqueParam) memberModel() {}
-func (p memberWithPrismaIsModEqualsUniqueParam) isModField()  {}
-
-func (memberWithPrismaIsModEqualsUniqueParam) unique() {}
-func (memberWithPrismaIsModEqualsUniqueParam) equals() {}
-
 type MemberWithPrismaIsPushEnabledEqualsSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
@@ -20835,6 +20838,162 @@ func (p memberWithPrismaIsPushEnabledEqualsUniqueParam) isPushEnabledField() {}
 
 func (memberWithPrismaIsPushEnabledEqualsUniqueParam) unique() {}
 func (memberWithPrismaIsPushEnabledEqualsUniqueParam) equals() {}
+
+type MemberWithPrismaHasModPermissionEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	memberModel()
+	hasModPermissionField()
+}
+
+type MemberWithPrismaHasModPermissionSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	hasModPermissionField()
+}
+
+type memberWithPrismaHasModPermissionSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaHasModPermissionSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaHasModPermissionSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaHasModPermissionSetParam) memberModel() {}
+
+func (p memberWithPrismaHasModPermissionSetParam) hasModPermissionField() {}
+
+type MemberWithPrismaHasModPermissionWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	hasModPermissionField()
+}
+
+type memberWithPrismaHasModPermissionEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaHasModPermissionEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaHasModPermissionEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaHasModPermissionEqualsParam) memberModel() {}
+
+func (p memberWithPrismaHasModPermissionEqualsParam) hasModPermissionField() {}
+
+func (memberWithPrismaHasModPermissionSetParam) settable()  {}
+func (memberWithPrismaHasModPermissionEqualsParam) equals() {}
+
+type memberWithPrismaHasModPermissionEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaHasModPermissionEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaHasModPermissionEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaHasModPermissionEqualsUniqueParam) memberModel()           {}
+func (p memberWithPrismaHasModPermissionEqualsUniqueParam) hasModPermissionField() {}
+
+func (memberWithPrismaHasModPermissionEqualsUniqueParam) unique() {}
+func (memberWithPrismaHasModPermissionEqualsUniqueParam) equals() {}
+
+type MemberWithPrismaHasSendPermissionEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	memberModel()
+	hasSendPermissionField()
+}
+
+type MemberWithPrismaHasSendPermissionSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	hasSendPermissionField()
+}
+
+type memberWithPrismaHasSendPermissionSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaHasSendPermissionSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaHasSendPermissionSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaHasSendPermissionSetParam) memberModel() {}
+
+func (p memberWithPrismaHasSendPermissionSetParam) hasSendPermissionField() {}
+
+type MemberWithPrismaHasSendPermissionWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	hasSendPermissionField()
+}
+
+type memberWithPrismaHasSendPermissionEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaHasSendPermissionEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaHasSendPermissionEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaHasSendPermissionEqualsParam) memberModel() {}
+
+func (p memberWithPrismaHasSendPermissionEqualsParam) hasSendPermissionField() {}
+
+func (memberWithPrismaHasSendPermissionSetParam) settable()  {}
+func (memberWithPrismaHasSendPermissionEqualsParam) equals() {}
+
+type memberWithPrismaHasSendPermissionEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaHasSendPermissionEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaHasSendPermissionEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaHasSendPermissionEqualsUniqueParam) memberModel()            {}
+func (p memberWithPrismaHasSendPermissionEqualsUniqueParam) hasSendPermissionField() {}
+
+func (memberWithPrismaHasSendPermissionEqualsUniqueParam) unique() {}
+func (memberWithPrismaHasSendPermissionEqualsUniqueParam) equals() {}
 
 type MemberWithPrismaCreatedAtEqualsSetParam interface {
 	field() builder.Field
