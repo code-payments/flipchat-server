@@ -484,8 +484,8 @@ func testServer(
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]chat.Member{
-				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: true},
-				{UserID: userID, AddedBy: streamUser, IsMuted: false, IsHost: false},
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, HasModPermission: true},
+				{UserID: userID, AddedBy: streamUser, IsMuted: false, HasModPermission: false},
 			},
 		)
 
@@ -500,7 +500,7 @@ func testServer(
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]chat.Member{
-				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: true},
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, HasModPermission: true},
 			},
 		)
 
@@ -533,8 +533,8 @@ func testServer(
 		verifyExpectedMembers(
 			u.MemberUpdate,
 			[]chat.Member{
-				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, IsHost: false},
-				{UserID: userID, AddedBy: streamUser, IsMuted: false, IsHost: true},
+				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, HasModPermission: false},
+				{UserID: userID, AddedBy: streamUser, IsMuted: false, HasModPermission: true},
 			},
 		)
 

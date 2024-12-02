@@ -213,7 +213,8 @@ func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*cha
 			UserID:        &commonpb.UserId{Value: decodedUserId},
 			IsPushEnabled: member.IsPushEnabled,
 			IsMuted:       member.IsMuted,
-			IsHost:        member.HasModPermission,
+
+			HasModPermission: member.HasModPermission,
 		}
 
 		if addedByID, ok := member.AddedByID(); ok {
@@ -261,7 +262,8 @@ func (s *store) GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *
 		UserID:        &commonpb.UserId{Value: userID.Value},
 		IsPushEnabled: member.IsPushEnabled,
 		IsMuted:       member.IsMuted,
-		IsHost:        member.HasModPermission,
+
+		HasModPermission: member.HasModPermission,
 	}
 
 	if addedByID, ok := member.AddedByID(); ok {
@@ -426,7 +428,7 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 	createArgs := []db.MemberSetParam{
 		db.Member.IsPushEnabled.Set(true),
 		db.Member.IsMuted.Set(member.IsMuted),
-		db.Member.HasModPermission.Set(member.IsHost),
+		db.Member.HasModPermission.Set(member.HasModPermission),
 	}
 
 	// Add AddedBy parameter conditionally

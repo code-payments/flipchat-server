@@ -27,7 +27,8 @@ type Member struct {
 	AddedBy       *commonpb.UserId
 	IsPushEnabled bool
 	IsMuted       bool
-	IsHost        bool
+
+	HasModPermission bool
 }
 
 func (m *Member) Validate() error {
@@ -44,15 +45,17 @@ func (m *Member) Clone() *Member {
 		AddedBy:       proto.Clone(m.AddedBy).(*commonpb.UserId),
 		IsPushEnabled: m.IsPushEnabled,
 		IsMuted:       m.IsMuted,
-		IsHost:        m.IsHost,
+
+		HasModPermission: m.HasModPermission,
 	}
 }
 
 func (m *Member) ToProto(self *commonpb.UserId) *chatpb.Member {
 	member := &chatpb.Member{
 		UserId:  m.UserID,
-		IsHost:  m.IsHost,
 		IsMuted: m.IsMuted,
+
+		IsHost: m.HasModPermission,
 	}
 
 	if self != nil {

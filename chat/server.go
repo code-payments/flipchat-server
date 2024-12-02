@@ -442,7 +442,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 	for _, m := range users {
 		member := Member{UserID: m, AddedBy: userID}
 		if req.GetGroupChat() != nil && bytes.Equal(m.Value, userID.Value) {
-			member.IsHost = true
+			member.HasModPermission = true
 		}
 
 		memberProtos = append(memberProtos, member.ToProto(userID))
