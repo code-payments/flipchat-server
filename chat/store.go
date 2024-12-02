@@ -28,7 +28,8 @@ type Member struct {
 	IsPushEnabled bool
 	IsMuted       bool
 
-	HasModPermission bool
+	HasModPermission  bool
+	HasSendPermission bool
 }
 
 func (m *Member) Validate() error {
@@ -46,7 +47,8 @@ func (m *Member) Clone() *Member {
 		IsPushEnabled: m.IsPushEnabled,
 		IsMuted:       m.IsMuted,
 
-		HasModPermission: m.HasModPermission,
+		HasModPermission:  m.HasModPermission,
+		HasSendPermission: m.HasSendPermission,
 	}
 }
 

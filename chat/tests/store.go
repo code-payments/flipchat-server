@@ -30,6 +30,7 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 		testChatStore_SetChatMuteState,
 		testChatStore_SetChatPushState,
 		testChatStore_JoinLeave,
+		testChatStore_JoinLeaveWithPermissions,
 		testChatStore_AddRemove,
 		testChatStore_AdvanceLastChatActivity,
 	} {
@@ -315,6 +316,60 @@ func testChatStore_JoinLeave(t *testing.T, store chat.Store) {
 	chats, err = store.GetChatsForUser(context.Background(), member.UserID)
 	require.NoError(t, err)
 	require.Empty(t, chats, 0)
+}
+
+func testChatStore_JoinLeaveWithPermissions(t *testing.T, store chat.Store) {
+	chatID := model.MustGenerateChatID()
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId: chatID,
+		Type:   chatpb.Metadata_GROUP,
+	})
+	require.NoError(t, err)
+
+	var members []*chat.Member
+	for i := range 10 {
+		member := chat.Member{
+			UserID:  model.MustGenerateUserID(),
+			AddedBy: model.MustGenerateUserID(),
+
+			HasModPermission:  i%2 == 0,
+			HasSendPermission: i%3 == 0,
+		}
+
+		require.NoError(t, store.AddMember(context.Background(), chatID, member))
+		members = append(members, &member)
+	}
+
+	slices.SortFunc(members, func(a, b *chat.Member) int {
+		return bytes.Compare(a.UserID.Value, b.UserID.Value)
+	})
+
+	actual, err := store.GetMembers(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, len(members), len(actual))
+	for i := range members {
+		require.NoError(t, protoutil.ProtoEqualError(members[i].UserID, actual[i].UserID))
+		require.NoError(t, protoutil.ProtoEqualError(members[i].AddedBy, actual[i].AddedBy))
+
+		require.Equal(t, members[i].HasModPermission, actual[i].HasModPermission)
+		require.Equal(t, members[i].HasSendPermission, actual[i].HasSendPermission)
+	}
+
+	require.NoError(t, store.RemoveMember(context.Background(), chatID, members[5].UserID))
+	require.NoError(t, store.RemoveMember(context.Background(), chatID, members[5].UserID))
+	members = slices.Delete(members, 5, 6)
+
+	actual, err = store.GetMembers(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, len(members), len(actual))
+	for i := range members {
+		require.NoError(t, protoutil.ProtoEqualError(members[i].UserID, actual[i].UserID))
+		require.NoError(t, protoutil.ProtoEqualError(members[i].AddedBy, actual[i].AddedBy))
+
+		require.Equal(t, members[i].HasModPermission, actual[i].HasModPermission)
+		require.Equal(t, members[i].HasSendPermission, actual[i].HasSendPermission)
+	}
 }
 
 func testChatStore_AddRemove(t *testing.T, store chat.Store) {

@@ -214,7 +214,8 @@ func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*cha
 			IsPushEnabled: member.IsPushEnabled,
 			IsMuted:       member.IsMuted,
 
-			HasModPermission: member.HasModPermission,
+			HasModPermission:  member.HasModPermission,
+			HasSendPermission: member.HasSendPermission,
 		}
 
 		if addedByID, ok := member.AddedByID(); ok {
@@ -263,7 +264,8 @@ func (s *store) GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *
 		IsPushEnabled: member.IsPushEnabled,
 		IsMuted:       member.IsMuted,
 
-		HasModPermission: member.HasModPermission,
+		HasModPermission:  member.HasModPermission,
+		HasSendPermission: member.HasSendPermission,
 	}
 
 	if addedByID, ok := member.AddedByID(); ok {
@@ -388,6 +390,7 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 			db.Member.UserID.Set(encodedOwnerID),
 			db.Member.Chat.Link(db.Chat.ID.Equals(encodedChatID)),
 			db.Member.HasModPermission.Set(true),
+			db.Member.HasSendPermission.Set(true),
 		).Exec(ctx)
 
 		if err != nil {
@@ -429,6 +432,7 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 		db.Member.IsPushEnabled.Set(true),
 		db.Member.IsMuted.Set(member.IsMuted),
 		db.Member.HasModPermission.Set(member.HasModPermission),
+		db.Member.HasSendPermission.Set(member.HasSendPermission),
 	}
 
 	// Add AddedBy parameter conditionally
