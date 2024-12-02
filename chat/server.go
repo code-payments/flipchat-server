@@ -40,7 +40,7 @@ const (
 	StreamTimeout    = time.Second
 
 	MaxFlushedChatBatchSize = 1024
-	FlushedChatBatchSize    = MaxFlushedChatBatchSize
+	FlushedChatBatchSize    = 32
 )
 
 var (
@@ -957,11 +957,20 @@ func (s *Server) getMetadataWithMembers(ctx context.Context, chatID *commonpb.Ch
 		return nil, nil, err
 	}
 
-	members, err := s.chats.GetMembers(ctx, chatID)
+	members, err := s.getMembers(ctx, md, caller)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return md, members, nil
+}
+
+func (s *Server) getMembers(ctx context.Context, md *chatpb.Metadata, caller *commonpb.UserId) ([]*chatpb.Member, error) {
+	members, err := s.chats.GetMembers(ctx, md.ChatId)
 	if err == ErrMemberNotFound {
-		return md, nil, nil
+		return nil, nil
 	} else if err != nil {
-		return nil, nil, fmt.Errorf("failed to get members: %w", err)
+		return nil, fmt.Errorf("failed to get members: %w", err)
 	}
 
 	memberProtos := make([]*chatpb.Member, 0, len(members))
@@ -974,11 +983,11 @@ func (s *Server) getMetadataWithMembers(ctx context.Context, chatID *commonpb.Ch
 		memberProtos = append(memberProtos, p)
 	}
 
-	if err = s.populateMemberData(ctx, memberProtos, chatID); err != nil {
-		return nil, nil, fmt.Errorf("failed to populate member data: %w", err)
+	if err = s.populateMemberData(ctx, memberProtos, md.ChatId); err != nil {
+		return nil, fmt.Errorf("failed to populate member data: %w", err)
 	}
 
-	return md, memberProtos, nil
+	return memberProtos, nil
 }
 
 func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Member, chatID *commonpb.ChatId) error {
@@ -1018,42 +1027,50 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		return
 	}
 
+	// Initially load chat metadata for all chats so we can prioritize events
+	// sent to the client by the last activity timestamp
 	var events []*event.ChatEvent
 	for _, chatID := range chatIDs {
-		md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)
+		md, err := s.getMetadata(ctx, chatID, userID)
 		if err != nil {
-			log.Warn("Failed to get metadata for chat (steam flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
-			continue
+			log.Warn("Failed to get metadata for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
+			return
 		}
 
 		e := &event.ChatEvent{
 			ChatID:     chatID,
 			ChatUpdate: md,
-			MemberUpdate: &chatpb.StreamChatEventsResponse_MemberUpdate{
+		}
+		events = append(events, e)
+	}
+	sorted := event.ByLastActivityTimestamp(events)
+	sort.Sort(sort.Reverse(sorted))
+
+	// Fill out additional event metadata and send back in small batches back to the
+	// client, where an initial batch size is sufficient to fill at least a screen's
+	// worth of chats.
+	var batch []*event.ChatEvent
+	for _, e := range events {
+		members, err := s.getMembers(ctx, e.ChatUpdate, userID)
+		if err != nil {
+			log.Warn("Failed to get members for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(e.ChatID.Value)))
+		} else {
+			e.MemberUpdate = &chatpb.StreamChatEventsResponse_MemberUpdate{
 				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
 					Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
 						Members: members,
 					},
 				},
-			},
+			}
 		}
 
-		messages, err := s.messages.GetMessages(ctx, chatID, query.WithDescending(), query.WithLimit(1))
+		messages, err := s.messages.GetMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
 		if err != nil {
-			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
-		}
-		if len(messages) > 0 {
+			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(e.ChatID.Value)))
+		} else if len(messages) > 0 {
 			e.MessageUpdate = messages[len(messages)-1]
 		}
 
-		events = append(events, e)
-	}
-
-	sorted := event.ByLastActivityTimestamp(events)
-	sort.Sort(sort.Reverse(sorted))
-
-	var batch []*event.ChatEvent
-	for _, e := range sorted {
 		batch = append(batch, e)
 		if len(batch) >= FlushedChatBatchSize {
 			if err = ss.Notify(batch, StreamTimeout); err != nil {
@@ -1063,6 +1080,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 			batch = nil
 		}
 	}
+
 	if len(batch) > 0 {
 		if err = ss.Notify(batch, StreamTimeout); err != nil {
 			log.Warn("Failed to notify stream (steam flush)", zap.Error(err))
