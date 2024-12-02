@@ -28,6 +28,9 @@ const (
 	streamBufferSize = 64
 	streamPingDelay  = 5 * time.Second
 	streamTimeout    = time.Second
+
+	maxFlushedMessageBatchSize = 1024
+	flushedMessageBatchSize    = maxFlushedMessageBatchSize
 )
 
 type Server struct {
@@ -133,10 +136,10 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		func(e *event.ChatEvent) (*messagingpb.StreamMessagesResponse_MessageBatch, bool) {
 			var messages []*messagingpb.Message
 
+			// Only one of these should be not nil at a time
 			if e.MessageUpdate != nil {
 				messages = append(messages, e.MessageUpdate)
 			}
-
 			if len(e.FlushedMessages) > 0 {
 				messages = append(messages, e.FlushedMessages...)
 			}
@@ -144,7 +147,10 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 			if len(messages) == 0 {
 				return nil, false
 			}
-
+			if len(messages) > maxFlushedMessageBatchSize {
+				log.Warn("Flushed message batch size exceeds proto limit")
+				return nil, false
+			}
 			return &messagingpb.StreamMessagesResponse_MessageBatch{
 				Messages: messages,
 			}, true
@@ -391,11 +397,9 @@ func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, use
 	}
 
 	var batch []*messagingpb.Message
-
 	for _, message := range messages {
 		batch = append(batch, message)
-
-		if len(batch) >= 1024 {
+		if len(batch) >= flushedMessageBatchSize {
 			if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
 				log.Info("Failed to send message to stream", zap.Error(err))
 				return
@@ -403,7 +407,6 @@ func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, use
 			batch = nil
 		}
 	}
-
 	if len(batch) > 0 {
 		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
 			log.Info("Failed to send message to stream", zap.Error(err))

@@ -38,6 +38,20 @@ func (e *ChatEvent) Clone() *ChatEvent {
 	}
 }
 
+type ByLastActivityTimestamp []*ChatEvent
+
+func (a ByLastActivityTimestamp) Len() int      { return len(a) }
+func (a ByLastActivityTimestamp) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByLastActivityTimestamp) Less(i, j int) bool {
+	if a[i].ChatUpdate == nil {
+		return false
+	}
+	if a[j].ChatUpdate == nil {
+		return true
+	}
+	return a[i].ChatUpdate.LastActivity.AsTime().Before(a[j].ChatUpdate.LastActivity.AsTime())
+}
+
 type Handler[Key, Event any] interface {
 	OnEvent(key Key, e Event)
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -37,6 +38,9 @@ const (
 	StreamBufferSize = 64
 	StreamPingDelay  = 5 * time.Second
 	StreamTimeout    = time.Second
+
+	MaxFlushedChatBatchSize = 1024
+	FlushedChatBatchSize    = MaxFlushedChatBatchSize
 )
 
 var (
@@ -59,7 +63,7 @@ type Server struct {
 	messenger messaging.Messenger
 
 	streamsMu sync.RWMutex
-	streams   map[string]event.Stream[*event.ChatEvent]
+	streams   map[string]event.Stream[[]*event.ChatEvent]
 
 	chatpb.UnimplementedChatServer
 }
@@ -90,7 +94,7 @@ func NewServer(
 
 		messenger: messenger,
 
-		streams: make(map[string]event.Stream[*event.ChatEvent]),
+		streams: make(map[string]event.Stream[[]*event.ChatEvent]),
 	}
 
 	eventBus.AddHandler(event.HandlerFunc[*commonpb.ChatId, *event.ChatEvent](s.OnChatEvent))
@@ -131,52 +135,65 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 		log.Info("Closed previous stream")
 	}
 
-	ss := event.NewProtoEventStream[*event.ChatEvent, *chatpb.StreamChatEventsResponse_EventBatch](
+	ss := event.NewProtoEventStream[[]*event.ChatEvent, *chatpb.StreamChatEventsResponse_EventBatch](
 		userKey,
 		StreamBufferSize,
-		func(e *event.ChatEvent) (*chatpb.StreamChatEventsResponse_EventBatch, bool) {
-			isMember, err := s.chats.IsMember(ctx, e.ChatID, userID)
-			if err != nil {
-				log.Warn("Failed to check membership for event, dropping")
+		func(events []*event.ChatEvent) (*chatpb.StreamChatEventsResponse_EventBatch, bool) {
+			if len(events) > MaxFlushedChatBatchSize {
+				log.Warn("Chat event batch size exceeds proto limit")
 				return nil, false
 			}
 
-			if !isMember {
+			var updates []*chatpb.StreamChatEventsResponse_ChatUpdate
+			for _, e := range events {
+				isMember, err := s.chats.IsMember(ctx, e.ChatID, userID)
+				if err != nil {
+					log.Warn("Failed to check membership for event, dropping")
+					return nil, false
+				}
+
+				if !isMember {
+					continue
+				}
+
+				clonedEvent := e.Clone()
+
+				update := &chatpb.StreamChatEventsResponse_ChatUpdate{
+					ChatId:       clonedEvent.ChatID,
+					Metadata:     clonedEvent.ChatUpdate,
+					MemberUpdate: clonedEvent.MemberUpdate,
+					LastMessage:  clonedEvent.MessageUpdate,
+					Pointer:      clonedEvent.PointerUpdate,
+					IsTyping:     clonedEvent.IsTyping,
+				}
+
+				// todo: this section needs tests
+				if update.LastMessage != nil {
+					// Notably, to propagate unread counts after sending a message
+					//
+					// todo: Should we have updates for a limited view of a chat so we don't need to fetch entire metadata?
+					md, err := s.getMetadata(ctx, e.ChatID, userID)
+					if err == nil {
+						update.Metadata = md
+					} else {
+						log.Warn("Failed to get metadata", zap.Error(err))
+					}
+				}
+
+				if refresh := update.GetMemberUpdate().GetRefresh(); refresh != nil {
+					for _, m := range refresh.Members {
+						m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
+					}
+				}
+
+				updates = append(updates, update)
+			}
+
+			if len(updates) == 0 {
 				return nil, false
 			}
-
-			clonedEvent := e.Clone()
-
-			update := &chatpb.StreamChatEventsResponse_ChatUpdate{
-				ChatId:       clonedEvent.ChatID,
-				Metadata:     clonedEvent.ChatUpdate,
-				MemberUpdate: clonedEvent.MemberUpdate,
-				LastMessage:  clonedEvent.MessageUpdate,
-				Pointer:      clonedEvent.PointerUpdate,
-				IsTyping:     clonedEvent.IsTyping,
-			}
-
-			// todo: this section needs tests
-			if update.LastMessage != nil {
-				// Notably, to propagate unread counts after sending a message
-				//
-				// todo: Should we have updates for a limited view of a chat so we don't need to fetch entire metadata?
-				md, err := s.getMetadata(ctx, e.ChatID, userID)
-				if err == nil {
-					update.Metadata = md
-				} else {
-					log.Warn("Failed to get metadata", zap.Error(err))
-				}
-			}
-
-			if refresh := update.GetMemberUpdate().GetRefresh(); refresh != nil {
-				for _, m := range refresh.Members {
-					m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
-				}
-			}
-
 			return &chatpb.StreamChatEventsResponse_EventBatch{
-				Updates: []*chatpb.StreamChatEventsResponse_ChatUpdate{update},
+				Updates: updates,
 			}, true
 		},
 	)
@@ -852,8 +869,8 @@ func (s *Server) ReportUser(ctx context.Context, req *chatpb.ReportUserRequest) 
 	return &chatpb.ReportUserResponse{}, nil
 }
 
-func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
-	clonedEvent := event.Clone()
+func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
+	clonedEvent := e.Clone()
 
 	members, err := s.chats.GetMembers(context.Background(), chatID)
 	if err != nil {
@@ -877,7 +894,7 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, event *event.ChatEvent) {
 		s.streamsMu.RUnlock()
 
 		if exists {
-			if err = stream.Notify(clonedEvent, StreamTimeout); err != nil {
+			if err = stream.Notify([]*event.ChatEvent{clonedEvent}, StreamTimeout); err != nil {
 				s.log.Warn("Failed to send event", zap.Error(err))
 			}
 		}
@@ -988,7 +1005,7 @@ func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Membe
 	return nil
 }
 
-func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId, ss event.Stream[*event.ChatEvent]) {
+func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId, ss event.Stream[[]*event.ChatEvent]) {
 	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
 
 	chatIDs, err := s.chats.GetChatsForUser(ctx, userID)
@@ -1001,6 +1018,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		return
 	}
 
+	var events []*event.ChatEvent
 	for _, chatID := range chatIDs {
 		md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)
 		if err != nil {
@@ -1008,7 +1026,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 			continue
 		}
 
-		event := &event.ChatEvent{
+		e := &event.ChatEvent{
 			ChatID:     chatID,
 			ChatUpdate: md,
 			MemberUpdate: &chatpb.StreamChatEventsResponse_MemberUpdate{
@@ -1025,10 +1043,28 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
 		}
 		if len(messages) > 0 {
-			event.MessageUpdate = messages[len(messages)-1]
+			e.MessageUpdate = messages[len(messages)-1]
 		}
 
-		if err = ss.Notify(event, StreamTimeout); err != nil {
+		events = append(events, e)
+	}
+
+	sorted := event.ByLastActivityTimestamp(events)
+	sort.Sort(sort.Reverse(sorted))
+
+	var batch []*event.ChatEvent
+	for _, e := range sorted {
+		batch = append(batch, e)
+		if len(batch) >= FlushedChatBatchSize {
+			if err = ss.Notify(batch, StreamTimeout); err != nil {
+				log.Info("Failed to notify stream (steam flush)", zap.Error(err))
+				return
+			}
+			batch = nil
+		}
+	}
+	if len(batch) > 0 {
+		if err = ss.Notify(batch, StreamTimeout); err != nil {
 			log.Warn("Failed to notify stream (steam flush)", zap.Error(err))
 		}
 	}
