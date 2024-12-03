@@ -339,7 +339,7 @@ func testServer(
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
 			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
 
-			// Upgrade to a non-special user
+			// Upgrade to a non-spectator user with send message permissions
 
 			for i, m := range newExpectedMembers {
 				if bytes.Equal(m.UserId.Value, otherUser.Value) {
