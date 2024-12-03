@@ -1027,7 +1027,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		return
 	}
 
-	var initialEvents []*event.ChatEvent
+	var events []*event.ChatEvent
 	for _, chatID := range chatIDs {
 		md, err := s.getMetadata(ctx, chatID, userID)
 		if err != nil {
@@ -1039,7 +1039,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 			ChatID:     chatID,
 			ChatUpdate: md,
 		}
-		initialEvents = append(initialEvents, e)
+		events = append(events, e)
 
 		messages, err := s.messages.GetMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
 		if err != nil {
@@ -1049,43 +1049,12 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		}
 	}
 
-	sorted := event.ByLastActivityTimestamp(initialEvents)
+	sorted := event.ByLastActivityTimestamp(events)
 	sort.Sort(sort.Reverse(sorted))
 
 	var batch []*event.ChatEvent
 	for _, e := range sorted {
 		batch = append(batch, e)
-		if len(batch) >= FlushedChatBatchSize {
-			if err = ss.Notify(batch, StreamTimeout); err != nil {
-				log.Info("Failed to notify stream (stream flush)", zap.Error(err))
-				return
-			}
-			batch = nil
-		}
-	}
-	if len(batch) > 0 {
-		if err = ss.Notify(batch, StreamTimeout); err != nil {
-			log.Warn("Failed to notify stream (stream flush)", zap.Error(err))
-		}
-	}
-
-	batch = nil
-	for _, e := range initialEvents {
-		members, err := s.getMembers(ctx, e.ChatUpdate, userID)
-		if err != nil {
-			log.Warn("Failed to get members for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(e.ChatID.Value)))
-		} else {
-			mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
-					Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
-						Members: members,
-					},
-				},
-			}
-
-			batch = append(batch, &event.ChatEvent{ChatID: e.ChatID, MemberUpdate: mu})
-		}
-
 		if len(batch) >= FlushedChatBatchSize {
 			if err = ss.Notify(batch, StreamTimeout); err != nil {
 				log.Info("Failed to notify stream (stream flush)", zap.Error(err))
