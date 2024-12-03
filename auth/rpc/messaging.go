@@ -34,7 +34,7 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 		return false, err
 	}
 
-	return !member.IsMuted, nil
+	return !member.IsMuted && member.HasSendPermission, nil
 }
 
 func (a *MessagingAuthorizer) CanAdvancePointer(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {

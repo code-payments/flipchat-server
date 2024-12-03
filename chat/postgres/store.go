@@ -526,6 +526,44 @@ func (s *store) IsUserMuted(ctx context.Context, chatID *commonpb.ChatId, member
 	return res.IsMuted, nil
 }
 
+func (s *store) SetSendPermission(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, hasSendPermission bool) error {
+	encodedChatID := pg.Encode(chatID.Value)
+	encodedUserID := pg.Encode(member.Value)
+
+	_, err := s.client.Member.FindUnique(
+		db.Member.ChatIDUserID(
+			db.Member.ChatID.Equals(encodedChatID),
+			db.Member.UserID.Equals(encodedUserID),
+		),
+	).Update(
+		db.Member.HasSendPermission.Set(hasSendPermission),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return chat.ErrMemberNotFound
+	}
+
+	return err
+}
+
+func (s *store) HasSendPermission(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
+	encodedChatID := pg.Encode(chatID.Value)
+	encodedUserID := pg.Encode(member.Value)
+
+	res, err := s.client.Member.FindUnique(
+		db.Member.ChatIDUserID(
+			db.Member.ChatID.Equals(encodedChatID),
+			db.Member.UserID.Equals(encodedUserID),
+		),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) || res == nil {
+		return false, chat.ErrMemberNotFound
+	}
+
+	return res.HasSendPermission, nil
+}
+
 func (s *store) SetPushState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isPushEnabled bool) error {
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedUserID := pg.Encode(member.Value)

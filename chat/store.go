@@ -58,6 +58,7 @@ func (m *Member) ToProto(self *commonpb.UserId) *chatpb.Member {
 		IsMuted: m.IsMuted,
 
 		HasModeratorPermission: m.HasModPermission,
+		HasSendPermission:      m.HasSendPermission,
 	}
 
 	if self != nil {
@@ -82,6 +83,9 @@ type Store interface {
 
 	SetMuteState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isMuted bool) error
 	IsUserMuted(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error)
+
+	SetSendPermission(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, hasSendPermission bool) error
+	HasSendPermission(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error)
 
 	SetPushState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isPushEnabled bool) error
 	IsPushEnabled(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error)

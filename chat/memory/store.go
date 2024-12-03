@@ -277,6 +277,35 @@ func (s *InMemoryStore) IsUserMuted(_ context.Context, chatID *commonpb.ChatId, 
 	return false, chat.ErrMemberNotFound
 }
 
+func (s *InMemoryStore) SetSendPermission(_ context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, hasSendPermission bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	members := s.members[string(chatID.Value)]
+	for _, m := range members {
+		if bytes.Equal(m.UserID.Value, member.Value) {
+			m.HasSendPermission = hasSendPermission
+			return nil
+		}
+	}
+
+	return chat.ErrMemberNotFound
+}
+
+func (s *InMemoryStore) HasSendPermission(_ context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	members := s.members[string(chatID.Value)]
+	for _, m := range members {
+		if bytes.Equal(m.UserID.Value, member.Value) {
+			return m.HasSendPermission, nil
+		}
+	}
+
+	return false, chat.ErrMemberNotFound
+}
+
 func (s *InMemoryStore) SetPushState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isPushEnabled bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

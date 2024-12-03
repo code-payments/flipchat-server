@@ -551,17 +551,30 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	// TODO: Return if no-op
 
 	newMember := Member{UserID: userID}
-	if hasPaymentIntent {
-		newMember.HasSendPermission = true
-	}
-
-	if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {
-		s.log.Warn("Failed to put chat member", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to put chat member")
-	}
 
 	// todo: put this logic in a DB transaction alongside member add
 	if hasPaymentIntent {
+
+		isMember, err := s.chats.IsMember(ctx, chatID, userID)
+		if err != nil {
+			s.log.Warn("Failed to check if user is already a member", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to check if user is already a member")
+		}
+
+		if isMember {
+			err := s.chats.SetSendPermission(ctx, chatID, userID, true)
+			if err != nil {
+				s.log.Warn("Failed to set send permission", zap.Error(err))
+				return nil, status.Errorf(codes.Internal, "failed to set send permission")
+			}
+		} else {
+			newMember.HasSendPermission = true
+			if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {
+				s.log.Warn("Failed to put chat member", zap.Error(err))
+				return nil, status.Errorf(codes.Internal, "failed to put chat member")
+			}
+		}
+
 		err = s.intents.MarkFulfilled(ctx, req.PaymentIntent)
 		if err == intent.ErrAlreadyFulfilled {
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
@@ -578,6 +591,13 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		); err != nil {
 			s.log.Warn("Failed to send announcement", zap.Error(err))
 		}
+	} else {
+
+		if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {
+			s.log.Warn("Failed to put chat spectator", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to put chat member")
+		}
+
 	}
 
 	md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)

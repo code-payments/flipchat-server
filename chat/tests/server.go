@@ -242,9 +242,10 @@ func testServer(
 				m.IsSelf = false
 			}
 			newExpectedMembers = append(newExpectedMembers, &chatpb.Member{
-				UserId:   otherUser,
-				Identity: &chatpb.MemberIdentity{},
-				IsSelf:   true,
+				UserId:            otherUser,
+				Identity:          &chatpb.MemberIdentity{},
+				IsSelf:            true,
+				HasSendPermission: true,
 			})
 
 			slices.SortFunc(newExpectedMembers, func(a, b *chatpb.Member) int {
@@ -323,6 +324,7 @@ func testServer(
 				return bytes.Compare(a.UserId.Value, b.UserId.Value)
 			})
 
+			// Join without send permission
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
@@ -337,6 +339,36 @@ func testServer(
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
 			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
 
+			// Upgrade to a non-special user
+
+			for i, m := range newExpectedMembers {
+				if bytes.Equal(m.UserId.Value, otherUser.Value) {
+					newExpectedMembers[i].HasSendPermission = true
+					break
+				}
+			}
+
+			joinPaymentMetadata := &chatpb.JoinChatPaymentMetadata{
+				UserId: otherUser,
+				ChatId: created.Chat.ChatId,
+			}
+			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+
+			join = &chatpb.JoinChatRequest{
+				Identifier: &chatpb.JoinChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+				PaymentIntent: joinIntentID,
+			}
+			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
+
+			joinResp, err = client.JoinChat(context.Background(), join)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
+			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
+
+			// Leave the room
 			leave := &chatpb.LeaveChatRequest{
 				ChatId: created.Chat.GetChatId(),
 			}

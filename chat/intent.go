@@ -181,14 +181,20 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		}, nil
 	}
 
-	// The paying user is already a member, and doesn't need to join
 	isMember, err := h.chats.IsMember(ctx, chat.ChatId, payingUser)
 	if err != nil {
 		return nil, err
-	} else if isMember {
+	}
+
+	hasSendPermission, err := h.chats.HasSendPermission(ctx, chat.ChatId, payingUser)
+	if err != nil {
+		return nil, err
+	}
+
+	if isMember && hasSendPermission {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
-			ErrorDescription: "user is already a chat member",
+			ErrorDescription: "user is already a chat member with send permission",
 		}, nil
 	}
 

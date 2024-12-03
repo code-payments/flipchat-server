@@ -258,11 +258,53 @@ func testChatStore_SetChatMuteState(t *testing.T, store chat.Store) {
 	require.NoError(t, err)
 	require.False(t, members[0].IsMuted)
 
+	hasMuteState, err := store.IsUserMuted(context.Background(), chatID, memberID)
+	require.NoError(t, err)
+	require.False(t, hasMuteState)
+
 	require.NoError(t, store.SetMuteState(context.Background(), chatID, memberID, true))
 
 	members, err = store.GetMembers(context.Background(), chatID)
 	require.NoError(t, err)
 	require.True(t, members[0].IsMuted)
+
+	hasMuteState, err = store.IsUserMuted(context.Background(), chatID, memberID)
+	require.NoError(t, err)
+	require.True(t, hasMuteState)
+}
+
+func testChatStore_SetSendPermission(t *testing.T, store chat.Store) {
+
+	chatID := model.MustGenerateChatID()
+	memberID := model.MustGenerateUserID()
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId: chatID,
+		Type:   chatpb.Metadata_GROUP,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
+		UserID: memberID,
+	}))
+
+	members, err := store.GetMembers(context.Background(), chatID)
+	require.NoError(t, err)
+	require.False(t, members[0].HasSendPermission) // Default to false
+
+	hasSendPermission, err := store.HasSendPermission(context.Background(), chatID, memberID)
+	require.NoError(t, err)
+	require.False(t, hasSendPermission)
+
+	require.NoError(t, store.SetSendPermission(context.Background(), chatID, memberID, true))
+
+	members, err = store.GetMembers(context.Background(), chatID)
+	require.NoError(t, err)
+	require.True(t, members[0].HasSendPermission)
+
+	hasSendPermission, err = store.HasSendPermission(context.Background(), chatID, memberID)
+	require.NoError(t, err)
+	require.True(t, hasSendPermission)
 }
 
 func testChatStore_SetChatPushState(t *testing.T, store chat.Store) {
@@ -283,11 +325,19 @@ func testChatStore_SetChatPushState(t *testing.T, store chat.Store) {
 	require.NoError(t, err)
 	require.True(t, members[0].IsPushEnabled) // Default to true
 
+	hasPushEnabled, err := store.IsPushEnabled(context.Background(), chatID, memberID)
+	require.NoError(t, err)
+	require.True(t, hasPushEnabled)
+
 	require.NoError(t, store.SetPushState(context.Background(), chatID, memberID, false))
 
 	members, err = store.GetMembers(context.Background(), chatID)
 	require.NoError(t, err)
 	require.False(t, members[0].IsPushEnabled)
+
+	hasPushEnabled, err = store.IsPushEnabled(context.Background(), chatID, memberID)
+	require.NoError(t, err)
+	require.False(t, hasPushEnabled)
 }
 
 func testChatStore_JoinLeave(t *testing.T, store chat.Store) {
