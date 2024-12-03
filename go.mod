@@ -26,6 +26,8 @@ require (
 	google.golang.org/protobuf v1.35.1
 )
 
+require github.com/ReneKroon/ttlcache v1.7.0
+
 require (
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	firebase.google.com/go/v4 v4.15.0
