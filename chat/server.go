@@ -996,8 +996,10 @@ func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Membe
 		if err != nil && !errors.Is(err, profile.ErrNotFound) {
 			return fmt.Errorf("failed to get user profile: %w", err)
 		}
-		m.Identity = &chatpb.MemberIdentity{
-			DisplayName: p.GetDisplayName(),
+		if err == nil {
+			m.Identity = &chatpb.MemberIdentity{
+				DisplayName: p.GetDisplayName(),
+			}
 		}
 
 		if chatID == nil {
