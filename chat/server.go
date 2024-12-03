@@ -1027,9 +1027,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		return
 	}
 
-	// Initially load chat metadata for all chats so we can prioritize events
-	// sent to the client by the last activity timestamp
-	var events []*event.ChatEvent
+	var initialEvents []*event.ChatEvent
 	for _, chatID := range chatIDs {
 		md, err := s.getMetadata(ctx, chatID, userID)
 		if err != nil {
@@ -1041,28 +1039,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 			ChatID:     chatID,
 			ChatUpdate: md,
 		}
-		events = append(events, e)
-	}
-	sorted := event.ByLastActivityTimestamp(events)
-	sort.Sort(sort.Reverse(sorted))
-
-	// Fill out additional event metadata and send back in small batches back to the
-	// client, where an initial batch size is sufficient to fill at least a screen's
-	// worth of chats.
-	var batch []*event.ChatEvent
-	for _, e := range events {
-		members, err := s.getMembers(ctx, e.ChatUpdate, userID)
-		if err != nil {
-			log.Warn("Failed to get members for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(e.ChatID.Value)))
-		} else {
-			e.MemberUpdate = &chatpb.StreamChatEventsResponse_MemberUpdate{
-				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
-					Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
-						Members: members,
-					},
-				},
-			}
-		}
+		initialEvents = append(initialEvents, e)
 
 		messages, err := s.messages.GetMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
 		if err != nil {
@@ -1070,20 +1047,56 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		} else if len(messages) > 0 {
 			e.MessageUpdate = messages[len(messages)-1]
 		}
+	}
 
+	sorted := event.ByLastActivityTimestamp(initialEvents)
+	sort.Sort(sort.Reverse(sorted))
+
+	var batch []*event.ChatEvent
+	for _, e := range sorted {
 		batch = append(batch, e)
 		if len(batch) >= FlushedChatBatchSize {
 			if err = ss.Notify(batch, StreamTimeout); err != nil {
-				log.Info("Failed to notify stream (steam flush)", zap.Error(err))
+				log.Info("Failed to notify stream (stream flush)", zap.Error(err))
 				return
 			}
 			batch = nil
 		}
 	}
-
 	if len(batch) > 0 {
 		if err = ss.Notify(batch, StreamTimeout); err != nil {
-			log.Warn("Failed to notify stream (steam flush)", zap.Error(err))
+			log.Warn("Failed to notify stream (stream flush)", zap.Error(err))
+		}
+	}
+
+	batch = nil
+	for _, e := range initialEvents {
+		members, err := s.getMembers(ctx, e.ChatUpdate, userID)
+		if err != nil {
+			log.Warn("Failed to get members for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(e.ChatID.Value)))
+		} else {
+			mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
+					Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+						Members: members,
+					},
+				},
+			}
+
+			batch = append(batch, &event.ChatEvent{ChatID: e.ChatID, MemberUpdate: mu})
+		}
+
+		if len(batch) >= FlushedChatBatchSize {
+			if err = ss.Notify(batch, StreamTimeout); err != nil {
+				log.Info("Failed to notify stream (stream flush)", zap.Error(err))
+				return
+			}
+			batch = nil
+		}
+	}
+	if len(batch) > 0 {
+		if err = ss.Notify(batch, StreamTimeout); err != nil {
+			log.Warn("Failed to notify stream (stream flush)", zap.Error(err))
 		}
 	}
 }
