@@ -171,8 +171,8 @@ func testServer(
 			Identity: &chatpb.MemberIdentity{
 				DisplayName: "Self",
 			},
-			IsSelf:      true,
-			IsModerator: true,
+			IsSelf:                 true,
+			HasModeratorPermission: true,
 		}}
 
 		for i, groupUserID := range otherUsers {

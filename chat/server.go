@@ -977,7 +977,7 @@ func (s *Server) getMembers(ctx context.Context, md *chatpb.Metadata, caller *co
 	for _, member := range members {
 		p := member.ToProto(caller)
 		if bytes.Equal(member.UserID.Value, md.Owner.GetValue()) {
-			p.IsModerator = true
+			p.HasModeratorPermission = true
 		}
 
 		memberProtos = append(memberProtos, p)

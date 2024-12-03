@@ -57,7 +57,7 @@ func (m *Member) ToProto(self *commonpb.UserId) *chatpb.Member {
 		UserId:  m.UserID,
 		IsMuted: m.IsMuted,
 
-		IsModerator: m.HasModPermission,
+		HasModeratorPermission: m.HasModPermission,
 	}
 
 	if self != nil {
