@@ -487,7 +487,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	var paymentMetadata chatpb.JoinChatPaymentMetadata
 
 	if hasPaymentIntent {
-		if !req.WithSendPermission {
+		if req.WithoutSendPermission {
 			s.log.Warn("Users should not pay for a chat they can't send messages in", zap.Error(err))
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 		}
@@ -540,7 +540,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		}
 
 		isOwner := chatMetadata.Owner != nil && bytes.Equal(chatMetadata.Owner.Value, userID.Value)
-		isSpectator := !req.WithSendPermission
+		isSpectator := req.WithoutSendPermission
 
 		if !isOwner && !isSpectator {
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
@@ -551,10 +551,8 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	// TODO: Return if no-op
 
 	newMember := Member{UserID: userID}
-	if req.WithSendPermission || hasPaymentIntent {
+	if hasPaymentIntent {
 		newMember.HasSendPermission = true
-	} else {
-		newMember.HasSendPermission = false
 	}
 
 	if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {

@@ -261,8 +261,7 @@ func testServer(
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
 				},
-				PaymentIntent:      joinIntentID,
-				WithSendPermission: true, // todo: is this flag optional when providing a payment intent?
+				PaymentIntent: joinIntentID,
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 
@@ -328,7 +327,7 @@ func testServer(
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
 				},
-				WithSendPermission: false, // todo: is this flag optional when not providing a payment intent?
+				WithoutSendPermission: true,
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 
@@ -570,9 +569,8 @@ func testServer(
 		}
 		joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
 		join := &chatpb.JoinChatRequest{
-			Identifier:         &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
-			PaymentIntent:      joinIntentID,
-			WithSendPermission: true,
+			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
+			PaymentIntent: joinIntentID,
 		}
 		require.NoError(t, streamKeyPair.Auth(join, &join.Auth))
 
