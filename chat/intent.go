@@ -186,9 +186,12 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		return nil, err
 	}
 
-	hasSendPermission, err := h.chats.HasSendPermission(ctx, chat.ChatId, payingUser)
-	if err != nil {
-		return nil, err
+	var hasSendPermission bool
+	if isMember {
+		hasSendPermission, err = h.chats.HasSendPermission(ctx, chat.ChatId, payingUser)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if isMember && hasSendPermission {
