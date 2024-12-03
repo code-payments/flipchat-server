@@ -473,7 +473,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		log.Warn("Failed to notify new chat", zap.Error(err))
 	}
 
-	return &chatpb.StartChatResponse{Chat: md}, nil
+	return &chatpb.StartChatResponse{Chat: md, Members: memberProtos}, nil
 }
 
 func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*chatpb.JoinChatResponse, error) {
