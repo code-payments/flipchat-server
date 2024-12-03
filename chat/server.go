@@ -486,6 +486,11 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	var paymentMetadata chatpb.JoinChatPaymentMetadata
 
 	if hasPaymentIntent {
+		if !req.WithSendPermission {
+			s.log.Warn("Users should not pay for a chat they can't send messages in", zap.Error(err))
+			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
+		}
+
 		isFulfilled, err := s.intents.IsFulfilled(ctx, req.PaymentIntent)
 		if err != nil {
 			s.log.Warn("Failed to check if intent is already fulfilled", zap.Error(err))
@@ -533,8 +538,10 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			return nil, status.Errorf(codes.Internal, "failed to get chat")
 		}
 
-		// Only the owner of the chat can join without payment
-		if chatMetadata.Owner == nil || !bytes.Equal(chatMetadata.Owner.Value, userID.Value) {
+		isOwner := chatMetadata.Owner != nil && bytes.Equal(chatMetadata.Owner.Value, userID.Value)
+		isSpectator := !req.WithSendPermission
+
+		if !isOwner && !isSpectator {
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 		}
 	}
@@ -542,7 +549,14 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	// TODO: Auth
 	// TODO: Return if no-op
 
-	if err = s.chats.AddMember(ctx, chatID, Member{UserID: userID}); err != nil {
+	newMember := Member{UserID: userID}
+	if req.WithSendPermission || hasPaymentIntent {
+		newMember.HasSendPermission = true
+	} else {
+		newMember.HasSendPermission = false
+	}
+
+	if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {
 		s.log.Warn("Failed to put chat member", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to put chat member")
 	}
@@ -556,15 +570,15 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			s.log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
 		}
-	}
 
-	if err := messaging.SendAnnouncement(
-		ctx,
-		s.messenger,
-		chatID,
-		messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID),
-	); err != nil {
-		s.log.Warn("Failed to send announcement", zap.Error(err))
+		if err := messaging.SendAnnouncement(
+			ctx,
+			s.messenger,
+			chatID,
+			messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID),
+		); err != nil {
+			s.log.Warn("Failed to send announcement", zap.Error(err))
+		}
 	}
 
 	md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)

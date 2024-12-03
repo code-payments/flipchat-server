@@ -261,7 +261,8 @@ func testServer(
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
 				},
-				PaymentIntent: joinIntentID,
+				PaymentIntent:      joinIntentID,
+				WithSendPermission: true, // todo: is this flag optional when providing a payment intent?
 			}
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 
@@ -301,6 +302,56 @@ func testServer(
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
 			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
+		})
+
+		t.Run("Join without send permission and leave", func(t *testing.T) {
+			otherUser := model.MustGenerateUserID()
+			otherKeyPair := model.MustGenerateKeyPair()
+			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
+
+			newExpectedMembers := protoutil.SliceClone(expectedMembers)
+			for _, m := range newExpectedMembers {
+				m.IsSelf = false
+			}
+			newExpectedMembers = append(newExpectedMembers, &chatpb.Member{
+				UserId:            otherUser,
+				Identity:          &chatpb.MemberIdentity{},
+				IsSelf:            true,
+				HasSendPermission: false,
+			})
+
+			slices.SortFunc(newExpectedMembers, func(a, b *chatpb.Member) int {
+				return bytes.Compare(a.UserId.Value, b.UserId.Value)
+			})
+
+			join := &chatpb.JoinChatRequest{
+				Identifier: &chatpb.JoinChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+				WithSendPermission: false, // todo: is this flag optional when not providing a payment intent?
+			}
+			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
+
+			joinResp, err := client.JoinChat(context.Background(), join)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
+			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
+
+			leave := &chatpb.LeaveChatRequest{
+				ChatId: created.Chat.GetChatId(),
+			}
+			require.NoError(t, otherKeyPair.Auth(leave, &leave.Auth))
+
+			leaveResp, err := client.LeaveChat(context.Background(), leave)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
+
+			get, err = client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
+			require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
 		})
 
 		t.Run("Remove user", func(t *testing.T) {
@@ -519,8 +570,9 @@ func testServer(
 		}
 		joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
 		join := &chatpb.JoinChatRequest{
-			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
-			PaymentIntent: joinIntentID,
+			Identifier:         &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
+			PaymentIntent:      joinIntentID,
+			WithSendPermission: true,
 		}
 		require.NoError(t, streamKeyPair.Auth(join, &join.Auth))
 
