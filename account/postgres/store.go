@@ -174,8 +174,12 @@ func (s *store) IsStaff(ctx context.Context, userID *commonpb.UserId) (bool, err
 		db.User.ID.Equals(encodedUserID),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || res == nil {
+	if errors.Is(err, db.ErrNotFound) {
 		return false, nil
+	}
+
+	if err != nil {
+		return false, err
 	}
 
 	return res.IsStaff, nil
