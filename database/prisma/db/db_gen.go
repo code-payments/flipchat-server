@@ -93,6 +93,7 @@ model User {
 
   id          String      @id
   displayName String?
+  isStaff     Boolean     @default(false)
   publicKeys  PublicKey[]
 
   createdAt DateTime @default(now())
@@ -383,6 +384,7 @@ type UserScalarFieldEnum string
 const (
 	UserScalarFieldEnumID          UserScalarFieldEnum = "id"
 	UserScalarFieldEnumDisplayName UserScalarFieldEnum = "displayName"
+	UserScalarFieldEnumIsStaff     UserScalarFieldEnum = "isStaff"
 	UserScalarFieldEnumCreatedAt   UserScalarFieldEnum = "createdAt"
 	UserScalarFieldEnumUpdatedAt   UserScalarFieldEnum = "updatedAt"
 )
@@ -524,6 +526,8 @@ type userPrismaFields = prismaFields
 const userFieldID userPrismaFields = "id"
 
 const userFieldDisplayName userPrismaFields = "displayName"
+
+const userFieldIsStaff userPrismaFields = "isStaff"
 
 const userFieldPublicKeys userPrismaFields = "publicKeys"
 
@@ -1054,6 +1058,7 @@ type UserModel struct {
 type InnerUser struct {
 	ID          string   `json:"id"`
 	DisplayName *string  `json:"displayName,omitempty"`
+	IsStaff     bool     `json:"isStaff"`
 	CreatedAt   DateTime `json:"createdAt"`
 	UpdatedAt   DateTime `json:"updatedAt"`
 }
@@ -1062,6 +1067,7 @@ type InnerUser struct {
 type RawUserModel struct {
 	ID          RawString   `json:"id"`
 	DisplayName *RawString  `json:"displayName,omitempty"`
+	IsStaff     RawBoolean  `json:"isStaff"`
 	CreatedAt   RawDateTime `json:"createdAt"`
 	UpdatedAt   RawDateTime `json:"updatedAt"`
 }
@@ -1363,6 +1369,11 @@ type userQuery struct {
 	//
 	// @optional
 	DisplayName userQueryDisplayNameString
+
+	// IsStaff
+	//
+	// @required
+	IsStaff userQueryIsStaffBoolean
 
 	PublicKeys userQueryPublicKeysRelations
 
@@ -2165,6 +2176,74 @@ func (r userQueryDisplayNameString) HasSuffixIfPresent(value *string) userDefaul
 
 func (r userQueryDisplayNameString) Field() userPrismaFields {
 	return userFieldDisplayName
+}
+
+// base struct
+type userQueryIsStaffBoolean struct{}
+
+// Set the required value of IsStaff
+func (r userQueryIsStaffBoolean) Set(value bool) userSetParam {
+
+	return userSetParam{
+		data: builder.Field{
+			Name:  "isStaff",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of IsStaff dynamically
+func (r userQueryIsStaffBoolean) SetIfPresent(value *Boolean) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r userQueryIsStaffBoolean) Equals(value bool) userWithPrismaIsStaffEqualsParam {
+
+	return userWithPrismaIsStaffEqualsParam{
+		data: builder.Field{
+			Name: "isStaff",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryIsStaffBoolean) EqualsIfPresent(value *bool) userWithPrismaIsStaffEqualsParam {
+	if value == nil {
+		return userWithPrismaIsStaffEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r userQueryIsStaffBoolean) Order(direction SortOrder) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name:  "isStaff",
+			Value: direction,
+		},
+	}
+}
+
+func (r userQueryIsStaffBoolean) Cursor(cursor bool) userCursorParam {
+	return userCursorParam{
+		data: builder.Field{
+			Name:  "isStaff",
+			Value: cursor,
+		},
+	}
+}
+
+func (r userQueryIsStaffBoolean) Field() userPrismaFields {
+	return userFieldIsStaff
 }
 
 // base struct
@@ -17616,6 +17695,7 @@ type userActions struct {
 var userOutput = []builder.Output{
 	{Name: "id"},
 	{Name: "displayName"},
+	{Name: "isStaff"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -17939,6 +18019,84 @@ func (p userWithPrismaDisplayNameEqualsUniqueParam) displayNameField() {}
 
 func (userWithPrismaDisplayNameEqualsUniqueParam) unique() {}
 func (userWithPrismaDisplayNameEqualsUniqueParam) equals() {}
+
+type UserWithPrismaIsStaffEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	isStaffField()
+}
+
+type UserWithPrismaIsStaffSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	isStaffField()
+}
+
+type userWithPrismaIsStaffSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsStaffSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsStaffSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsStaffSetParam) userModel() {}
+
+func (p userWithPrismaIsStaffSetParam) isStaffField() {}
+
+type UserWithPrismaIsStaffWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	isStaffField()
+}
+
+type userWithPrismaIsStaffEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsStaffEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsStaffEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsStaffEqualsParam) userModel() {}
+
+func (p userWithPrismaIsStaffEqualsParam) isStaffField() {}
+
+func (userWithPrismaIsStaffSetParam) settable()  {}
+func (userWithPrismaIsStaffEqualsParam) equals() {}
+
+type userWithPrismaIsStaffEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsStaffEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsStaffEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsStaffEqualsUniqueParam) userModel()    {}
+func (p userWithPrismaIsStaffEqualsUniqueParam) isStaffField() {}
+
+func (userWithPrismaIsStaffEqualsUniqueParam) unique() {}
+func (userWithPrismaIsStaffEqualsUniqueParam) equals() {}
 
 type UserWithPrismaPublicKeysEqualsSetParam interface {
 	field() builder.Field
