@@ -246,10 +246,15 @@ func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRe
 		return &accountpb.GetUserFlagsResponse{Result: accountpb.GetUserFlagsResponse_DENIED}, nil
 	}
 
+	isStaff, err := s.store.IsStaff(ctx, req.UserId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get staff flag")
+	}
+
 	return &accountpb.GetUserFlagsResponse{
 		Result: accountpb.GetUserFlagsResponse_OK,
 		UserFlags: &accountpb.UserFlags{
-			IsStaff:        false, // todo: implement staff flag
+			IsStaff:        isStaff,
 			StartGroupFee:  &commonpb.PaymentAmount{Quarks: flags.StartGroupFee},
 			FeeDestination: &commonpb.PublicKey{Value: flags.FeeDestination.PublicKey().ToBytes()},
 		},

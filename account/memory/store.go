@@ -114,3 +114,7 @@ func (m *memory) IsAuthorized(_ context.Context, userID *commonpb.UserId, pubKey
 
 	return false, nil
 }
+
+func (m *memory) IsStaff(ctx context.Context, userID *commonpb.UserId) (bool, error) {
+	return false, nil
+}

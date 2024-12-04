@@ -166,3 +166,17 @@ func (s *store) IsAuthorized(ctx context.Context, userID *commonpb.UserId, pubKe
 
 	return key != nil, nil
 }
+
+func (s *store) IsStaff(ctx context.Context, userID *commonpb.UserId) (bool, error) {
+	encodedUserID := pg.Encode(userID.Value)
+
+	res, err := s.client.User.FindUnique(
+		db.User.ID.Equals(encodedUserID),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) || res == nil {
+		return false, nil
+	}
+
+	return res.IsStaff, nil
+}
