@@ -61,7 +61,7 @@ func testFCMPusher_SendPush(t *testing.T, store push.TokenStore) {
 		require.NoError(t, err)
 	}
 
-	// Send push to first 3 users
+	// Send visible push to first 3 users
 	chatID := model.MustGenerateChatID()
 	targetUsers := users[:3]
 	data := map[string]string{"my-data": "data is gold"}
@@ -72,16 +72,18 @@ func testFCMPusher_SendPush(t *testing.T, store push.TokenStore) {
 	require.NotNil(t, fcmClient.sentMessage)
 	assert.Len(t, fcmClient.sentMessage.Tokens, 6)
 
-	// Verify basic notification message content
-	assert.Equal(t, "Test Title", fcmClient.sentMessage.Notification.Title)
-	assert.Equal(t, "Test Body", fcmClient.sentMessage.Notification.Body)
-	assert.Equal(t, data, fcmClient.sentMessage.Data)
+	// Verify title and body are in the data payload
+	expectedData := map[string]string{
+		"chat_id": base64.StdEncoding.EncodeToString(chatID.Value),
+		"my-data": "data is gold",
+		"title":   "Test Title",
+		"body":    "Test Body",
+	}
+	assert.Equal(t, expectedData, fcmClient.sentMessage.Data)
 
-	// Verify APS content
-	assert.Equal(t, "Test Title", fcmClient.sentMessage.APNS.Payload.Aps.Alert.Title)
-	assert.Equal(t, "Test Body", fcmClient.sentMessage.APNS.Payload.Aps.Alert.Body)
+	// Verify APS content for a visible push
+	assert.False(t, fcmClient.sentMessage.APNS.Payload.Aps.ContentAvailable)
 	assert.Equal(t, base64.StdEncoding.EncodeToString(chatID.Value), fcmClient.sentMessage.APNS.Payload.Aps.ThreadID)
-	assert.Equal(t, data, fcmClient.sentMessage.Data)
 
 	// Verify the correct tokens were included
 	expectedTokens := []string{
@@ -90,4 +92,20 @@ func testFCMPusher_SendPush(t *testing.T, store push.TokenStore) {
 		"token2_1", "token2_2",
 	}
 	assert.ElementsMatch(t, expectedTokens, fcmClient.sentMessage.Tokens)
+
+	// Send silent push to the same users
+	err = pusher.SendSilentPushes(ctx, chatID, targetUsers, data)
+	require.NoError(t, err)
+
+	// Verify silent push message
+	require.NotNil(t, fcmClient.sentMessage)
+	assert.Len(t, fcmClient.sentMessage.Tokens, 6)
+
+	// Verify data payload remains unchanged
+	assert.Equal(t, data, fcmClient.sentMessage.Data)
+
+	// Verify APS content for silent push
+	assert.True(t, fcmClient.sentMessage.APNS.Payload.Aps.ContentAvailable)
+	assert.Nil(t, fcmClient.sentMessage.APNS.Payload.Aps.Alert)
+	assert.Equal(t, base64.StdEncoding.EncodeToString(chatID.Value), fcmClient.sentMessage.APNS.Payload.Aps.ThreadID)
 }

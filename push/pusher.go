@@ -76,37 +76,48 @@ func (p *FCMPusher) sendMessage(ctx context.Context, chatID *commonpb.ChatId, us
 		return err
 	}
 
+	if response == nil {
+		p.log.Debug("No response from FCM")
+		return nil
+	}
+
 	p.log.Debug("Send pushes", zap.Int("success", response.SuccessCount), zap.Int("failed", response.FailureCount))
+	if response.FailureCount == 0 {
+		return nil
+	}
+
 	p.processResponse(response, pushTokens, tokens)
 
 	return nil
 }
 
 func (p *FCMPusher) buildMessage(chatID *commonpb.ChatId, tokens []string, title, body string, data map[string]string, silent bool) *messaging.MulticastMessage {
+	encodedChatId := base64.StdEncoding.EncodeToString(chatID.Value)
+
+	// Apple specific payload
 	aps := &messaging.Aps{
-		ThreadID: base64.StdEncoding.EncodeToString(chatID.Value),
+		ThreadID: encodedChatId,
 	}
 
+	data["chat_id"] = encodedChatId
+
 	if silent {
+		// Setting this to true, ensures that the notification is
+		// treated as a silent push, which does not display a
+		// notification banner or alert but allows the app to
+		// process data in the background.
+
 		aps.ContentAvailable = true
 	} else {
-		aps.Alert = &messaging.ApsAlert{
-			Title: title,
-			Body:  body,
-		}
+		// This is a regular notification (user-visible), so include
+		// the title and body in the notification payload.
+
+		data["title"] = title
+		data["body"] = body
 	}
 
 	return &messaging.MulticastMessage{
 		Tokens: tokens,
-		Notification: func() *messaging.Notification {
-			if silent {
-				return nil
-			}
-			return &messaging.Notification{
-				Title: title,
-				Body:  body,
-			}
-		}(),
 		APNS: &messaging.APNSConfig{
 			Payload: &messaging.APNSPayload{
 				Aps: aps,
