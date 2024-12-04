@@ -67,8 +67,10 @@ func (s *Server) Register(ctx context.Context, req *accountpb.RegisterRequest) (
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	if err = s.profiles.SetDisplayName(ctx, userID, req.DisplayName); err != nil {
-		return nil, status.Error(codes.Internal, "failed to set display name")
+	if len(req.DisplayName) > 0 {
+		if err = s.profiles.SetDisplayName(ctx, userID, req.DisplayName); err != nil {
+			return nil, status.Error(codes.Internal, "failed to set display name")
+		}
 	}
 
 	return &accountpb.RegisterResponse{
