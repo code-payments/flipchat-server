@@ -62,7 +62,8 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 
 	t.Run("Append", func(t *testing.T) {
 		for i := range 10 {
-			for _, sender := range users {
+			senders := append(users, nil)
+			for _, sender := range senders {
 				msg := &messagingpb.Message{
 					SenderId: sender,
 					Content: []*messagingpb.Content{
@@ -114,10 +115,10 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		actual, err = s.GetMessages(
 			ctx,
 			chatID,
-			query.WithToken(&commonpb.PagingToken{Value: messages[3].MessageId.Value}),
+			query.WithToken(&commonpb.PagingToken{Value: messages[12].MessageId.Value}),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(messages[4:], actual))
+		require.NoError(t, protoutil.SliceEqualError(messages[13:], actual))
 
 		actual, err = s.GetMessages(
 			ctx,
@@ -126,7 +127,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 			query.WithOrder(commonpb.QueryOptions_DESC),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(reversedMessages[17:], actual))
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages[27:], actual))
 
 		actual, err = s.GetMessages(
 			ctx,
@@ -136,23 +137,23 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 			query.WithLimit(10),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(reversedMessages[5:15], actual))
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages[15:25], actual))
 	})
 
 	t.Run("Unread", func(t *testing.T) {
 		unread, err := s.CountUnread(ctx, chatID, users[0], nil, -1)
 		require.NoError(t, err)
-		require.EqualValues(t, 10, unread)
+		require.EqualValues(t, 20, unread)
 
 		unread, err = s.CountUnread(ctx, chatID, users[0], nil, 3)
 		require.NoError(t, err)
 		require.EqualValues(t, 3, unread)
 
-		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId, -1)
+		unread, err = s.CountUnread(ctx, chatID, users[0], messages[7].MessageId, -1)
 		require.NoError(t, err)
-		require.EqualValues(t, 5, unread)
+		require.EqualValues(t, 15, unread)
 
-		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId, 2)
+		unread, err = s.CountUnread(ctx, chatID, users[0], messages[7].MessageId, 2)
 		require.NoError(t, err)
 		require.EqualValues(t, 2, unread)
 	})

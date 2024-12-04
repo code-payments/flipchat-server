@@ -135,7 +135,10 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 	// Query arguments
 	queryArgs := []db.MessageWhereParam{
 		db.Message.ChatID.Equals(encodedChatID),
-		db.Message.SenderID.Not(encodedUserID),
+		db.Message.Or(
+			db.Message.SenderID.IsNull(),
+			db.Message.Not(db.Message.SenderID.Equals(encodedUserID)),
+		),
 	}
 
 	if lastRead != nil {
