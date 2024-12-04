@@ -38,6 +38,15 @@ func (m *mockPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, me
 	return nil
 }
 
+func (m *mockPusher) SendSilentPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, data map[string]string) error {
+	m.lastChatID = chatID
+	m.lastPushMembers = members
+	m.lastTitle = ""
+	m.lastBody = ""
+	m.lastData = data
+	return nil
+}
+
 func (m *mockPusher) reset() {
 	m.lastPushMembers = nil
 	m.lastTitle = ""
