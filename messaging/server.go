@@ -18,6 +18,7 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/model"
@@ -39,8 +40,10 @@ type Server struct {
 	authz    auth.Authorizer
 	rpcAuthz auth.Messaging
 
+	accounts account.Store
 	messages MessageStore
 	pointers PointerStore
+
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent]
 
 	streamsMu sync.RWMutex
@@ -53,6 +56,7 @@ func NewServer(
 	log *zap.Logger,
 	authz auth.Authorizer,
 	rpcAuthz auth.Messaging,
+	accounts account.Store,
 	messages MessageStore,
 	pointers PointerStore,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
@@ -62,8 +66,10 @@ func NewServer(
 		authz:    authz,
 		rpcAuthz: rpcAuthz,
 
+		accounts: accounts,
 		messages: messages,
 		pointers: pointers,
+
 		eventBus: eventBus,
 
 		streams: make(map[string][]event.Stream[*event.ChatEvent]),
@@ -94,6 +100,12 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 	userID, err := s.authz.Authorize(ctx, params, &params.Auth)
 	if err != nil {
 		return err
+	}
+
+	minLogLevel := zap.DebugLevel
+	isStaff, _ := s.accounts.IsStaff(ctx, userID)
+	if isStaff {
+		minLogLevel = zap.InfoLevel
 	}
 
 	streamID := uuid.New()
@@ -161,7 +173,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		},
 	)
 
-	log.Debug("Initializing stream")
+	log.Log(minLogLevel, "Initializing stream")
 
 	chatStreams = append(chatStreams, ss)
 	s.streams[chatKey] = chatStreams
@@ -170,7 +182,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 	defer func() {
 		s.streamsMu.Lock()
 
-		log.Debug("Closing streamer")
+		log.Log(minLogLevel, "Closing streamer")
 
 		// We check to see if the current active stream is the one that we created.
 		// If it is, we can just remove it since it's closed. Otherwise, we leave it
@@ -208,7 +220,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		select {
 		case batch, ok := <-ss.Channel():
 			if !ok {
-				log.Debug("Stream closed; ending stream")
+				log.Log(minLogLevel, "Stream closed; ending stream")
 				return status.Error(codes.Aborted, "stream closed")
 			}
 
@@ -218,13 +230,13 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 				},
 			}
 
-			log.Debug("Forwarding chat messages", zap.Int("batch_size", len(batch.Messages)))
+			log.Log(minLogLevel, "Forwarding chat messages", zap.Int("batch_size", len(batch.Messages)))
 			if err = stream.Send(resp); err != nil {
 				log.Info("Failed to forward chat message", zap.Error(err))
 				return err
 			}
 		case <-sendPingCh:
-			log.Debug("Sending ping to client")
+			log.Log(minLogLevel, "Sending ping to client")
 
 			sendPingCh = time.After(streamPingDelay)
 
@@ -237,14 +249,14 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 				},
 			})
 			if err != nil {
-				log.Debug("Stream is unhealthy; aborting")
+				log.Log(minLogLevel, "Stream is unhealthy; aborting")
 				return status.Error(codes.Aborted, "terminating unhealthy stream")
 			}
 		case <-streamHealthCh:
-			log.Debug("Stream is unhealthy; aborting")
+			log.Log(minLogLevel, "Stream is unhealthy; aborting")
 			return status.Error(codes.Aborted, "terminating unhealthy stream")
 		case <-ctx.Done():
-			log.Debug("Stream context cancelled; ending stream")
+			log.Log(minLogLevel, "Stream context cancelled; ending stream")
 			return status.Error(codes.Canceled, "")
 		}
 	}

@@ -86,11 +86,12 @@ func testServer(
 	serv := chat.NewServer(
 		log,
 		account.NewAuthorizer(log, accounts, auth.NewKeyPairAuthenticator()),
+		accounts,
 		chats,
-		profiles,
+		intents,
 		messageDB,
 		pointerDB,
-		intents,
+		profiles,
 		codeData,
 		messaging.NewNoopMessenger(), // todo: add tests for announcements
 		bus,

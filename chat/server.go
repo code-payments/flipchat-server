@@ -25,6 +25,7 @@ import (
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codekin "github.com/code-payments/code-server/pkg/kin"
 
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/intent"
@@ -54,11 +55,12 @@ type Server struct {
 	authz    auth.Authorizer
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent]
 
+	accounts account.Store
 	chats    Store
-	profiles profile.Store
+	intents  intent.Store
 	messages messaging.MessageStore
 	pointers messaging.PointerStore
-	intents  intent.Store
+	profiles profile.Store
 	codeData codedata.Provider
 
 	messenger messaging.Messenger
@@ -72,11 +74,12 @@ type Server struct {
 func NewServer(
 	log *zap.Logger,
 	authz auth.Authorizer,
+	accounts account.Store,
 	chats Store,
-	profiles profile.Store,
+	intents intent.Store,
 	messages messaging.MessageStore,
 	pointers messaging.PointerStore,
-	intents intent.Store,
+	profiles profile.Store,
 	codeData codedata.Provider,
 	messenger messaging.Messenger,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
@@ -86,11 +89,12 @@ func NewServer(
 		authz:    authz,
 		eventBus: eventBus,
 
+		accounts: accounts,
 		chats:    chats,
-		profiles: profiles,
-		pointers: pointers,
-		messages: messages,
 		intents:  intents,
+		messages: messages,
+		pointers: pointers,
+		profiles: profiles,
 		codeData: codeData,
 
 		messenger: messenger,
@@ -123,6 +127,12 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 	userID, err := s.authz.Authorize(ctx, params, &params.Auth)
 	if err != nil {
 		return err
+	}
+
+	minLogLevel := zap.DebugLevel
+	isStaff, _ := s.accounts.IsStaff(ctx, userID)
+	if isStaff {
+		minLogLevel = zap.InfoLevel
 	}
 
 	streamID := uuid.New()
@@ -205,7 +215,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 	)
 
 	log = log.With(zap.String("ss", fmt.Sprintf("%p", ss)))
-	log.Debug("Initializing stream")
+	log.Log(minLogLevel, "Initializing stream")
 
 	s.streams[userKey] = ss
 	s.streamsMu.Unlock()
@@ -213,7 +223,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 	defer func() {
 		s.streamsMu.Lock()
 
-		log.Debug("Closing streamer")
+		log.Log(minLogLevel, "Closing streamer")
 
 		// We check to see if the current active stream is the one that we created.
 		// If it is, we can just remove it since it's closed. Otherwise, we leave it
@@ -237,11 +247,11 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 		select {
 		case batch, ok := <-ss.Channel():
 			if !ok {
-				log.Debug("Stream closed; ending stream")
+				log.Log(minLogLevel, "Stream closed; ending stream")
 				return status.Error(codes.Aborted, "stream closed")
 			}
 
-			log.Debug("Forwarding chat update")
+			log.Log(minLogLevel, "Forwarding chat update")
 			err = stream.Send(&chatpb.StreamChatEventsResponse{
 				Type: &chatpb.StreamChatEventsResponse_Events{
 					Events: batch,
@@ -252,7 +262,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				return err
 			}
 		case <-sendPingCh:
-			log.Debug("Sending ping to client")
+			log.Log(minLogLevel, "Sending ping to client")
 
 			sendPingCh = time.After(StreamPingDelay)
 
@@ -265,14 +275,14 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				},
 			})
 			if err != nil {
-				log.Debug("Stream is unhealthy; aborting")
+				log.Log(minLogLevel, "Stream is unhealthy; aborting")
 				return status.Error(codes.Aborted, "terminating unhealthy stream")
 			}
 		case <-streamHealthCh:
-			log.Debug("Stream is unhealthy; aborting")
+			log.Log(minLogLevel, "Stream is unhealthy; aborting")
 			return status.Error(codes.Aborted, "terminating unhealthy stream")
 		case <-ctx.Done():
-			log.Debug("Stream context cancelled; ending stream")
+			log.Log(minLogLevel, "Stream context cancelled; ending stream")
 			return status.Error(codes.Canceled, "")
 		}
 	}
