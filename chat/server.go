@@ -214,7 +214,6 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 		},
 	)
 
-	log = log.With(zap.String("ss", fmt.Sprintf("%p", ss)))
 	log.Log(minLogLevel, "Initializing stream")
 
 	s.streams[userKey] = ss
