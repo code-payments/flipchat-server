@@ -121,12 +121,10 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 			},
 			message: &messagingpb.Message{
 				SenderId: sender,
-				Content: []*messagingpb.Content{
-					{
-						Type: &messagingpb.Content_Text{
-							Text: &messagingpb.TextContent{
-								Text: "Hello World",
-							},
+				Content: &messagingpb.Content{
+					Type: &messagingpb.Content_Text{
+						Text: &messagingpb.TextContent{
+							Text: "Hello World",
 						},
 					},
 				},
@@ -158,12 +156,10 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 			},
 			message: &messagingpb.Message{
 				SenderId: sender,
-				Content: []*messagingpb.Content{
-					{
-						Type: &messagingpb.Content_Text{
-							Text: &messagingpb.TextContent{
-								Text: "Hello Group",
-							},
+				Content: &messagingpb.Content{
+					Type: &messagingpb.Content_Text{
+						Text: &messagingpb.TextContent{
+							Text: "Hello Group",
 						},
 					},
 				},
@@ -198,12 +194,10 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 			},
 			message: &messagingpb.Message{
 				SenderId: sender,
-				Content: []*messagingpb.Content{
-					{
-						Type: &messagingpb.Content_Text{
-							Text: &messagingpb.TextContent{
-								Text: "Hello Muted",
-							},
+				Content: &messagingpb.Content{
+					Type: &messagingpb.Content_Text{
+						Text: &messagingpb.TextContent{
+							Text: "Hello Muted",
 						},
 					},
 				},

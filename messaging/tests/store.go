@@ -65,12 +65,10 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 			for _, sender := range users {
 				msg := &messagingpb.Message{
 					SenderId: sender,
-					Content: []*messagingpb.Content{
-						{
-							Type: &messagingpb.Content_Text{
-								Text: &messagingpb.TextContent{
-									Text: fmt.Sprintf("i: %d", i),
-								},
+					Content: &messagingpb.Content{
+						Type: &messagingpb.Content_Text{
+							Text: &messagingpb.TextContent{
+								Text: fmt.Sprintf("i: %d", i),
 							},
 						},
 					},

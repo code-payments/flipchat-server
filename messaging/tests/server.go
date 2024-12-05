@@ -137,11 +137,9 @@ func testServerHappy(
 		for i := range 10 {
 			send := &messagingpb.SendMessageRequest{
 				ChatId: chatID,
-				Content: []*messagingpb.Content{
-					{
-						Type: &messagingpb.Content_Text{
-							Text: &messagingpb.TextContent{Text: fmt.Sprintf("msg-%d", i)},
-						},
+				Content: &messagingpb.Content{
+					Type: &messagingpb.Content_Text{
+						Text: &messagingpb.TextContent{Text: fmt.Sprintf("msg-%d", i)},
 					},
 				},
 			}

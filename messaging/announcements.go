@@ -27,8 +27,8 @@ func SendAnnouncement(ctx context.Context, messenger Messenger, chatID *commonpb
 		return err
 	}
 	msg := &messagingpb.Message{
-		Content: []*messagingpb.Content{
-			{Type: &messagingpb.Content_LocalizedAnnouncement{LocalizedAnnouncement: content}},
+		Content: &messagingpb.Content{
+			Type: &messagingpb.Content_LocalizedAnnouncement{LocalizedAnnouncement: content},
 		},
 		Ts: timestamppb.Now(),
 	}

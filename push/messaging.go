@@ -60,7 +60,7 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 		h.log.Debug("Dropping push, no sender")
 		return nil
 	}
-	if len(msg.Content) == 0 {
+	if msg.Content == nil {
 		h.log.Debug("Dropping push, no content")
 		return nil
 	}
@@ -99,8 +99,8 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	}
 
 	var pushPreview string
-	if len(msg.Content) > 0 && msg.Content[0].GetText().GetText() != "" {
-		pushPreview = msg.Content[0].GetText().GetText()
+	if msg.Content != nil && msg.Content.GetText().GetText() != "" {
+		pushPreview = msg.Content.GetText().GetText()
 	} else {
 		pushPreview = "Sent a message"
 	}

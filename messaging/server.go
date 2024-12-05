@@ -275,7 +275,7 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		return nil, err
 	}
 
-	switch req.Content[0].Type.(type) {
+	switch req.Content.Type.(type) {
 	case *messagingpb.Content_Text:
 	default:
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
