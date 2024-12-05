@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -95,9 +96,12 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		return err
 	}
 
+	streamID := uuid.New()
+
 	log := s.log.With(
 		zap.String("chat_id", base64.StdEncoding.EncodeToString(params.ChatId.Value)),
 		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("stream_id", streamID.String()),
 	)
 
 	allow, err := s.rpcAuthz.CanStreamMessages(ctx, params.ChatId, userID)
@@ -204,7 +208,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		select {
 		case batch, ok := <-ss.Channel():
 			if !ok {
-				log.Debug("stream closed; ending stream")
+				log.Debug("Stream closed; ending stream")
 				return status.Error(codes.Aborted, "stream closed")
 			}
 
@@ -214,12 +218,13 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 				},
 			}
 
+			log.Debug("Forwarding chat messages", zap.Int("batch_size", len(batch.Messages)))
 			if err = stream.Send(resp); err != nil {
 				log.Info("Failed to forward chat message", zap.Error(err))
 				return err
 			}
 		case <-sendPingCh:
-			log.Debug("sending ping to client")
+			log.Debug("Sending ping to client")
 
 			sendPingCh = time.After(streamPingDelay)
 
@@ -232,14 +237,14 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 				},
 			})
 			if err != nil {
-				log.Debug("stream is unhealthy; aborting")
+				log.Debug("Stream is unhealthy; aborting")
 				return status.Error(codes.Aborted, "terminating unhealthy stream")
 			}
 		case <-streamHealthCh:
-			log.Debug("stream is unhealthy; aborting")
+			log.Debug("Stream is unhealthy; aborting")
 			return status.Error(codes.Aborted, "terminating unhealthy stream")
 		case <-ctx.Done():
-			log.Debug("stream context cancelled; ending stream")
+			log.Debug("Stream context cancelled; ending stream")
 			return status.Error(codes.Canceled, "")
 		}
 	}
