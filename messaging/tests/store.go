@@ -86,7 +86,13 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 				// non-deterministic (well, won't be post sort, but this way we don't
 				// have to sort)
 				time.Sleep(time.Millisecond)
-				require.NoError(t, s.PutMessage(ctx, chatID, msg))
+
+				if i%2 == 0 {
+					require.NoError(t, s.PutMessage(ctx, chatID, msg))
+				} else {
+					require.NoError(t, s.PutMessageLegacy(ctx, chatID, msg))
+				}
+
 				require.NotNil(t, msg.MessageId)
 
 				messages = append(messages, msg)

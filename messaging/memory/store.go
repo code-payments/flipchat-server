@@ -112,6 +112,11 @@ func (m *Memory) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *m
 	return nil
 }
 
+func (m *Memory) PutMessageLegacy(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {
+	// Memory store doesn't support legacy messages.
+	return m.PutMessage(ctx, chatID, msg)
+}
+
 func (m *Memory) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId, maxValue int64) (int64, error) {
 	m.RLock()
 	defer m.RUnlock()

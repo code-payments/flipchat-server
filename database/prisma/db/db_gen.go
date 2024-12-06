@@ -196,7 +196,9 @@ model Message {
   chatId   String
   senderId String?
 
-  content Bytes // protobuf repeated "Content" message (min: 1, max: 2)
+  version     Int   @default(0) @db.SmallInt // MessageVersion enum: Message: 0, Content: 1
+  contentType Int   @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, LocalizedAnnouncement: 2, NaclBoxEncryptedContent: 4, ReactionContent: 5, ReplyContent: 6
+  content     Bytes // protobuf serialized opaque data
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -439,12 +441,14 @@ const (
 type MessageScalarFieldEnum string
 
 const (
-	MessageScalarFieldEnumID        MessageScalarFieldEnum = "id"
-	MessageScalarFieldEnumChatID    MessageScalarFieldEnum = "chatId"
-	MessageScalarFieldEnumSenderID  MessageScalarFieldEnum = "senderId"
-	MessageScalarFieldEnumContent   MessageScalarFieldEnum = "content"
-	MessageScalarFieldEnumCreatedAt MessageScalarFieldEnum = "createdAt"
-	MessageScalarFieldEnumUpdatedAt MessageScalarFieldEnum = "updatedAt"
+	MessageScalarFieldEnumID          MessageScalarFieldEnum = "id"
+	MessageScalarFieldEnumChatID      MessageScalarFieldEnum = "chatId"
+	MessageScalarFieldEnumSenderID    MessageScalarFieldEnum = "senderId"
+	MessageScalarFieldEnumVersion     MessageScalarFieldEnum = "version"
+	MessageScalarFieldEnumContentType MessageScalarFieldEnum = "contentType"
+	MessageScalarFieldEnumContent     MessageScalarFieldEnum = "content"
+	MessageScalarFieldEnumCreatedAt   MessageScalarFieldEnum = "createdAt"
+	MessageScalarFieldEnumUpdatedAt   MessageScalarFieldEnum = "updatedAt"
 )
 
 type PointerScalarFieldEnum string
@@ -610,6 +614,10 @@ const messageFieldID messagePrismaFields = "id"
 const messageFieldChatID messagePrismaFields = "chatId"
 
 const messageFieldSenderID messagePrismaFields = "senderId"
+
+const messageFieldVersion messagePrismaFields = "version"
+
+const messageFieldContentType messagePrismaFields = "contentType"
 
 const messageFieldContent messagePrismaFields = "content"
 
@@ -1263,22 +1271,26 @@ type MessageModel struct {
 
 // InnerMessage holds the actual data
 type InnerMessage struct {
-	ID        Bytes    `json:"id"`
-	ChatID    string   `json:"chatId"`
-	SenderID  *string  `json:"senderId,omitempty"`
-	Content   Bytes    `json:"content"`
-	CreatedAt DateTime `json:"createdAt"`
-	UpdatedAt DateTime `json:"updatedAt"`
+	ID          Bytes    `json:"id"`
+	ChatID      string   `json:"chatId"`
+	SenderID    *string  `json:"senderId,omitempty"`
+	Version     int      `json:"version"`
+	ContentType int      `json:"contentType"`
+	Content     Bytes    `json:"content"`
+	CreatedAt   DateTime `json:"createdAt"`
+	UpdatedAt   DateTime `json:"updatedAt"`
 }
 
 // RawMessageModel is a struct for Message when used in raw queries
 type RawMessageModel struct {
-	ID        RawBytes    `json:"id"`
-	ChatID    RawString   `json:"chatId"`
-	SenderID  *RawString  `json:"senderId,omitempty"`
-	Content   RawBytes    `json:"content"`
-	CreatedAt RawDateTime `json:"createdAt"`
-	UpdatedAt RawDateTime `json:"updatedAt"`
+	ID          RawBytes    `json:"id"`
+	ChatID      RawString   `json:"chatId"`
+	SenderID    *RawString  `json:"senderId,omitempty"`
+	Version     RawInt      `json:"version"`
+	ContentType RawInt      `json:"contentType"`
+	Content     RawBytes    `json:"content"`
+	CreatedAt   RawDateTime `json:"createdAt"`
+	UpdatedAt   RawDateTime `json:"updatedAt"`
 }
 
 // RelationsMessage holds the relation data separately
@@ -11653,6 +11665,16 @@ type messageQuery struct {
 	// @optional
 	SenderID messageQuerySenderIDString
 
+	// Version
+	//
+	// @required
+	Version messageQueryVersionInt
+
+	// ContentType
+	//
+	// @required
+	ContentType messageQueryContentTypeInt
+
 	// Content
 	//
 	// @required
@@ -12588,6 +12610,804 @@ func (r messageQuerySenderIDString) HasSuffixIfPresent(value *string) messageDef
 
 func (r messageQuerySenderIDString) Field() messagePrismaFields {
 	return messageFieldSenderID
+}
+
+// base struct
+type messageQueryVersionInt struct{}
+
+// Set the required value of Version
+func (r messageQueryVersionInt) Set(value int) messageSetParam {
+
+	return messageSetParam{
+		data: builder.Field{
+			Name:  "version",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Version dynamically
+func (r messageQueryVersionInt) SetIfPresent(value *Int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of Version
+func (r messageQueryVersionInt) Increment(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) IncrementIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of Version
+func (r messageQueryVersionInt) Decrement(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) DecrementIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of Version
+func (r messageQueryVersionInt) Multiply(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) MultiplyIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of Version
+func (r messageQueryVersionInt) Divide(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) DivideIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r messageQueryVersionInt) Equals(value int) messageWithPrismaVersionEqualsParam {
+
+	return messageWithPrismaVersionEqualsParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) EqualsIfPresent(value *int) messageWithPrismaVersionEqualsParam {
+	if value == nil {
+		return messageWithPrismaVersionEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r messageQueryVersionInt) Order(direction SortOrder) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name:  "version",
+			Value: direction,
+		},
+	}
+}
+
+func (r messageQueryVersionInt) Cursor(cursor int) messageCursorParam {
+	return messageCursorParam{
+		data: builder.Field{
+			Name:  "version",
+			Value: cursor,
+		},
+	}
+}
+
+func (r messageQueryVersionInt) In(value []int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) InIfPresent(value []int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r messageQueryVersionInt) NotIn(value []int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) NotInIfPresent(value []int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r messageQueryVersionInt) Lt(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) LtIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r messageQueryVersionInt) Lte(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) LteIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r messageQueryVersionInt) Gt(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) GtIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r messageQueryVersionInt) Gte(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) GteIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r messageQueryVersionInt) Not(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) NotIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r messageQueryVersionInt) LT(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r messageQueryVersionInt) LTIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r messageQueryVersionInt) LTE(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r messageQueryVersionInt) LTEIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r messageQueryVersionInt) GT(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r messageQueryVersionInt) GTIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r messageQueryVersionInt) GTE(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r messageQueryVersionInt) GTEIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r messageQueryVersionInt) Field() messagePrismaFields {
+	return messageFieldVersion
+}
+
+// base struct
+type messageQueryContentTypeInt struct{}
+
+// Set the required value of ContentType
+func (r messageQueryContentTypeInt) Set(value int) messageSetParam {
+
+	return messageSetParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ContentType dynamically
+func (r messageQueryContentTypeInt) SetIfPresent(value *Int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of ContentType
+func (r messageQueryContentTypeInt) Increment(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) IncrementIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of ContentType
+func (r messageQueryContentTypeInt) Decrement(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) DecrementIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of ContentType
+func (r messageQueryContentTypeInt) Multiply(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) MultiplyIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of ContentType
+func (r messageQueryContentTypeInt) Divide(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) DivideIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r messageQueryContentTypeInt) Equals(value int) messageWithPrismaContentTypeEqualsParam {
+
+	return messageWithPrismaContentTypeEqualsParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) EqualsIfPresent(value *int) messageWithPrismaContentTypeEqualsParam {
+	if value == nil {
+		return messageWithPrismaContentTypeEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r messageQueryContentTypeInt) Order(direction SortOrder) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: direction,
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) Cursor(cursor int) messageCursorParam {
+	return messageCursorParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: cursor,
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) In(value []int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) InIfPresent(value []int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r messageQueryContentTypeInt) NotIn(value []int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) NotInIfPresent(value []int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r messageQueryContentTypeInt) Lt(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) LtIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r messageQueryContentTypeInt) Lte(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) LteIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r messageQueryContentTypeInt) Gt(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) GtIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r messageQueryContentTypeInt) Gte(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) GteIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r messageQueryContentTypeInt) Not(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) NotIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r messageQueryContentTypeInt) LT(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r messageQueryContentTypeInt) LTIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r messageQueryContentTypeInt) LTE(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r messageQueryContentTypeInt) LTEIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r messageQueryContentTypeInt) GT(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r messageQueryContentTypeInt) GTIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r messageQueryContentTypeInt) GTE(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r messageQueryContentTypeInt) GTEIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r messageQueryContentTypeInt) Field() messagePrismaFields {
+	return messageFieldContentType
 }
 
 // base struct
@@ -21396,6 +22216,8 @@ var messageOutput = []builder.Output{
 	{Name: "id"},
 	{Name: "chatId"},
 	{Name: "senderId"},
+	{Name: "version"},
+	{Name: "contentType"},
 	{Name: "content"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
@@ -21798,6 +22620,162 @@ func (p messageWithPrismaSenderIDEqualsUniqueParam) senderIDField() {}
 
 func (messageWithPrismaSenderIDEqualsUniqueParam) unique() {}
 func (messageWithPrismaSenderIDEqualsUniqueParam) equals() {}
+
+type MessageWithPrismaVersionEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	messageModel()
+	versionField()
+}
+
+type MessageWithPrismaVersionSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	versionField()
+}
+
+type messageWithPrismaVersionSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaVersionSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaVersionSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaVersionSetParam) messageModel() {}
+
+func (p messageWithPrismaVersionSetParam) versionField() {}
+
+type MessageWithPrismaVersionWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	versionField()
+}
+
+type messageWithPrismaVersionEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaVersionEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaVersionEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaVersionEqualsParam) messageModel() {}
+
+func (p messageWithPrismaVersionEqualsParam) versionField() {}
+
+func (messageWithPrismaVersionSetParam) settable()  {}
+func (messageWithPrismaVersionEqualsParam) equals() {}
+
+type messageWithPrismaVersionEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaVersionEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaVersionEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaVersionEqualsUniqueParam) messageModel() {}
+func (p messageWithPrismaVersionEqualsUniqueParam) versionField() {}
+
+func (messageWithPrismaVersionEqualsUniqueParam) unique() {}
+func (messageWithPrismaVersionEqualsUniqueParam) equals() {}
+
+type MessageWithPrismaContentTypeEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	messageModel()
+	contentTypeField()
+}
+
+type MessageWithPrismaContentTypeSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	contentTypeField()
+}
+
+type messageWithPrismaContentTypeSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaContentTypeSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaContentTypeSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaContentTypeSetParam) messageModel() {}
+
+func (p messageWithPrismaContentTypeSetParam) contentTypeField() {}
+
+type MessageWithPrismaContentTypeWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	contentTypeField()
+}
+
+type messageWithPrismaContentTypeEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaContentTypeEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaContentTypeEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaContentTypeEqualsParam) messageModel() {}
+
+func (p messageWithPrismaContentTypeEqualsParam) contentTypeField() {}
+
+func (messageWithPrismaContentTypeSetParam) settable()  {}
+func (messageWithPrismaContentTypeEqualsParam) equals() {}
+
+type messageWithPrismaContentTypeEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaContentTypeEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaContentTypeEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaContentTypeEqualsUniqueParam) messageModel()     {}
+func (p messageWithPrismaContentTypeEqualsUniqueParam) contentTypeField() {}
+
+func (messageWithPrismaContentTypeEqualsUniqueParam) unique() {}
+func (messageWithPrismaContentTypeEqualsUniqueParam) equals() {}
 
 type MessageWithPrismaContentEqualsSetParam interface {
 	field() builder.Field

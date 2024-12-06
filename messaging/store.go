@@ -23,6 +23,7 @@ type MessageStore interface {
 	GetMessage(ctx context.Context, chatID *commonpb.ChatId, messageID *messagingpb.MessageId) (*messagingpb.Message, error)
 	GetMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error)
 	PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error
+	PutMessageLegacy(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error
 	CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId, maxValue int64) (int64, error)
 }
 
