@@ -110,7 +110,7 @@ func (s *store) GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*
 		db.Chat.ID.Equals(encodedChatID),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || res == nil {
+	if errors.Is(err, db.ErrNotFound) {
 		return nil, chat.ErrChatNotFound
 	} else if err != nil {
 		return nil, err
