@@ -43,7 +43,9 @@ func (s *store) reset() {
 	}
 }
 
-func (s *store) GetMessage(ctx context.Context, _ *commonpb.ChatId, messageID *messagingpb.MessageId) (*messagingpb.Message, error) {
+func (s *store) GetMessage(ctx context.Context, chatID *commonpb.ChatId, messageID *messagingpb.MessageId) (*messagingpb.Message, error) {
+	encodedChatID := pg.Encode(chatID.Value)
+
 	message, err := s.client.Message.FindUnique(
 		db.Message.ID.Equals(messageID.Value),
 	).Exec(ctx)
@@ -52,6 +54,10 @@ func (s *store) GetMessage(ctx context.Context, _ *commonpb.ChatId, messageID *m
 		return nil, messaging.ErrMessageNotFound
 	} else if err != nil {
 		return nil, err
+	}
+
+	if message.ChatID != encodedChatID {
+		return nil, messaging.ErrMessageNotFound
 	}
 
 	protoMessage := &messagingpb.Message{}
