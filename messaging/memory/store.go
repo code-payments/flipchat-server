@@ -39,6 +39,25 @@ func NewInMemory() *Memory {
 	}
 }
 
+func (m *Memory) GetMessage(ctx context.Context, chatID *commonpb.ChatId, messageID *messagingpb.MessageId) (*messagingpb.Message, error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	var found *messagingpb.Message
+	messages := m.messages[string(chatID.Value)]
+	for _, message := range messages {
+		if bytes.Equal(messageID.Value, message.MessageId.Value) {
+			found = message
+			break
+		}
+	}
+
+	if found == nil {
+		return nil, messaging.ErrMessageNotFound
+	}
+	return proto.Clone(found).(*messagingpb.Message), nil
+}
+
 func (m *Memory) GetMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
 	appliedOptions := query.ApplyOptions(options...)
 

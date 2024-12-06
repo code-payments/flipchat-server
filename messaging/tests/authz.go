@@ -17,6 +17,10 @@ func (a *AlwaysAllowRpcAuthz) CanStreamMessages(ctx context.Context, chatID *com
 	return true, nil
 }
 
+func (a *AlwaysAllowRpcAuthz) CanGetMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {
+	return true, nil
+}
+
 func (a *AlwaysAllowRpcAuthz) CanGetMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {
 	return true, nil
 }

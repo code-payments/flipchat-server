@@ -9,6 +9,8 @@ import (
 type Messaging interface {
 	CanStreamMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error)
 
+	CanGetMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error)
+
 	CanGetMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error)
 
 	CanSendMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error)

@@ -22,6 +22,10 @@ func (a *MessagingAuthorizer) CanStreamMessages(ctx context.Context, chatID *com
 	return a.chats.IsMember(ctx, chatID, userID)
 }
 
+func (a *MessagingAuthorizer) CanGetMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {
+	return a.chats.IsMember(ctx, chatID, userID)
+}
+
 func (a *MessagingAuthorizer) CanGetMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {
 	return a.chats.IsMember(ctx, chatID, userID)
 }

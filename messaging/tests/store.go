@@ -43,6 +43,10 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 	chatID := model.MustGenerateChatID()
 
 	t.Run("Empty", func(t *testing.T) {
+		message, err := s.GetMessage(ctx, chatID, messaging.MustGenerateMessageID())
+		require.Equal(t, messaging.ErrMessageNotFound, err)
+		require.Nil(t, message)
+
 		messages, err := s.GetMessages(ctx, chatID)
 		require.NoError(t, err)
 		require.Empty(t, messages)
@@ -88,6 +92,14 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 				messages = append(messages, msg)
 				reversedMessages = append([]*messagingpb.Message{msg}, reversedMessages...)
 			}
+		}
+	})
+
+	t.Run("GetMessage", func(t *testing.T) {
+		for _, message := range messages {
+			actual, err := s.GetMessage(ctx, chatID, message.MessageId)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.ProtoEqualError(message, actual))
 		}
 	})
 

@@ -3,6 +3,7 @@ package messaging
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"slices"
 	"sync"
 	"time"
@@ -260,6 +261,32 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 			return status.Error(codes.Canceled, "")
 		}
 	}
+}
+
+func (s *Server) GetMessage(ctx context.Context, req *messagingpb.GetMessageRequest) (*messagingpb.GetMessageResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	allow, err := s.rpcAuthz.CanGetMessage(ctx, req.ChatId, userID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
+	} else if !allow {
+		return &messagingpb.GetMessageResponse{Result: messagingpb.GetMessageResponse_DENIED}, nil
+	}
+
+	message, err := s.messages.GetMessage(ctx, req.ChatId, req.MessageId)
+	if errors.Is(err, ErrMessageNotFound) {
+		return &messagingpb.GetMessageResponse{Result: messagingpb.GetMessageResponse_NOT_FOUND}, nil
+	} else if err != nil {
+		s.log.Error("Failed to get message", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to get message")
+	}
+
+	return &messagingpb.GetMessageResponse{
+		Message: message,
+	}, nil
 }
 
 func (s *Server) GetMessages(ctx context.Context, req *messagingpb.GetMessagesRequest) (*messagingpb.GetMessagesResponse, error) {

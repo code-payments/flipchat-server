@@ -159,6 +159,19 @@ func testServerHappy(
 		}
 	})
 
+	t.Run("GetMessage", func(t *testing.T) {
+		get := &messagingpb.GetMessageRequest{
+			ChatId:    chatID,
+			MessageId: expected[0].MessageId,
+		}
+		require.NoError(t, keyPair.Auth(get, &get.Auth))
+
+		message, err := client.GetMessage(ctx, get)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.GetMessageResponse_OK, message.Result)
+		require.NoError(t, protoutil.ProtoEqualError(expected[0], message.Message))
+	})
+
 	t.Run("GetMessages", func(t *testing.T) {
 		get := &messagingpb.GetMessagesRequest{
 			ChatId: chatID,
