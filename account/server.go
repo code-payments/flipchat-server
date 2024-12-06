@@ -251,12 +251,20 @@ func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRe
 		return nil, status.Errorf(codes.Internal, "failed to get staff flag")
 	}
 
+	// todo: Replace with an IAP check
+	userProfile, err := s.profiles.GetProfile(ctx, req.UserId)
+	if err != nil && !errors.Is(err, profile.ErrNotFound) {
+		return nil, status.Errorf(codes.Internal, "failed to get registered account status")
+	}
+	isRegisteredAccount := len(userProfile.GetDisplayName()) > 0
+
 	return &accountpb.GetUserFlagsResponse{
 		Result: accountpb.GetUserFlagsResponse_OK,
 		UserFlags: &accountpb.UserFlags{
-			IsStaff:        isStaff,
-			StartGroupFee:  &commonpb.PaymentAmount{Quarks: flags.StartGroupFee},
-			FeeDestination: &commonpb.PublicKey{Value: flags.FeeDestination.PublicKey().ToBytes()},
+			IsStaff:             isStaff,
+			StartGroupFee:       &commonpb.PaymentAmount{Quarks: flags.StartGroupFee},
+			FeeDestination:      &commonpb.PublicKey{Value: flags.FeeDestination.PublicKey().ToBytes()},
+			IsRegisteredAccount: isRegisteredAccount,
 		},
 	}, nil
 }
