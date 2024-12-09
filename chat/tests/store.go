@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/code-payments/code-server/pkg/kin"
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
@@ -32,6 +33,8 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 		testChatStore_JoinLeave,
 		testChatStore_JoinLeaveWithPermissions,
 		testChatStore_AddRemove,
+		testChatStore_SetDisplayName,
+		testChatStore_SetCoverCharge,
 		testChatStore_AdvanceLastChatActivity,
 	} {
 		tf(t, s)
@@ -44,7 +47,6 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 	expected := &chatpb.Metadata{
 		ChatId:       chatID,
 		Type:         chatpb.Metadata_GROUP,
-		Title:        "This is my chat!",
 		RoomNumber:   1,
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
@@ -466,6 +468,52 @@ func testChatStore_AddRemove(t *testing.T, store chat.Store) {
 		require.NoError(t, protoutil.ProtoEqualError(members[i].UserID, actual[i].UserID))
 		require.NoError(t, protoutil.ProtoEqualError(members[i].AddedBy, actual[i].AddedBy))
 	}
+}
+
+func testChatStore_SetDisplayName(t *testing.T, store chat.Store) {
+	chatID := model.MustGenerateChatID()
+
+	require.Equal(t, chat.ErrChatNotFound, store.SetDisplayName(context.Background(), chatID, "My Room"))
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId:       chatID,
+		Type:         chatpb.Metadata_GROUP,
+		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
+	})
+	require.NoError(t, err)
+
+	result, err := store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Empty(t, result.DisplayName)
+
+	require.NoError(t, store.SetDisplayName(context.Background(), chatID, "My Room"))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, "My Room", result.DisplayName)
+}
+
+func testChatStore_SetCoverCharge(t *testing.T, store chat.Store) {
+	chatID := model.MustGenerateChatID()
+
+	require.Equal(t, chat.ErrChatNotFound, store.SetCoverCharge(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId:       chatID,
+		Type:         chatpb.Metadata_GROUP,
+		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
+	})
+	require.NoError(t, err)
+
+	result, err := store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Nil(t, result.CoverCharge)
+
+	require.NoError(t, store.SetCoverCharge(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, kin.ToQuarks(100), result.CoverCharge.Quarks)
 }
 
 func testChatStore_AdvanceLastChatActivity(t *testing.T, store chat.Store) {

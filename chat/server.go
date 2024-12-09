@@ -404,7 +404,6 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		md = &chatpb.Metadata{
 			ChatId:      model.MustGenerateChatID(),
 			Type:        chatpb.Metadata_GROUP,
-			Title:       t.GroupChat.Title,
 			Owner:       userID,
 			CoverCharge: &commonpb.PaymentAmount{Quarks: InitialCoverCharge},
 		}
@@ -674,6 +673,56 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 	}
 
 	return &chatpb.LeaveChatResponse{}, nil
+}
+
+func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameRequest) (*chatpb.SetDisplayNameResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
+	if err == ErrChatNotFound {
+		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat")
+	}
+
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
+		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_DENIED}, nil
+	}
+
+	// todo: Add AI checks against display name, and return a set of alternate
+	//       suggestions if the provided value is denied. For now, gate the RPC
+	//       to staff users
+	//
+	isStaff, _ := s.accounts.IsStaff(ctx, userID)
+	if !isStaff {
+		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_DENIED}, nil
+	}
+
+	err = s.chats.SetDisplayName(ctx, req.ChatId, req.DisplayName)
+	if err != nil {
+		log.Warn("Failed to set display name", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to set display name")
+	}
+
+	if err = messaging.SendAnnouncement(
+		ctx,
+		s.messenger,
+		req.ChatId,
+		messaging.NewRoomDisplayNameChangedAnnouncementContentBuilder(req.DisplayName),
+	); err != nil {
+		log.Warn("Failed to send announcement", zap.Error(err))
+	}
+
+	return &chatpb.SetDisplayNameResponse{}, nil
 }
 
 func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeRequest) (*chatpb.SetCoverChargeResponse, error) {

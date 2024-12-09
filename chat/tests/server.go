@@ -152,7 +152,6 @@ func testServer(
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
 					Users:         otherUsers,
-					Title:         "My Fun Group!",
 					PaymentIntent: startIntentID,
 				},
 			},
@@ -162,7 +161,6 @@ func testServer(
 		created, err := client.StartChat(context.Background(), start)
 		require.NoError(t, err)
 		require.Equal(t, chatpb.StartChatResponse_OK, created.Result)
-		require.Equal(t, "My Fun Group!", created.Chat.Title)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
 		require.Equal(t, chat.InitialCoverCharge, created.Chat.CoverCharge.Quarks)
@@ -433,6 +431,31 @@ func testServer(
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 			require.NoError(t, protoutil.ProtoEqualError(setCoverCharge.CoverCharge, get.Metadata.CoverCharge))
 		})
+
+		t.Run("Set display name", func(t *testing.T) {
+			t.Skip("re-enable when staff flag requirement is removed")
+
+			setDisplayName := &chatpb.SetDisplayNameRequest{
+				ChatId:      created.Chat.ChatId,
+				DisplayName: "My Room",
+			}
+			require.NoError(t, keyPair.Auth(setDisplayName, &setDisplayName.Auth))
+
+			setDisplayNameResp, err := client.SetDisplayName(context.Background(), setDisplayName)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.SetDisplayNameResponse_OK, setDisplayNameResp.Result)
+
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, keyPair.Auth(getByID, &getByID.Auth))
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.Equal(t, setDisplayName.DisplayName, get.Metadata.DisplayName)
+		})
 	})
 
 	t.Run("Start Two Way", func(t *testing.T) {
@@ -551,7 +574,6 @@ func testServer(
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
-					Title:         "my-title",
 					Users:         []*commonpb.UserId{userID},
 					PaymentIntent: startIntentID,
 				},

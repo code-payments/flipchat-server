@@ -67,11 +67,11 @@ model Intent {
 model Chat {
   // Fields
 
-  id          String @id
-  title       String
-  roomNumber  Int?   @unique
-  coverCharge BigInt @default(0)
-  type        Int    @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
+  id          String  @id
+  displayName String?
+  roomNumber  Int?    @unique
+  coverCharge BigInt  @default(0)
+  type        Int     @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
 
   createdBy      String   @default("")
   createdAt      DateTime @default(now())
