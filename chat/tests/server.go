@@ -174,6 +174,7 @@ func testServer(
 			},
 			IsSelf:                 true,
 			HasModeratorPermission: true,
+			HasSendPermission:      true,
 		}}
 
 		for i, groupUserID := range otherUsers {

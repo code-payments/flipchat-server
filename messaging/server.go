@@ -335,33 +335,29 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 	msg := &messagingpb.Message{
 		SenderId: userID,
 		Content:  req.Content,
-		Ts:       timestamppb.Now(),
 	}
 
-	if err := s.Send(ctx, req.ChatId, msg); err != nil {
+	sent, err := s.Send(ctx, req.ChatId, msg)
+	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to send message")
 	}
 
 	return &messagingpb.SendMessageResponse{
-		Message: msg,
+		Message: sent,
 	}, nil
 }
 
-func (s *Server) Send(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {
-	if msg.Ts == nil {
-		msg.Ts = timestamppb.Now()
-	}
-
-	if err := s.messages.PutMessage(ctx, chatID, msg); err != nil {
+func (s *Server) Send(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {
+	created, err := s.messages.PutMessage(ctx, chatID, msg)
+	if err != nil {
 		s.log.Error("Failed to put chat message", zap.Error(err))
-		return err
 	}
 
-	if err := s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MessageUpdate: msg}); err != nil {
+	if err := s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MessageUpdate: created}); err != nil {
 		s.log.Warn("Failed to notify event bus", zap.Error(err))
 	}
 
-	return nil
+	return created, nil
 }
 
 func (s *Server) AdvancePointer(ctx context.Context, req *messagingpb.AdvancePointerRequest) (*messagingpb.AdvancePointerResponse, error) {

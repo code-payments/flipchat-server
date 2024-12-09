@@ -120,20 +120,22 @@ func (s *store) GetMessages(ctx context.Context, chatID *commonpb.ChatId, option
 	return result, nil
 }
 
-func (s *store) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {
+func (s *store) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {
 	if msg.MessageId != nil {
-		return errors.New("cannt provide a message id")
+		return nil, errors.New("cannt provide a message id")
 	}
 
+	msg = proto.Clone(msg).(*messagingpb.Message)
 	msg.MessageId = messaging.MustGenerateMessageID()
-	return s.CreateContentMessage(ctx, chatID, msg)
+	return s.createContentMessage(ctx, chatID, msg)
 }
 
-func (s *store) PutMessageLegacy(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {
+func (s *store) PutMessageLegacy(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {
 	if msg.MessageId != nil {
-		return errors.New("cannt provide a message id")
+		return nil, errors.New("cannt provide a message id")
 	}
 
+	msg = proto.Clone(msg).(*messagingpb.Message)
 	msg.MessageId = messaging.MustGenerateMessageID()
 	return s.createLegacyMessage(ctx, chatID, msg)
 }
@@ -306,23 +308,19 @@ func (s *store) GetAllPointers(ctx context.Context, chatID *commonpb.ChatId) ([]
 	return pgPointers, nil
 }
 
-func (s *store) createLegacyMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {
+func (s *store) createLegacyMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {
 	if msg.MessageId == nil {
-		return errors.New("message id is required")
+		return nil, errors.New("message id is required")
 	}
 
 	encodedChatID := pg.Encode(chatID.Value)
 	opaqueData, err := proto.Marshal(msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	opt := []db.MessageSetParam{
 		db.Message.Version.Set(LEGACY_MESSAGE_VERSION),
-	}
-
-	if !msg.Ts.AsTime().IsZero() {
-		opt = append(opt, db.Message.CreatedAt.Set(msg.Ts.AsTime()))
 	}
 
 	if msg.SenderId != nil {
@@ -330,23 +328,27 @@ func (s *store) createLegacyMessage(ctx context.Context, chatID *commonpb.ChatId
 		opt = append(opt, db.Message.SenderID.Set(encodedSenderId))
 	}
 
-	_, err = s.client.Message.CreateOne(
+	created, err := s.client.Message.CreateOne(
 		db.Message.ID.Set(msg.MessageId.Value),
 		db.Message.ChatID.Set(encodedChatID),
 		db.Message.Content.Set(opaqueData),
 		opt...,
 	).Exec(ctx)
 
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	return fromModel(created)
 }
 
-func (s *store) CreateContentMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {
+func (s *store) createContentMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {
 	if msg.MessageId == nil {
-		return errors.New("message id is required")
+		return nil, errors.New("message id is required")
 	}
 
 	if msg.Content == nil || len(msg.Content) != 1 {
-		return errors.New("unexpected content length")
+		return nil, errors.New("unexpected content length")
 	}
 
 	content := msg.Content[0]
@@ -354,7 +356,7 @@ func (s *store) CreateContentMessage(ctx context.Context, chatID *commonpb.ChatI
 
 	opaqueData, err := proto.Marshal(content)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	contentType := getContentType(content)
@@ -364,23 +366,23 @@ func (s *store) CreateContentMessage(ctx context.Context, chatID *commonpb.ChatI
 		db.Message.ContentType.Set(contentType),
 	}
 
-	if !msg.Ts.AsTime().IsZero() {
-		opt = append(opt, db.Message.CreatedAt.Set(msg.Ts.AsTime()))
-	}
-
 	if msg.SenderId != nil {
 		encodedSenderId := pg.Encode(msg.SenderId.Value)
 		opt = append(opt, db.Message.SenderID.Set(encodedSenderId))
 	}
 
-	_, err = s.client.Message.CreateOne(
+	created, err := s.client.Message.CreateOne(
 		db.Message.ID.Set(msg.MessageId.Value),
 		db.Message.ChatID.Set(encodedChatID),
 		db.Message.Content.Set(opaqueData),
 		opt...,
 	).Exec(ctx)
 
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	return fromModel(created)
 }
 
 func getContentType(content *messagingpb.Content) int {
@@ -407,6 +409,13 @@ func fromModel(message *db.MessageModel) (*messagingpb.Message, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		var ts *timestamppb.Timestamp
+		if !message.CreatedAt.IsZero() {
+			ts = timestamppb.New(message.CreatedAt)
+			protoMessage.Ts = ts
+		}
+
 		return protoMessage, nil
 
 		// For content messages, we unmarshal the content as a messagingpb.Content
