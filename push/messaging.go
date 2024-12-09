@@ -114,6 +114,9 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 		title = sender.DisplayName
 		body = pushPreview
 	}
+	if len(md.DisplayName) > 0 {
+		title = md.DisplayName
+	}
 
 	data := map[string]string{
 		"chat_id": base64.StdEncoding.EncodeToString(chatID.Value),
