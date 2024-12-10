@@ -16,12 +16,15 @@ type ChatEvent struct {
 	ChatID    *commonpb.ChatId
 	Timestamp time.Time
 
-	ChatUpdate      *chatpb.Metadata
-	PointerUpdate   *chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate
-	MemberUpdate    *chatpb.StreamChatEventsResponse_MemberUpdate
+	MetadataUpdates []*chatpb.StreamChatEventsResponse_MetadataUpdate
+	MemberUpdates   []*chatpb.StreamChatEventsResponse_MemberUpdate
 	MessageUpdate   *messagingpb.Message
 	FlushedMessages []*messagingpb.Message
+	PointerUpdate   *chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate
 	IsTyping        *messagingpb.IsTyping
+
+	LegacyMetadataUpdate *chatpb.Metadata                              // Deprecated
+	LegacyMemberUpdate   *chatpb.StreamChatEventsResponse_MemberUpdate // Deprecated
 }
 
 func (e *ChatEvent) Clone() *ChatEvent {
@@ -29,12 +32,15 @@ func (e *ChatEvent) Clone() *ChatEvent {
 		ChatID:    proto.Clone(e.ChatID).(*commonpb.ChatId),
 		Timestamp: e.Timestamp,
 
-		ChatUpdate:      proto.Clone(e.ChatUpdate).(*chatpb.Metadata),
-		PointerUpdate:   proto.Clone(e.PointerUpdate).(*chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate),
-		MemberUpdate:    proto.Clone(e.MemberUpdate).(*chatpb.StreamChatEventsResponse_MemberUpdate),
+		MetadataUpdates: protoutil.SliceClone(e.MetadataUpdates),
+		MemberUpdates:   protoutil.SliceClone(e.MemberUpdates),
 		MessageUpdate:   proto.Clone(e.MessageUpdate).(*messagingpb.Message),
 		FlushedMessages: protoutil.SliceClone(e.FlushedMessages),
+		PointerUpdate:   proto.Clone(e.PointerUpdate).(*chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate),
 		IsTyping:        proto.Clone(e.IsTyping).(*messagingpb.IsTyping),
+
+		LegacyMetadataUpdate: proto.Clone(e.LegacyMetadataUpdate).(*chatpb.Metadata),
+		LegacyMemberUpdate:   proto.Clone(e.LegacyMemberUpdate).(*chatpb.StreamChatEventsResponse_MemberUpdate),
 	}
 }
 
@@ -43,13 +49,13 @@ type ByLastActivityTimestamp []*ChatEvent
 func (a ByLastActivityTimestamp) Len() int      { return len(a) }
 func (a ByLastActivityTimestamp) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a ByLastActivityTimestamp) Less(i, j int) bool {
-	if a[i].ChatUpdate == nil {
+	if a[i].LegacyMetadataUpdate == nil {
 		return false
 	}
-	if a[j].ChatUpdate == nil {
+	if a[j].LegacyMetadataUpdate == nil {
 		return true
 	}
-	return a[i].ChatUpdate.LastActivity.AsTime().Before(a[j].ChatUpdate.LastActivity.AsTime())
+	return a[i].LegacyMetadataUpdate.LastActivity.AsTime().Before(a[j].LegacyMetadataUpdate.LastActivity.AsTime())
 }
 
 type Handler[Key, Event any] interface {

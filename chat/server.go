@@ -175,12 +175,15 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				clonedEvent := e.Clone()
 
 				update := &chatpb.StreamChatEventsResponse_ChatUpdate{
-					ChatId:       clonedEvent.ChatID,
-					Metadata:     clonedEvent.ChatUpdate,
-					MemberUpdate: clonedEvent.MemberUpdate,
-					LastMessage:  clonedEvent.MessageUpdate,
-					Pointer:      clonedEvent.PointerUpdate,
-					IsTyping:     clonedEvent.IsTyping,
+					ChatId:          clonedEvent.ChatID,
+					MetadataUpdates: clonedEvent.MetadataUpdates,
+					MemberUpdates:   clonedEvent.MemberUpdates,
+					LastMessage:     clonedEvent.MessageUpdate,
+					Pointer:         clonedEvent.PointerUpdate,
+					IsTyping:        clonedEvent.IsTyping,
+
+					Metadata:     clonedEvent.LegacyMetadataUpdate,
+					MemberUpdate: clonedEvent.LegacyMemberUpdate,
 				}
 
 				// todo: this section needs tests
@@ -196,9 +199,21 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 					}
 				}
 
-				if refresh := update.GetMemberUpdate().GetRefresh(); refresh != nil {
-					for _, m := range refresh.Members {
+				if fullRefresh := update.GetMemberUpdate().GetFullRefresh(); fullRefresh != nil {
+					for _, m := range fullRefresh.Members {
 						m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
+					}
+				}
+				for _, memberUpdate := range update.MemberUpdates {
+					switch typed := memberUpdate.Kind.(type) {
+					case *chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_:
+						for _, m := range typed.FullRefresh.Members {
+							m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
+						}
+					case *chatpb.StreamChatEventsResponse_MemberUpdate_IndividualRefresh_:
+						typed.IndividualRefresh.Member.IsSelf = bytes.Equal(typed.IndividualRefresh.Member.UserId.Value, userID.Value)
+					case *chatpb.StreamChatEventsResponse_MemberUpdate_Joined_:
+						typed.Joined.Member.IsSelf = bytes.Equal(typed.Joined.Member.UserId.Value, userID.Value)
 					}
 				}
 
@@ -488,15 +503,15 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		log.Warn("Failed to get member profiles for notification, not including")
 	} else {
 		mu = &chatpb.StreamChatEventsResponse_MemberUpdate{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
-				Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
 					Members: memberProtos,
 				},
 			},
 		}
 	}
 
-	if err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, ChatUpdate: md, MemberUpdate: mu}); err != nil {
+	if err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMetadataUpdate: md, LegacyMemberUpdate: mu}); err != nil {
 		log.Warn("Failed to notify new chat", zap.Error(err))
 	}
 
@@ -634,14 +649,14 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	}
 
 	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
-			Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+			FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
 				Members: members,
 			},
 		},
 	}
 
-	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, ChatUpdate: md, MemberUpdate: mu})
+	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMetadataUpdate: md, LegacyMemberUpdate: mu})
 	if err != nil {
 		s.log.Warn("Failed to notify joined member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
 	}
@@ -672,14 +687,14 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 	}
 
 	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
-			Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+			FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
 				Members: members,
 			},
 		},
 	}
 
-	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdate: mu})
+	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu})
 	if err != nil {
 		s.log.Warn("Failed to notify member leaving", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
 	}
@@ -906,14 +921,14 @@ func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*ch
 	}
 
 	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh_{
-			Refresh: &chatpb.StreamChatEventsResponse_MemberUpdate_Refresh{
+		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+			FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
 				Members: members,
 			},
 		},
 	}
 
-	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdate: mu})
+	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu})
 	if err != nil {
 		s.log.Warn("Failed to notify muted member", zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)), zap.Error(err))
 	}
@@ -996,8 +1011,8 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 		err := s.chats.AdvanceLastChatActivity(context.Background(), chatID, clonedEvent.MessageUpdate.Ts.AsTime())
 		if err != nil {
 			s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
-		} else if clonedEvent.ChatUpdate != nil {
-			clonedEvent.ChatUpdate.LastActivity = clonedEvent.MessageUpdate.Ts
+		} else if clonedEvent.LegacyMetadataUpdate != nil {
+			clonedEvent.LegacyMetadataUpdate.LastActivity = clonedEvent.MessageUpdate.Ts
 		}
 	}
 
@@ -1150,8 +1165,8 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		}
 
 		e := &event.ChatEvent{
-			ChatID:     chatID,
-			ChatUpdate: md,
+			ChatID:               chatID,
+			LegacyMetadataUpdate: md,
 		}
 		events = append(events, e)
 
