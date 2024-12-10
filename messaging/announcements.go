@@ -32,7 +32,8 @@ func SendAnnouncement(ctx context.Context, messenger Messenger, chatID *commonpb
 		},
 		Ts: timestamppb.Now(),
 	}
-	return messenger.Send(ctx, chatID, msg)
+	_, err = messenger.Send(ctx, chatID, msg)
+	return err
 }
 
 func NewRoomIsLiveAnnouncementContentBuilder(roomNumber uint64) AnnouncementContentBuilder {
