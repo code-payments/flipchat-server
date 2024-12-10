@@ -157,6 +157,7 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 			db.Message.SenderID.IsNull(),
 			db.Message.Not(db.Message.SenderID.Equals(encodedUserID)),
 		),
+		db.Message.ContentType.Not(ContentTypeReaction),
 	}
 
 	if lastRead != nil {
