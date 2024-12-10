@@ -339,12 +339,24 @@ func (s *Server) GetChat(ctx context.Context, req *chatpb.GetChatRequest) (*chat
 		}
 	}
 
-	md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)
-	if errors.Is(err, ErrChatNotFound) {
-		return &chatpb.GetChatResponse{Result: chatpb.GetChatResponse_NOT_FOUND}, nil
-	} else if err != nil {
-		s.log.Warn("Failed to get data", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to get chat data")
+	var md *chatpb.Metadata
+	var members []*chatpb.Member
+	if req.ExcludeMembers {
+		md, err = s.getMetadata(ctx, chatID, userID)
+		if errors.Is(err, ErrChatNotFound) {
+			return &chatpb.GetChatResponse{Result: chatpb.GetChatResponse_NOT_FOUND}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get chat metadata", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to get chat metadata")
+		}
+	} else {
+		md, members, err = s.getMetadataWithMembers(ctx, chatID, userID)
+		if errors.Is(err, ErrChatNotFound) {
+			return &chatpb.GetChatResponse{Result: chatpb.GetChatResponse_NOT_FOUND}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get chat metadata with members", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to get chat metadata with members")
+		}
 	}
 
 	return &chatpb.GetChatResponse{
