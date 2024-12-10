@@ -63,6 +63,11 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		room = uint64(roomNumber)
 	}
 
+	var name string
+	if displayName, ok := m.DisplayName(); ok {
+		name = displayName
+	}
+
 	coverCharge := (*commonpb.PaymentAmount)(nil)
 	if m.CoverCharge != 0 {
 		coverCharge = &commonpb.PaymentAmount{Quarks: uint64(m.CoverCharge)}
@@ -71,9 +76,9 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 	return &chatpb.Metadata{
 		ChatId: &commonpb.ChatId{Value: decodedChatID},
 
-		Type:       chatpb.Metadata_ChatType(m.Type),
-		Title:      m.Title,
-		RoomNumber: room,
+		Type:        chatpb.Metadata_ChatType(m.Type),
+		DisplayName: name,
+		RoomNumber:  room,
 
 		NumUnread: 0, // not stored in the DB on this model
 
@@ -110,7 +115,7 @@ func (s *store) GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*
 		db.Chat.ID.Equals(encodedChatID),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || res == nil {
+	if errors.Is(err, db.ErrNotFound) {
 		return nil, chat.ErrChatNotFound
 	} else if err != nil {
 		return nil, err
@@ -305,6 +310,10 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 	if md.RoomNumber != 0 {
 		return nil, errors.New("cannot create chat with room number")
 	}
+	if len(md.DisplayName) > 0 {
+		// todo: May not always be the case in the future, but true for current flows
+		return nil, errors.New("cannot create chat with display name")
+	}
 
 	encodedChatID := pg.Encode(md.ChatId.Value)
 
@@ -374,7 +383,6 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 	// Create the chat room
 	res, err = s.client.Chat.CreateOne(
 		db.Chat.ID.Set(encodedChatID),
-		db.Chat.Title.Set(md.Title),
 		opt...,
 	).Exec(ctx)
 
@@ -467,6 +475,22 @@ func (s *store) RemoveMember(ctx context.Context, chatID *commonpb.ChatId, membe
 
 	if errors.Is(err, db.ErrNotFound) {
 		return chat.ErrMemberNotFound
+	}
+
+	return err
+}
+
+func (s *store) SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, displayName string) error {
+	encodedChatID := pg.Encode(chatID.Value)
+
+	_, err := s.client.Chat.FindUnique(
+		db.Chat.ID.Equals(encodedChatID),
+	).Update(
+		db.Chat.DisplayName.Set(db.String(displayName)),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return chat.ErrChatNotFound
 	}
 
 	return err

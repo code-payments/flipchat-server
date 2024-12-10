@@ -319,17 +319,33 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		return nil, err
 	}
 
-	switch req.Content[0].Type.(type) {
+	var reference *messagingpb.MessageId
+	switch typed := req.Content[0].Type.(type) {
 	case *messagingpb.Content_Text:
+	case *messagingpb.Content_Reaction:
+		reference = typed.Reaction.OriginalMessageId
+	case *messagingpb.Content_Reply:
+		reference = typed.Reply.OriginalMessageId
 	default:
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 	}
 
 	allow, err := s.rpcAuthz.CanSendMessage(ctx, req.ChatId, userID)
 	if err != nil {
+		s.log.Warn("Failed to do rpc authz checks", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+	}
+
+	if reference != nil {
+		_, err := s.messages.GetMessage(ctx, req.ChatId, reference)
+		if errors.Is(err, ErrMessageNotFound) {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get message reference", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to get message reference")
+		}
 	}
 
 	msg := &messagingpb.Message{
@@ -339,6 +355,7 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 
 	sent, err := s.Send(ctx, req.ChatId, msg)
 	if err != nil {
+		s.log.Warn("Failed to send message", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to send message")
 	}
 

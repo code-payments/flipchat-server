@@ -141,11 +141,11 @@ model Intent {
 model Chat {
   // Fields
 
-  id          String @id
-  title       String
-  roomNumber  Int?   @unique
-  coverCharge BigInt @default(0)
-  type        Int    @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
+  id          String  @id
+  displayName String?
+  roomNumber  Int?    @unique
+  coverCharge BigInt  @default(0)
+  type        Int     @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
 
   createdBy      String   @default("")
   createdAt      DateTime @default(now())
@@ -413,7 +413,7 @@ type ChatScalarFieldEnum string
 
 const (
 	ChatScalarFieldEnumID             ChatScalarFieldEnum = "id"
-	ChatScalarFieldEnumTitle          ChatScalarFieldEnum = "title"
+	ChatScalarFieldEnumDisplayName    ChatScalarFieldEnum = "displayName"
 	ChatScalarFieldEnumRoomNumber     ChatScalarFieldEnum = "roomNumber"
 	ChatScalarFieldEnumCoverCharge    ChatScalarFieldEnum = "coverCharge"
 	ChatScalarFieldEnumType           ChatScalarFieldEnum = "type"
@@ -565,7 +565,7 @@ type chatPrismaFields = prismaFields
 
 const chatFieldID chatPrismaFields = "id"
 
-const chatFieldTitle chatPrismaFields = "title"
+const chatFieldDisplayName chatPrismaFields = "displayName"
 
 const chatFieldRoomNumber chatPrismaFields = "roomNumber"
 
@@ -1168,7 +1168,7 @@ type ChatModel struct {
 // InnerChat holds the actual data
 type InnerChat struct {
 	ID             string   `json:"id"`
-	Title          string   `json:"title"`
+	DisplayName    *string  `json:"displayName,omitempty"`
 	RoomNumber     *int     `json:"roomNumber,omitempty"`
 	CoverCharge    BigInt   `json:"coverCharge"`
 	Type           int      `json:"type"`
@@ -1181,7 +1181,7 @@ type InnerChat struct {
 // RawChatModel is a struct for Chat when used in raw queries
 type RawChatModel struct {
 	ID             RawString   `json:"id"`
-	Title          RawString   `json:"title"`
+	DisplayName    *RawString  `json:"displayName,omitempty"`
 	RoomNumber     *RawInt     `json:"roomNumber,omitempty"`
 	CoverCharge    RawBigInt   `json:"coverCharge"`
 	Type           RawInt      `json:"type"`
@@ -1194,6 +1194,13 @@ type RawChatModel struct {
 // RelationsChat holds the relation data separately
 type RelationsChat struct {
 	Members []MemberModel `json:"members,omitempty"`
+}
+
+func (r ChatModel) DisplayName() (value String, ok bool) {
+	if r.InnerChat.DisplayName == nil {
+		return value, false
+	}
+	return *r.InnerChat.DisplayName, true
 }
 
 func (r ChatModel) RoomNumber() (value Int, ok bool) {
@@ -5662,10 +5669,10 @@ type chatQuery struct {
 	// @required
 	ID chatQueryIDString
 
-	// Title
+	// DisplayName
 	//
-	// @required
-	Title chatQueryTitleString
+	// @optional
+	DisplayName chatQueryDisplayNameString
 
 	// RoomNumber
 	//
@@ -6105,34 +6112,50 @@ func (r chatQueryIDString) Field() chatPrismaFields {
 }
 
 // base struct
-type chatQueryTitleString struct{}
+type chatQueryDisplayNameString struct{}
 
-// Set the required value of Title
-func (r chatQueryTitleString) Set(value string) chatWithPrismaTitleSetParam {
+// Set the optional value of DisplayName
+func (r chatQueryDisplayNameString) Set(value string) chatSetParam {
 
-	return chatWithPrismaTitleSetParam{
+	return chatSetParam{
 		data: builder.Field{
-			Name:  "title",
+			Name:  "displayName",
 			Value: value,
 		},
 	}
 
 }
 
-// Set the optional value of Title dynamically
-func (r chatQueryTitleString) SetIfPresent(value *String) chatWithPrismaTitleSetParam {
+// Set the optional value of DisplayName dynamically
+func (r chatQueryDisplayNameString) SetIfPresent(value *String) chatSetParam {
 	if value == nil {
-		return chatWithPrismaTitleSetParam{}
+		return chatSetParam{}
 	}
 
 	return r.Set(*value)
 }
 
-func (r chatQueryTitleString) Equals(value string) chatWithPrismaTitleEqualsParam {
+// Set the optional value of DisplayName dynamically
+func (r chatQueryDisplayNameString) SetOptional(value *String) chatSetParam {
+	if value == nil {
 
-	return chatWithPrismaTitleEqualsParam{
+		var v *string
+		return chatSetParam{
+			data: builder.Field{
+				Name:  "displayName",
+				Value: v,
+			},
+		}
+	}
+
+	return r.Set(*value)
+}
+
+func (r chatQueryDisplayNameString) Equals(value string) chatWithPrismaDisplayNameEqualsParam {
+
+	return chatWithPrismaDisplayNameEqualsParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "equals",
@@ -6143,35 +6166,64 @@ func (r chatQueryTitleString) Equals(value string) chatWithPrismaTitleEqualsPara
 	}
 }
 
-func (r chatQueryTitleString) EqualsIfPresent(value *string) chatWithPrismaTitleEqualsParam {
+func (r chatQueryDisplayNameString) EqualsIfPresent(value *string) chatWithPrismaDisplayNameEqualsParam {
 	if value == nil {
-		return chatWithPrismaTitleEqualsParam{}
+		return chatWithPrismaDisplayNameEqualsParam{}
 	}
 	return r.Equals(*value)
 }
 
-func (r chatQueryTitleString) Order(direction SortOrder) chatDefaultParam {
+func (r chatQueryDisplayNameString) EqualsOptional(value *String) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name:  "title",
+			Name: "displayName",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryDisplayNameString) IsNull() chatDefaultParam {
+	var str *string = nil
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "displayName",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: str,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryDisplayNameString) Order(direction SortOrder) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name:  "displayName",
 			Value: direction,
 		},
 	}
 }
 
-func (r chatQueryTitleString) Cursor(cursor string) chatCursorParam {
+func (r chatQueryDisplayNameString) Cursor(cursor string) chatCursorParam {
 	return chatCursorParam{
 		data: builder.Field{
-			Name:  "title",
+			Name:  "displayName",
 			Value: cursor,
 		},
 	}
 }
 
-func (r chatQueryTitleString) In(value []string) chatDefaultParam {
+func (r chatQueryDisplayNameString) In(value []string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "in",
@@ -6182,17 +6234,17 @@ func (r chatQueryTitleString) In(value []string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) InIfPresent(value []string) chatDefaultParam {
+func (r chatQueryDisplayNameString) InIfPresent(value []string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.In(value)
 }
 
-func (r chatQueryTitleString) NotIn(value []string) chatDefaultParam {
+func (r chatQueryDisplayNameString) NotIn(value []string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "notIn",
@@ -6203,17 +6255,17 @@ func (r chatQueryTitleString) NotIn(value []string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) NotInIfPresent(value []string) chatDefaultParam {
+func (r chatQueryDisplayNameString) NotInIfPresent(value []string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.NotIn(value)
 }
 
-func (r chatQueryTitleString) Lt(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Lt(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "lt",
@@ -6224,17 +6276,17 @@ func (r chatQueryTitleString) Lt(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) LtIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) LtIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Lt(*value)
 }
 
-func (r chatQueryTitleString) Lte(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Lte(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "lte",
@@ -6245,17 +6297,17 @@ func (r chatQueryTitleString) Lte(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) LteIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) LteIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Lte(*value)
 }
 
-func (r chatQueryTitleString) Gt(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Gt(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "gt",
@@ -6266,17 +6318,17 @@ func (r chatQueryTitleString) Gt(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) GtIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) GtIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Gt(*value)
 }
 
-func (r chatQueryTitleString) Gte(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Gte(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "gte",
@@ -6287,17 +6339,17 @@ func (r chatQueryTitleString) Gte(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) GteIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) GteIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Gte(*value)
 }
 
-func (r chatQueryTitleString) Contains(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Contains(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "contains",
@@ -6308,17 +6360,17 @@ func (r chatQueryTitleString) Contains(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) ContainsIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) ContainsIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Contains(*value)
 }
 
-func (r chatQueryTitleString) StartsWith(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) StartsWith(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "startsWith",
@@ -6329,17 +6381,17 @@ func (r chatQueryTitleString) StartsWith(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) StartsWithIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) StartsWithIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.StartsWith(*value)
 }
 
-func (r chatQueryTitleString) EndsWith(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) EndsWith(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "endsWith",
@@ -6350,17 +6402,17 @@ func (r chatQueryTitleString) EndsWith(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) EndsWithIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) EndsWithIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.EndsWith(*value)
 }
 
-func (r chatQueryTitleString) Mode(value QueryMode) chatDefaultParam {
+func (r chatQueryDisplayNameString) Mode(value QueryMode) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "mode",
@@ -6371,17 +6423,17 @@ func (r chatQueryTitleString) Mode(value QueryMode) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) ModeIfPresent(value *QueryMode) chatDefaultParam {
+func (r chatQueryDisplayNameString) ModeIfPresent(value *QueryMode) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Mode(*value)
 }
 
-func (r chatQueryTitleString) Not(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Not(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "not",
@@ -6392,7 +6444,7 @@ func (r chatQueryTitleString) Not(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) NotIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) NotIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
@@ -6401,10 +6453,10 @@ func (r chatQueryTitleString) NotIfPresent(value *string) chatDefaultParam {
 
 // deprecated: Use StartsWith instead.
 
-func (r chatQueryTitleString) HasPrefix(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) HasPrefix(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "starts_with",
@@ -6416,7 +6468,7 @@ func (r chatQueryTitleString) HasPrefix(value string) chatDefaultParam {
 }
 
 // deprecated: Use StartsWithIfPresent instead.
-func (r chatQueryTitleString) HasPrefixIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) HasPrefixIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
@@ -6425,10 +6477,10 @@ func (r chatQueryTitleString) HasPrefixIfPresent(value *string) chatDefaultParam
 
 // deprecated: Use EndsWith instead.
 
-func (r chatQueryTitleString) HasSuffix(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) HasSuffix(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "ends_with",
@@ -6440,15 +6492,15 @@ func (r chatQueryTitleString) HasSuffix(value string) chatDefaultParam {
 }
 
 // deprecated: Use EndsWithIfPresent instead.
-func (r chatQueryTitleString) HasSuffixIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) HasSuffixIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.HasSuffix(*value)
 }
 
-func (r chatQueryTitleString) Field() chatPrismaFields {
-	return chatFieldTitle
+func (r chatQueryDisplayNameString) Field() chatPrismaFields {
+	return chatFieldDisplayName
 }
 
 // base struct
@@ -20213,7 +20265,7 @@ type chatActions struct {
 
 var chatOutput = []builder.Output{
 	{Name: "id"},
-	{Name: "title"},
+	{Name: "displayName"},
 	{Name: "roomNumber"},
 	{Name: "coverCharge"},
 	{Name: "type"},
@@ -20465,83 +20517,83 @@ func (p chatWithPrismaIDEqualsUniqueParam) idField()   {}
 func (chatWithPrismaIDEqualsUniqueParam) unique() {}
 func (chatWithPrismaIDEqualsUniqueParam) equals() {}
 
-type ChatWithPrismaTitleEqualsSetParam interface {
+type ChatWithPrismaDisplayNameEqualsSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	equals()
 	chatModel()
-	titleField()
+	displayNameField()
 }
 
-type ChatWithPrismaTitleSetParam interface {
+type ChatWithPrismaDisplayNameSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	chatModel()
-	titleField()
+	displayNameField()
 }
 
-type chatWithPrismaTitleSetParam struct {
+type chatWithPrismaDisplayNameSetParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p chatWithPrismaTitleSetParam) field() builder.Field {
+func (p chatWithPrismaDisplayNameSetParam) field() builder.Field {
 	return p.data
 }
 
-func (p chatWithPrismaTitleSetParam) getQuery() builder.Query {
+func (p chatWithPrismaDisplayNameSetParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p chatWithPrismaTitleSetParam) chatModel() {}
+func (p chatWithPrismaDisplayNameSetParam) chatModel() {}
 
-func (p chatWithPrismaTitleSetParam) titleField() {}
+func (p chatWithPrismaDisplayNameSetParam) displayNameField() {}
 
-type ChatWithPrismaTitleWhereParam interface {
+type ChatWithPrismaDisplayNameWhereParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	chatModel()
-	titleField()
+	displayNameField()
 }
 
-type chatWithPrismaTitleEqualsParam struct {
+type chatWithPrismaDisplayNameEqualsParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p chatWithPrismaTitleEqualsParam) field() builder.Field {
+func (p chatWithPrismaDisplayNameEqualsParam) field() builder.Field {
 	return p.data
 }
 
-func (p chatWithPrismaTitleEqualsParam) getQuery() builder.Query {
+func (p chatWithPrismaDisplayNameEqualsParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p chatWithPrismaTitleEqualsParam) chatModel() {}
+func (p chatWithPrismaDisplayNameEqualsParam) chatModel() {}
 
-func (p chatWithPrismaTitleEqualsParam) titleField() {}
+func (p chatWithPrismaDisplayNameEqualsParam) displayNameField() {}
 
-func (chatWithPrismaTitleSetParam) settable()  {}
-func (chatWithPrismaTitleEqualsParam) equals() {}
+func (chatWithPrismaDisplayNameSetParam) settable()  {}
+func (chatWithPrismaDisplayNameEqualsParam) equals() {}
 
-type chatWithPrismaTitleEqualsUniqueParam struct {
+type chatWithPrismaDisplayNameEqualsUniqueParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p chatWithPrismaTitleEqualsUniqueParam) field() builder.Field {
+func (p chatWithPrismaDisplayNameEqualsUniqueParam) field() builder.Field {
 	return p.data
 }
 
-func (p chatWithPrismaTitleEqualsUniqueParam) getQuery() builder.Query {
+func (p chatWithPrismaDisplayNameEqualsUniqueParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p chatWithPrismaTitleEqualsUniqueParam) chatModel()  {}
-func (p chatWithPrismaTitleEqualsUniqueParam) titleField() {}
+func (p chatWithPrismaDisplayNameEqualsUniqueParam) chatModel()        {}
+func (p chatWithPrismaDisplayNameEqualsUniqueParam) displayNameField() {}
 
-func (chatWithPrismaTitleEqualsUniqueParam) unique() {}
-func (chatWithPrismaTitleEqualsUniqueParam) equals() {}
+func (chatWithPrismaDisplayNameEqualsUniqueParam) unique() {}
+func (chatWithPrismaDisplayNameEqualsUniqueParam) equals() {}
 
 type ChatWithPrismaRoomNumberEqualsSetParam interface {
 	field() builder.Field
@@ -24516,7 +24568,6 @@ func (r intentCreateOne) Tx() IntentUniqueTxResult {
 // Creates a single chat.
 func (r chatActions) CreateOne(
 	_id ChatWithPrismaIDSetParam,
-	_title ChatWithPrismaTitleSetParam,
 
 	optional ...ChatSetParam,
 ) chatCreateOne {
@@ -24532,7 +24583,6 @@ func (r chatActions) CreateOne(
 	var fields []builder.Field
 
 	fields = append(fields, _id.field())
-	fields = append(fields, _title.field())
 
 	for _, q := range optional {
 		fields = append(fields, q.field())
@@ -33048,7 +33098,6 @@ func (r chatActions) UpsertOne(
 func (r chatUpsertOne) Create(
 
 	_id ChatWithPrismaIDSetParam,
-	_title ChatWithPrismaTitleSetParam,
 
 	optional ...ChatSetParam,
 ) chatUpsertOne {
@@ -33057,7 +33106,6 @@ func (r chatUpsertOne) Create(
 
 	var fields []builder.Field
 	fields = append(fields, _id.field())
-	fields = append(fields, _title.field())
 
 	for _, q := range optional {
 		fields = append(fields, q.field())
