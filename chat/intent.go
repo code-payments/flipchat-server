@@ -125,6 +125,10 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 
 	chat, err := h.chats.GetChatMetadata(ctx, joinChatMetadata.ChatId)
 	if err == ErrChatNotFound {
+		return &intent.ValidationResult{
+			StatusCode:       intent.INVALID,
+			ErrorDescription: "chat not found",
+		}, nil
 	} else if err != nil {
 		return nil, err
 	}
