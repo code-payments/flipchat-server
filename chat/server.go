@@ -186,11 +186,28 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 					MemberUpdate: clonedEvent.LegacyMemberUpdate,
 				}
 
-				// todo: this section needs tests
+				// Inject chat metadata updates specific to this user for a latest message
+				//
+				// todo: this needs testing
 				if update.LastMessage != nil {
-					// Notably, to propagate unread counts after sending a message
-					//
-					// todo: Should we have updates for a limited view of a chat so we don't need to fetch entire metadata?
+					numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, update.ChatId, userID)
+					if err == nil {
+						// Assumes the full metadata update is only sent on flush
+						update.MetadataUpdates = append(
+							update.MetadataUpdates,
+							&chatpb.StreamChatEventsResponse_MetadataUpdate{
+								Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_UnreadCountChanged_{
+									UnreadCountChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_UnreadCountChanged{
+										NumUnread:     numUnread,
+										HasMoreUnread: hasMoreUnread,
+									},
+								},
+							},
+						)
+					} else {
+						log.Warn("Failed to get unread count", zap.Error(err))
+					}
+
 					md, err := s.getMetadata(ctx, e.ChatID, userID)
 					if err == nil {
 						update.Metadata = md
@@ -199,11 +216,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 					}
 				}
 
-				if fullRefresh := update.GetMemberUpdate().GetFullRefresh(); fullRefresh != nil {
-					for _, m := range fullRefresh.Members {
-						m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
-					}
-				}
+				// Update all instances of IsSelf for relevant member updates
 				for _, memberUpdate := range update.MemberUpdates {
 					switch typed := memberUpdate.Kind.(type) {
 					case *chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_:
@@ -214,6 +227,11 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 						typed.IndividualRefresh.Member.IsSelf = bytes.Equal(typed.IndividualRefresh.Member.UserId.Value, userID.Value)
 					case *chatpb.StreamChatEventsResponse_MemberUpdate_Joined_:
 						typed.Joined.Member.IsSelf = bytes.Equal(typed.Joined.Member.UserId.Value, userID.Value)
+					}
+				}
+				if fullRefresh := update.GetMemberUpdate().GetFullRefresh(); fullRefresh != nil {
+					for _, m := range fullRefresh.Members {
+						m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
 					}
 				}
 
@@ -752,6 +770,19 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 		log.Warn("Failed to send announcement", zap.Error(err))
 	}
 
+	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+		{
+			Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged_{
+				DisplayNameChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged{
+					NewDisplayName: req.DisplayName,
+				},
+			},
+		},
+	}})
+	if err != nil {
+		s.log.Warn("Failed to notify display name changed", zap.Error(err))
+	}
+
 	return &chatpb.SetDisplayNameResponse{}, nil
 }
 
@@ -794,6 +825,19 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 		messaging.NewCoverChangedAnnouncementContentBuilder(req.CoverCharge.Quarks),
 	); err != nil {
 		log.Warn("Failed to send announcement", zap.Error(err))
+	}
+
+	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+		{
+			Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged_{
+				CoverChargeChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged{
+					NewCoverCharge: req.CoverCharge,
+				},
+			},
+		},
+	}})
+	if err != nil {
+		s.log.Warn("Failed to notify cover changed", zap.Error(err))
 	}
 
 	return &chatpb.SetCoverChargeResponse{}, nil
@@ -1000,22 +1044,34 @@ func (s *Server) ReportUser(ctx context.Context, req *chatpb.ReportUserRequest) 
 func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 	clonedEvent := e.Clone()
 
-	members, err := s.chats.GetMembers(context.Background(), chatID)
-	if err != nil {
-		s.log.Warn("Failed to get chat members for notification", zap.Error(err))
-		return
-	}
-
+	// Every new chat message advances the last activity timestamp and is injected
+	// as part of the event
+	//
 	// todo: this section needs tests
 	if clonedEvent.MessageUpdate != nil {
 		err := s.chats.AdvanceLastChatActivity(context.Background(), chatID, clonedEvent.MessageUpdate.Ts.AsTime())
 		if err != nil {
 			s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
-		} else if clonedEvent.LegacyMetadataUpdate != nil {
+		}
+
+		if clonedEvent.LegacyMetadataUpdate != nil {
 			clonedEvent.LegacyMetadataUpdate.LastActivity = clonedEvent.MessageUpdate.Ts
 		}
+		// Assumes the full metadata update is only sent on flush
+		clonedEvent.MetadataUpdates = append(clonedEvent.MetadataUpdates, &chatpb.StreamChatEventsResponse_MetadataUpdate{
+			Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_LastActivityChanged_{
+				LastActivityChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_LastActivityChanged{
+					NewLastActivity: clonedEvent.MessageUpdate.Ts,
+				},
+			},
+		})
 	}
 
+	members, err := s.chats.GetMembers(context.Background(), chatID)
+	if err != nil {
+		s.log.Warn("Failed to get chat members for notification", zap.Error(err))
+		return
+	}
 	for _, member := range members {
 		s.streamsMu.RLock()
 		stream, exists := s.streams[string(member.UserID.Value)]
@@ -1043,29 +1099,13 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 		return md, nil
 	}
 
-	ptrs, err := s.pointers.GetPointers(ctx, chatID, caller)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get caller pointers: %w", err)
-	}
-
-	var rPtr *messagingpb.MessageId
-	for _, ptr := range ptrs {
-		if ptr.Type == messagingpb.Pointer_READ {
-			rPtr = ptr.Value
-			break
-		}
-	}
-
 	// todo: this needs testing
-	unread, err := s.messages.CountUnread(ctx, chatID, caller, rPtr, int64(MaxUnreadCount+1))
+	numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, chatID, caller)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count unread messages: %w", err)
+		return nil, err
 	}
-	md.NumUnread = uint32(unread)
-	if md.NumUnread > MaxUnreadCount {
-		md.NumUnread = uint32(MaxUnreadCount)
-		md.HasMoreUnread = true
-	}
+	md.NumUnread = numUnread
+	md.HasMoreUnread = hasMoreUnread
 
 	// todo: this needs testing
 	isPushEnabled, err := s.chats.IsPushEnabled(ctx, chatID, caller)
@@ -1143,6 +1183,32 @@ func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Membe
 	return nil
 }
 
+// todo: this needs testing
+func (s *Server) getUnreadCount(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId) (uint32, bool, error) {
+	ptrs, err := s.pointers.GetPointers(ctx, chatID, caller)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to get caller pointers: %w", err)
+	}
+
+	var rPtr *messagingpb.MessageId
+	for _, ptr := range ptrs {
+		if ptr.Type == messagingpb.Pointer_READ {
+			rPtr = ptr.Value
+			break
+		}
+	}
+
+	unread, err := s.messages.CountUnread(ctx, chatID, caller, rPtr, int64(MaxUnreadCount+1))
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to count unread messages: %w", err)
+	}
+
+	if uint32(unread) > MaxUnreadCount {
+		return MaxUnreadCount, true, nil
+	}
+	return uint32(unread), false, nil
+}
+
 func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId, ss event.Stream[[]*event.ChatEvent]) {
 	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
 
@@ -1165,7 +1231,16 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		}
 
 		e := &event.ChatEvent{
-			ChatID:               chatID,
+			ChatID: chatID,
+			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+				{
+					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
+						FullRefresh: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh{
+							Metadata: md,
+						},
+					},
+				},
+			},
 			LegacyMetadataUpdate: md,
 		}
 		events = append(events, e)
@@ -1178,11 +1253,14 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		}
 	}
 
-	sorted := event.ByLastActivityTimestamp(events)
-	sort.Sort(sort.Reverse(sorted))
+	sort.Slice(events, func(i, j int) bool {
+		timestampAtI := events[i].MetadataUpdates[0].GetFullRefresh().Metadata.LastActivity.AsTime()
+		timestampAtJ := events[j].MetadataUpdates[0].GetFullRefresh().Metadata.LastActivity.AsTime()
+		return timestampAtI.After(timestampAtJ)
+	})
 
 	var batch []*event.ChatEvent
-	for _, e := range sorted {
+	for _, e := range events {
 		batch = append(batch, e)
 		if len(batch) >= FlushedChatBatchSize {
 			if err = ss.Notify(batch, StreamTimeout); err != nil {

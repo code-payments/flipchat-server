@@ -44,20 +44,6 @@ func (e *ChatEvent) Clone() *ChatEvent {
 	}
 }
 
-type ByLastActivityTimestamp []*ChatEvent
-
-func (a ByLastActivityTimestamp) Len() int      { return len(a) }
-func (a ByLastActivityTimestamp) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a ByLastActivityTimestamp) Less(i, j int) bool {
-	if a[i].LegacyMetadataUpdate == nil {
-		return false
-	}
-	if a[j].LegacyMetadataUpdate == nil {
-		return true
-	}
-	return a[i].LegacyMetadataUpdate.LastActivity.AsTime().Before(a[j].LegacyMetadataUpdate.LastActivity.AsTime())
-}
-
 type Handler[Key, Event any] interface {
 	OnEvent(key Key, e Event)
 }
