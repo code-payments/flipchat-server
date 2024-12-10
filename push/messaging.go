@@ -108,14 +108,14 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	var title, body string
 	switch md.Type {
 	case chatpb.Metadata_GROUP:
-		title = fmt.Sprintf("Room #%d", md.RoomNumber)
+		title = fmt.Sprintf("#%d", md.RoomNumber)
+		if len(md.DisplayName) > 0 {
+			title = fmt.Sprintf("#%d: %s", md.RoomNumber, md.DisplayName)
+		}
 		body = fmt.Sprintf("%s: %s", sender.DisplayName, pushPreview)
 	case chatpb.Metadata_TWO_WAY:
 		title = sender.DisplayName
 		body = pushPreview
-	}
-	if len(md.DisplayName) > 0 {
-		title = md.DisplayName
 	}
 
 	data := map[string]string{
