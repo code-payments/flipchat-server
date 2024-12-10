@@ -159,7 +159,49 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 					},
 				},
 			},
-			expectedTitle:  "Room #2",
+			expectedTitle:  "#2",
+			expectedBody:   "Sender Name: Hello Group",
+			expectedPushes: []*commonpb.UserId{recipient},
+		},
+		{
+			name: "group_chat_with_display_name_text_message",
+			setupChat: func() (*chatpb.Metadata, error) {
+				chatID := model.MustGenerateChatID()
+				md, err := chatStore.CreateChat(ctx, &chatpb.Metadata{
+					ChatId: chatID,
+					Type:   chatpb.Metadata_GROUP,
+				})
+				if err != nil {
+					return nil, err
+				}
+
+				err = chatStore.SetDisplayName(ctx, chatID, "Room Name")
+				if err != nil {
+					return nil, err
+				}
+
+				for _, user := range []*commonpb.UserId{sender, recipient} {
+					err = chatStore.AddMember(ctx, chatID, chat.Member{UserID: user})
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				return md, nil
+			},
+			message: &messagingpb.Message{
+				SenderId: sender,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Text{
+							Text: &messagingpb.TextContent{
+								Text: "Hello Group",
+							},
+						},
+					},
+				},
+			},
+			expectedTitle:  "#3: Room Name",
 			expectedBody:   "Sender Name: Hello Group",
 			expectedPushes: []*commonpb.UserId{recipient},
 		},
