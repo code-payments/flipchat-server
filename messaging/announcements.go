@@ -57,10 +57,10 @@ func NewUserJoinedChatAnnouncementContentBuilder(ctx context.Context, profiles p
 	}
 }
 
-func NewRoomDisplayNameChangedAnnouncementContentBuilder(displayName string) AnnouncementContentBuilder {
+func NewRoomDisplayNameChangedAnnouncementContentBuilder(roomNumber uint64, displayName string) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: announcementPrinter.Sprintf("Room name changed to %s", displayName),
+			KeyOrText: announcementPrinter.Sprintf("Room name changed to \"#%d: %s\"", roomNumber, displayName),
 		}, nil
 	}
 }

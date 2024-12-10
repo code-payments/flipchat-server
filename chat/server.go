@@ -694,6 +694,9 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 		return nil, status.Errorf(codes.Internal, "failed to get chat")
 	}
 
+	if md.RoomNumber == 0 {
+		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_DENIED}, nil
+	}
 	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
 		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_DENIED}, nil
 	}
@@ -717,7 +720,7 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 		ctx,
 		s.messenger,
 		req.ChatId,
-		messaging.NewRoomDisplayNameChangedAnnouncementContentBuilder(req.DisplayName),
+		messaging.NewRoomDisplayNameChangedAnnouncementContentBuilder(md.RoomNumber, req.DisplayName),
 	); err != nil {
 		log.Warn("Failed to send announcement", zap.Error(err))
 	}
