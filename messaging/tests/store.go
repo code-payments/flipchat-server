@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/proto"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
@@ -79,18 +79,33 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 							},
 						},
 					},
-					Ts: timestamppb.Now(),
 				}
 
 				// Ensure time ordering is progressing, otherwise ms collisions is
 				// non-deterministic (well, won't be post sort, but this way we don't
 				// have to sort)
 				time.Sleep(time.Millisecond)
-				require.NoError(t, s.PutMessage(ctx, chatID, msg))
-				require.NotNil(t, msg.MessageId)
 
-				messages = append(messages, msg)
-				reversedMessages = append([]*messagingpb.Message{msg}, reversedMessages...)
+				// Randomly use PutMessage or PutMessageLegacy
+				var fn func(context.Context, *commonpb.ChatId, *messagingpb.Message) (*messagingpb.Message, error)
+				if i%2 == 0 {
+					fn = s.PutMessage
+				} else {
+					fn = s.PutMessageLegacy
+				}
+
+				beforeMsg := proto.Clone(msg).(*messagingpb.Message)
+				afterMsg, err := fn(ctx, chatID, beforeMsg)
+
+				require.NoError(t, err)
+				require.NotNil(t, afterMsg.MessageId)
+				require.WithinDuration(t, time.Now(), afterMsg.Ts.AsTime(), time.Second)
+
+				// Ensure there are no side effects (old behavior had side effects)
+				require.NoError(t, protoutil.ProtoEqualError(beforeMsg, msg))
+
+				messages = append(messages, afterMsg)
+				reversedMessages = append([]*messagingpb.Message{afterMsg}, reversedMessages...)
 			}
 		}
 	})

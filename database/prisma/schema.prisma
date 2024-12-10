@@ -122,7 +122,9 @@ model Message {
   chatId   String
   senderId String?
 
-  content Bytes // protobuf repeated "Content" message (min: 1, max: 2)
+  version     Int   @default(0) @db.SmallInt // MessageVersion enum: Message: 0, Content: 1
+  contentType Int   @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, LocalizedAnnouncement: 2, NaclBoxEncryptedContent: 4, ReactionContent: 5, ReplyContent: 6
+  content     Bytes // protobuf serialized opaque data
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
