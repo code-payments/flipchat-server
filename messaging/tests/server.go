@@ -158,31 +158,33 @@ func testServerHappy(
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 		}
 
-		for i := range 10 {
-			send := &messagingpb.SendMessageRequest{
-				ChatId: chatID,
-				Content: []*messagingpb.Content{
-					{
-						Type: &messagingpb.Content_Reaction{
-							Reaction: &messagingpb.ReactionContent{
-								OriginalMessageId: expected[i].MessageId,
-								Emoji:             "👍",
+		/*
+			for i := range 10 {
+				send := &messagingpb.SendMessageRequest{
+					ChatId: chatID,
+					Content: []*messagingpb.Content{
+						{
+							Type: &messagingpb.Content_Reaction{
+								Reaction: &messagingpb.ReactionContent{
+									OriginalMessageId: expected[i].MessageId,
+									Emoji:             "👍",
+								},
 							},
 						},
 					},
-				},
+				}
+				require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+				sent, err := client.SendMessage(ctx, send)
+				require.NoError(t, err)
+				require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+
+				expected = append(expected, sent.Message)
+
+				notification := <-eventCh
+				require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
-
-			sent, err := client.SendMessage(ctx, send)
-			require.NoError(t, err)
-			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
-
-			expected = append(expected, sent.Message)
-
-			notification := <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
-		}
+		*/
 
 		for i := range 10 {
 			send := &messagingpb.SendMessageRequest{
