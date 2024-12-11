@@ -557,7 +557,7 @@ func testServer(
 		time.Sleep(200 * time.Millisecond)
 
 		verifyExpectedMembers := func(update *chatpb.StreamChatEventsResponse_MemberUpdate, expected []chat.Member) {
-			refresh := update.GetRefresh()
+			refresh := update.GetFullRefresh()
 			require.NotNil(t, refresh)
 
 			slices.SortFunc(refresh.Members, func(a, b *chatpb.Member) int {
