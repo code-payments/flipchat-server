@@ -322,8 +322,8 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 	var reference *messagingpb.MessageId
 	switch typed := req.Content[0].Type.(type) {
 	case *messagingpb.Content_Text:
-	case *messagingpb.Content_Reaction:
-		reference = typed.Reaction.OriginalMessageId
+	//case *messagingpb.Content_Reaction:
+	//	reference = typed.Reaction.OriginalMessageId
 	case *messagingpb.Content_Reply:
 		reference = typed.Reply.OriginalMessageId
 	default:
