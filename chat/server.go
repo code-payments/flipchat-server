@@ -324,8 +324,6 @@ func (s *Server) GetChat(ctx context.Context, req *chatpb.GetChatRequest) (*chat
 		return nil, err
 	}
 
-	// TODO: Auth
-
 	var chatID *commonpb.ChatId
 	switch t := req.Identifier.(type) {
 	case *chatpb.GetChatRequest_ChatId:
@@ -574,7 +572,6 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		}
 	}
 
-	// TODO: Auth
 	// TODO: Return if no-op
 
 	newMember := Member{UserID: userID}
@@ -713,6 +710,10 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_DENIED}, nil
 	}
 
+	if md.DisplayName == req.DisplayName {
+		return &chatpb.SetDisplayNameResponse{}, nil
+	}
+
 	// todo: Add AI checks against display name, and return a set of alternate
 	//       suggestions if the provided value is denied. For now, gate the RPC
 	//       to staff users
@@ -766,6 +767,10 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_CANT_SET}, nil
 	}
 
+	if md.CoverCharge.Quarks == req.CoverCharge.Quarks {
+		return &chatpb.SetCoverChargeResponse{}, nil
+	}
+
 	err = s.chats.SetCoverCharge(ctx, req.ChatId, req.CoverCharge)
 	if err != nil {
 		log.Warn("Failed to set cover charge", zap.Error(err))
@@ -815,7 +820,14 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 			return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
 		}
 
-		// todo: Return if no-op
+		isMember, err := s.chats.IsMember(ctx, req.ChatId, req.UserId)
+		if err != nil {
+			log.Warn("Failed to get chat membership status", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to get chat membership status")
+		}
+		if !isMember {
+			return &chatpb.RemoveUserResponse{}, nil
+		}
 
 		if err = s.chats.RemoveMember(ctx, req.ChatId, req.UserId); err != nil {
 			log.Warn("Failed to remove member", zap.Error(err))
@@ -883,7 +895,16 @@ func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*ch
 		return &chatpb.MuteUserResponse{Result: chatpb.MuteUserResponse_DENIED}, nil
 	}
 
-	// todo: Return if no-op
+	memberToMute, err := s.chats.GetMember(ctx, req.ChatId, req.UserId)
+	if err == ErrMemberNotFound {
+		return &chatpb.MuteUserResponse{Result: chatpb.MuteUserResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat member", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat member")
+	}
+	if memberToMute.IsMuted {
+		return &chatpb.MuteUserResponse{}, nil
+	}
 
 	if err = s.chats.SetMuteState(ctx, req.ChatId, req.UserId, true); err != nil {
 		log.Warn("Failed to mute chat member", zap.Error(err))
@@ -970,7 +991,7 @@ func (s *Server) UnmuteChat(ctx context.Context, req *chatpb.UnmuteChatRequest) 
 	}
 
 	if err = s.chats.SetPushState(ctx, req.ChatId, userID, true); err != nil {
-		log.Warn("Failed to mute chat", zap.Error(err))
+		log.Warn("Failed to unmute chat", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to unmute chat")
 	}
 
