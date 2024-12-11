@@ -30,6 +30,7 @@ import (
 	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
+	moderation_memory "github.com/code-payments/flipchat-server/moderation/memory"
 	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
@@ -94,6 +95,7 @@ func testServer(
 		profiles,
 		codeData,
 		messaging.NewNoopMessenger(), // todo: add tests for announcements
+		moderation_memory.NewClient(false),
 		bus,
 	)
 
@@ -434,8 +436,6 @@ func testServer(
 		})
 
 		t.Run("Set display name", func(t *testing.T) {
-			t.Skip("re-enable when staff flag requirement is removed")
-
 			setDisplayName := &chatpb.SetDisplayNameRequest{
 				ChatId:      created.Chat.ChatId,
 				DisplayName: "My Room",

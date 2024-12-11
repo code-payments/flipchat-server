@@ -31,6 +31,7 @@ import (
 	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/moderation"
 	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/query"
@@ -65,6 +66,8 @@ type Server struct {
 
 	messenger messaging.Messenger
 
+	moderationClient moderation.ModerationClient
+
 	streamsMu sync.RWMutex
 	streams   map[string]event.Stream[[]*event.ChatEvent]
 
@@ -82,6 +85,7 @@ func NewServer(
 	profiles profile.Store,
 	codeData codedata.Provider,
 	messenger messaging.Messenger,
+	moderationClient moderation.ModerationClient,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
 ) *Server {
 	s := &Server{
@@ -98,6 +102,8 @@ func NewServer(
 		codeData: codeData,
 
 		messenger: messenger,
+
+		moderationClient: moderationClient,
 
 		streams: make(map[string]event.Stream[[]*event.ChatEvent]),
 	}
@@ -792,13 +798,13 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 		return &chatpb.SetDisplayNameResponse{}, nil
 	}
 
-	// todo: Add AI checks against display name, and return a set of alternate
-	//       suggestions if the provided value is denied. For now, gate the RPC
-	//       to staff users
-	//
-	isStaff, _ := s.accounts.IsStaff(ctx, userID)
-	if !isStaff {
-		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_DENIED}, nil
+	// todo: this needs tests
+	moderationResult, err := s.moderationClient.ClassifyText(req.DisplayName)
+	if err != nil {
+		log.Warn("Failed to moderate display name", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to moderate display name")
+	} else if moderationResult.Flagged {
+		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_CANT_SET}, nil
 	}
 
 	err = s.chats.SetDisplayName(ctx, req.ChatId, req.DisplayName)
