@@ -98,17 +98,18 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 		return nil
 	}
 
-	switch msg.Content[0].Type.(type) {
+	var pushPreview string
+	switch typed := msg.Content[0].Type.(type) {
 	case *messagingpb.Content_Text:
+		pushPreview = typed.Text.Text
+	case *messagingpb.Content_LocalizedAnnouncement:
+		// todo: this needs tests
+		pushPreview = typed.LocalizedAnnouncement.KeyOrText
+	case *messagingpb.Content_Reply:
+		// todo: this needs tests
+		pushPreview = typed.Reply.ReplyText
 	default:
 		return nil
-	}
-
-	var pushPreview string
-	if len(msg.Content) > 0 && msg.Content[0].GetText().GetText() != "" {
-		pushPreview = msg.Content[0].GetText().GetText()
-	} else {
-		pushPreview = "Sent a message"
 	}
 
 	var title, body string
