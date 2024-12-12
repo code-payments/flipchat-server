@@ -368,6 +368,7 @@ func (s *Server) Send(ctx context.Context, chatID *commonpb.ChatId, msg *messagi
 	created, err := s.messages.PutMessage(ctx, chatID, msg)
 	if err != nil {
 		s.log.Error("Failed to put chat message", zap.Error(err))
+		return nil, err
 	}
 
 	if err := s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MessageUpdate: created}); err != nil {
