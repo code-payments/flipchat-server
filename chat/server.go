@@ -193,8 +193,6 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				}
 
 				// Inject chat metadata updates specific to this user for a latest message
-				//
-				// todo: this needs testing
 				if update.LastMessage != nil {
 					numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, update.ChatId, userID)
 					if err == nil {
@@ -1135,8 +1133,6 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 
 	// Every new chat message advances the last activity timestamp and is injected
 	// as part of the event
-	//
-	// todo: this section needs tests
 	if clonedEvent.MessageUpdate != nil {
 		err := s.chats.AdvanceLastChatActivity(context.Background(), chatID, clonedEvent.MessageUpdate.Ts.AsTime())
 		if err != nil {
@@ -1188,7 +1184,6 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 		return md, nil
 	}
 
-	// todo: this needs testing
 	numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, chatID, caller)
 	if err != nil {
 		return nil, err
@@ -1272,7 +1267,6 @@ func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Membe
 	return nil
 }
 
-// todo: this needs testing
 func (s *Server) getUnreadCount(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId) (uint32, bool, error) {
 	ptrs, err := s.pointers.GetPointers(ctx, chatID, caller)
 	if err != nil {
