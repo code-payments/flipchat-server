@@ -7,10 +7,11 @@ import (
 	"slices"
 	"time"
 
-	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
 	"github.com/code-payments/flipchat-server/chat"
 	pg "github.com/code-payments/flipchat-server/database/postgres"
@@ -80,7 +81,11 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		DisplayName: name,
 		RoomNumber:  room,
 
-		NumUnread: 0, // not stored in the DB on this model
+		IsPushEnabled:  false, // not stored in the DB on this model
+		CanDisablePush: false, // not stored in the DB on this model
+
+		NumUnread:     0,     // not stored in the DB on this model
+		HasMoreUnread: false, // not stored in the DB on this model
 
 		CoverCharge: coverCharge,
 
@@ -134,8 +139,52 @@ func (s *store) GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*
 	return fromModel(res)
 }
 
-func (s *store) GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
+func (s *store) GetChatMetadataBatched(ctx context.Context, chatIDs ...*commonpb.ChatId) ([]*chatpb.Metadata, error) {
+	encodedChatIDs := make([]string, len(chatIDs))
+	for i, chatID := range chatIDs {
+		encodedChatIDs[i] = pg.Encode(chatID.Value)
+	}
 
+	// Find the rooms
+	results, err := s.client.Chat.FindMany(
+		db.Chat.ID.In(encodedChatIDs),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return nil, chat.ErrChatNotFound
+	} else if err != nil {
+		return nil, err
+	}
+
+	if len(results) != len(chatIDs) {
+		return nil, chat.ErrChatNotFound
+	}
+
+	metadata := make([]*chatpb.Metadata, len(chatIDs))
+	for i, res := range results {
+		// Find the owner (host), currently assumed to only be one
+		if res.CreatedBy != "" {
+			decodedOwnerID, err := pg.Decode(res.CreatedBy)
+			if err != nil {
+				return nil, err
+			}
+
+			metadata[i], err = fromModelWithOwner(&res, &commonpb.UserId{Value: decodedOwnerID})
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		metadata[i], err = fromModel(&res)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return metadata, nil
+}
+
+func (s *store) GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
 	encodedUserID := pg.Encode(userID.Value)
 
 	res, err := s.client.Member.FindMany(

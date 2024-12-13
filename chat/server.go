@@ -340,15 +340,10 @@ func (s *Server) GetChats(ctx context.Context, req *chatpb.GetChatsRequest) (*ch
 		return nil, status.Errorf(codes.Internal, "failed to get chats")
 	}
 
-	metadata := make([]*chatpb.Metadata, 0, len(chatIDs))
-	for _, chatID := range chatIDs {
-		md, err := s.getMetadata(ctx, chatID, userID)
-		if err != nil {
-			log.Warn("Failed to get metadata", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to get metadata")
-		}
-
-		metadata = append(metadata, md)
+	metadata, err := s.getMetadataBatched(ctx, chatIDs, userID)
+	if err != nil {
+		log.Warn("Failed to get metadata", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get metadata")
 	}
 
 	return &chatpb.GetChatsResponse{
@@ -1201,6 +1196,7 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 	}
 }
 
+// todo: duplicated code with getMetadataBatched
 func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId) (*chatpb.Metadata, error) {
 	md, err := s.chats.GetChatMetadata(ctx, chatID)
 	if err != nil {
@@ -1232,6 +1228,44 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 	md.IsPushEnabled = isPushEnabled
 
 	return md, nil
+}
+
+// todo: duplicated code with getMetadata
+func (s *Server) getMetadataBatched(ctx context.Context, chatIDs []*commonpb.ChatId, caller *commonpb.UserId) ([]*chatpb.Metadata, error) {
+	metadata, err := s.chats.GetChatMetadataBatched(ctx, chatIDs...)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, md := range metadata {
+		md.CanDisablePush = true
+	}
+
+	// If the caller is not specified, _or_ the caller isn't a member, we don't need to fill out
+	// caller specific fields.
+	if caller == nil {
+		return metadata, nil
+	}
+
+	for _, md := range metadata {
+		numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, md.ChatId, caller)
+		if err != nil {
+			return nil, err
+		}
+		md.NumUnread = numUnread
+		md.HasMoreUnread = hasMoreUnread
+
+		// todo: this needs testing
+		isPushEnabled, err := s.chats.IsPushEnabled(ctx, md.ChatId, caller)
+		if err == ErrMemberNotFound {
+			isPushEnabled = true
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to get push state: %w", err)
+		}
+		md.IsPushEnabled = isPushEnabled
+	}
+
+	return metadata, nil
 }
 
 func (s *Server) getMetadataWithMembers(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId) (*chatpb.Metadata, []*chatpb.Member, error) {
@@ -1336,16 +1370,16 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		return
 	}
 
-	var events []*event.ChatEvent
-	for _, chatID := range chatIDs {
-		md, err := s.getMetadata(ctx, chatID, userID)
-		if err != nil {
-			log.Warn("Failed to get metadata for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
-			return
-		}
+	metadata, err := s.getMetadataBatched(ctx, chatIDs, userID)
+	if err != nil {
+		log.Warn("Failed to get metadata for chats (stream flush)", zap.Error(err))
+		return
+	}
 
+	events := make([]*event.ChatEvent, len(metadata))
+	for i, md := range metadata {
 		e := &event.ChatEvent{
-			ChatID: chatID,
+			ChatID: md.ChatId,
 			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
 				{
 					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
@@ -1357,11 +1391,11 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 			},
 			LegacyMetadataUpdate: md,
 		}
-		events = append(events, e)
+		events[i] = e
 
 		messages, err := s.messages.GetMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
 		if err != nil {
-			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err), zap.String("chat_id", base64.StdEncoding.EncodeToString(e.ChatID.Value)))
+			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err))
 		} else if len(messages) > 0 {
 			e.MessageUpdate = messages[len(messages)-1]
 		}
