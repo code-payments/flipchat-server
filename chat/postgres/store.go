@@ -173,11 +173,11 @@ func (s *store) GetChatMetadataBatched(ctx context.Context, chatIDs ...*commonpb
 			if err != nil {
 				return nil, err
 			}
-		}
-
-		metadata[i], err = fromModel(&res)
-		if err != nil {
-			return nil, err
+		} else {
+			metadata[i], err = fromModel(&res)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
