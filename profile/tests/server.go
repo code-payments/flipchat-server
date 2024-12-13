@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/model"
 
 	"github.com/code-payments/flipchat-server/auth"
@@ -19,19 +20,19 @@ import (
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
-func RunServerTests(t *testing.T, s profile.Store, teardown func()) {
-	for _, tf := range []func(t *testing.T, s profile.Store){
+func RunServerTests(t *testing.T, accounts account.Store, profiles profile.Store, teardown func()) {
+	for _, tf := range []func(t *testing.T, accounts account.Store, profiles profile.Store){
 		testServer,
 	} {
-		tf(t, s)
+		tf(t, accounts, profiles)
 		teardown()
 	}
 }
 
-func testServer(t *testing.T, store profile.Store) {
-	authz := auth.NewStaticAuthorizer()
+func testServer(t *testing.T, accounts account.Store, profiles profile.Store) {
+	authz := account.NewAuthorizer(zap.Must(zap.NewDevelopment()), accounts, auth.NewKeyPairAuthenticator())
 
-	serv := profile.NewServer(zap.Must(zap.NewDevelopment()), store, authz)
+	serv := profile.NewServer(zap.Must(zap.NewDevelopment()), accounts, profiles, authz)
 	cc := testutil.RunGRPCServer(t, testutil.WithService(func(s *grpc.Server) {
 		profilepb.RegisterProfileServer(s, serv)
 	}))
@@ -56,8 +57,10 @@ func testServer(t *testing.T, store profile.Store) {
 		require.Equal(t, codes.PermissionDenied, status.Code(err))
 	})
 
-	t.Run("Allowed", func(t *testing.T) {
-		authz.Add(userID, keyPair)
+	t.Run("Registered user", func(t *testing.T) {
+		_, err := accounts.Bind(context.Background(), userID, keyPair.Proto())
+		require.NoError(t, err)
+		require.NoError(t, accounts.SetRegistrationFlag(context.Background(), userID, true))
 
 		// Binding of a user isn't sufficient, a profile must be set!
 		get, err := client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
@@ -79,5 +82,28 @@ func testServer(t *testing.T, store profile.Store) {
 		})
 		require.NoError(t, err)
 		require.NoError(t, protoutil.ProtoEqualError(&profilepb.UserProfile{DisplayName: "my name"}, get.UserProfile))
+	})
+
+	t.Run("Unregistered user", func(t *testing.T) {
+		userID2 := model.MustGenerateUserID()
+		keypair2 := model.MustGenerateKeyPair()
+
+		_, err := accounts.Bind(context.Background(), userID2, keypair2.Proto())
+		require.NoError(t, err)
+		require.NoError(t, accounts.SetRegistrationFlag(context.Background(), userID, false))
+
+		req := &profilepb.SetDisplayNameRequest{
+			DisplayName: "my name",
+		}
+		require.NoError(t, keypair2.Auth(req, &req.Auth))
+		set, err := client.SetDisplayName(context.Background(), req)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(&profilepb.SetDisplayNameResponse{Result: profilepb.SetDisplayNameResponse_DENIED}, set))
+
+		get, err := client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
+			UserId: userID2,
+		})
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(&profilepb.GetProfileResponse{Result: profilepb.GetProfileResponse_NOT_FOUND}, get))
 	})
 }
