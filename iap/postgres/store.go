@@ -33,6 +33,13 @@ func NewInPostgres(client *db.PrismaClient) iap.Store {
 }
 
 func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) error {
+	if purchase.Product != iap.ProductCreateAccount {
+		return errors.New("product must be create account")
+	}
+	if purchase.State != iap.StateFulfilled {
+		return errors.New("state must be fulfilled")
+	}
+
 	encodedUserID := pg.Encode(purchase.User.Value)
 
 	_, err := s.client.Iap.FindUnique(

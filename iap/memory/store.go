@@ -21,6 +21,13 @@ func NewInMemory() iap.Store {
 	}
 }
 
+func (s *InMemoryStore) reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.purchases = make(map[string]*iap.Purchase)
+}
+
 func (s *InMemoryStore) CreatePurchase(ctx context.Context, purchase *iap.Purchase) error {
 	if purchase.Product != iap.ProductCreateAccount {
 		return errors.New("product must be create account")
