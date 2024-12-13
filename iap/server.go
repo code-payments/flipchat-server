@@ -2,6 +2,7 @@ package iap
 
 import (
 	"context"
+	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -18,6 +19,7 @@ type Server struct {
 	log      *zap.Logger
 	authz    auth.Authorizer
 	accounts account.Store
+	iaps     Store
 	verifier Verifier
 
 	iappb.UnimplementedIapServer
@@ -27,16 +29,19 @@ func NewServer(
 	log *zap.Logger,
 	authz auth.Authorizer,
 	accounts account.Store,
+	iaps Store,
 	verifier Verifier,
 ) *Server {
 	return &Server{
 		log:      log,
 		authz:    authz,
 		accounts: accounts,
+		iaps:     iaps,
 		verifier: verifier,
 	}
 }
 
+// todo: DB transaction for all calls
 // todo: eventually we'll need to distinguish what was purchased
 func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseCompletedRequest) (*iappb.OnPurchaseCompletedResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
@@ -50,7 +55,14 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		zap.String("receipt", req.Receipt.Value),
 	)
 
-	// todo: check if the receipt was already consumed
+	// Note: purchase is always assumed to be fulfilled
+	_, err = s.iaps.GetPurchase(ctx, req.Receipt.Value)
+	if err == nil {
+		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
+	} else if err != ErrNotFound {
+		log.Warn("Failed to check existing purchase", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to check existing purchase")
+	}
 
 	isVerified, err := s.verifier.VerifyReceipt(ctx, req.Receipt.Value)
 	if err != nil {
@@ -66,7 +78,18 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		return nil, status.Error(codes.Internal, "failed to set registration flag")
 	}
 
-	// todo: mark the receipt as being consumed
+	err = s.iaps.CreatePurchase(ctx, &Purchase{
+		Receipt:   req.Receipt.Value,
+		Platform:  req.Platform,
+		User:      userID,
+		Product:   ProductCreateAccount,
+		State:     StateFulfilled,
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		log.Warn("Failed to create purchase", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to create purchase")
+	}
 
 	return &iappb.OnPurchaseCompletedResponse{}, nil
 }

@@ -33,7 +33,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, verifer iap.V
 	log := zap.Must(zap.NewDevelopment())
 	authn := auth.NewKeyPairAuthenticator()
 	authz := account.NewAuthorizer(log, accounts, authn)
-	server := iap.NewServer(log, authz, accounts, verifer)
+	server := iap.NewServer(log, authz, accounts, nil, verifer) // todo: setup iap store
 
 	signer := model.MustGenerateKeyPair()
 
