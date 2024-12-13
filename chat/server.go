@@ -194,14 +194,16 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 
 				// Inject unread count updates specific to this user for a latest message or read pointer update
 				var includeUnreadCountUpdate bool
+				var readPtr *messagingpb.MessageId
 				if update.LastMessage != nil {
 					includeUnreadCountUpdate = true
 				}
 				if update.Pointer != nil && update.Pointer.Pointer.Type == messagingpb.Pointer_READ && bytes.Equal(update.Pointer.Member.Value, userID.Value) {
 					includeUnreadCountUpdate = true
+					readPtr = update.Pointer.Pointer.Value
 				}
 				if includeUnreadCountUpdate {
-					numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, update.ChatId, userID)
+					numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, update.ChatId, userID, readPtr)
 					if err == nil {
 						// Assumes the full metadata update is only sent on flush
 						// or chat creation.
@@ -1222,7 +1224,7 @@ func (s *Server) getMetadata(ctx context.Context, chatID *commonpb.ChatId, calle
 		return md, nil
 	}
 
-	numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, chatID, caller)
+	numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, chatID, caller, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1259,7 +1261,7 @@ func (s *Server) getMetadataBatched(ctx context.Context, chatIDs []*commonpb.Cha
 	}
 
 	for _, md := range metadata {
-		numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, md.ChatId, caller)
+		numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, md.ChatId, caller, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1343,21 +1345,22 @@ func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Membe
 	return nil
 }
 
-func (s *Server) getUnreadCount(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId) (uint32, bool, error) {
-	ptrs, err := s.pointers.GetPointers(ctx, chatID, caller)
-	if err != nil {
-		return 0, false, fmt.Errorf("failed to get caller pointers: %w", err)
-	}
+func (s *Server) getUnreadCount(ctx context.Context, chatID *commonpb.ChatId, caller *commonpb.UserId, readPtr *messagingpb.MessageId) (uint32, bool, error) {
+	if readPtr == nil {
+		ptrs, err := s.pointers.GetPointers(ctx, chatID, caller)
+		if err != nil {
+			return 0, false, fmt.Errorf("failed to get caller pointers: %w", err)
+		}
 
-	var rPtr *messagingpb.MessageId
-	for _, ptr := range ptrs {
-		if ptr.Type == messagingpb.Pointer_READ {
-			rPtr = ptr.Value
-			break
+		for _, ptr := range ptrs {
+			if ptr.Type == messagingpb.Pointer_READ {
+				readPtr = ptr.Value
+				break
+			}
 		}
 	}
 
-	unread, err := s.messages.CountUnread(ctx, chatID, caller, rPtr, int64(MaxUnreadCount+1))
+	unread, err := s.messages.CountUnread(ctx, chatID, caller, readPtr, int64(MaxUnreadCount+1))
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to count unread messages: %w", err)
 	}
