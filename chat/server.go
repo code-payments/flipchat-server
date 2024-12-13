@@ -490,17 +490,6 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		zap.String("user_id", model.UserIDString(userID)),
 	)
 
-	if md.Type == chatpb.Metadata_GROUP {
-		if err := messaging.SendAnnouncement(
-			ctx,
-			s.messenger,
-			md.ChatId,
-			messaging.NewRoomIsLiveAnnouncementContentBuilder(md.RoomNumber),
-		); err != nil {
-			log.Warn("Failed to send announcement", zap.Error(err))
-		}
-	}
-
 	var memberProtos []*chatpb.Member
 	for _, m := range users {
 		member := Member{UserID: m, AddedBy: userID}
@@ -508,7 +497,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			member.HasModPermission = true
 		}
 
-		memberProtos = append(memberProtos, member.ToProto(userID))
+		memberProtos = append(memberProtos, member.ToProto(nil))
 
 		err = s.chats.AddMember(ctx, md.ChatId, member)
 		if errors.Is(err, ErrMemberExists) {
@@ -519,44 +508,58 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		}
 	}
 
-	var mu *chatpb.StreamChatEventsResponse_MemberUpdate
 	if err := s.populateMemberData(ctx, memberProtos, nil); err != nil {
-		log.Warn("Failed to get member profiles for notification, not including")
-	} else {
-		mu = &chatpb.StreamChatEventsResponse_MemberUpdate{
+		log.Warn("Failed to populate additional member data, not including")
+	}
+
+	go func() {
+		ctx := context.Background()
+
+		if md.Type == chatpb.Metadata_GROUP {
+			if err := messaging.SendAnnouncement(
+				ctx,
+				s.messenger,
+				md.ChatId,
+				messaging.NewRoomIsLiveAnnouncementContentBuilder(md.RoomNumber),
+			); err != nil {
+				log.Warn("Failed to send announcement", zap.Error(err))
+			}
+		}
+
+		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
 			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
 				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
 					Members: memberProtos,
 				},
 			},
 		}
-	}
 
-	if err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{
-		ChatID:               md.ChatId,
-		LegacyMetadataUpdate: md,
-		LegacyMemberUpdate:   mu,
-		MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
-			{
-				Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
-					FullRefresh: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh{
-						Metadata: md,
+		if err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{
+			ChatID:               md.ChatId,
+			LegacyMetadataUpdate: md,
+			LegacyMemberUpdate:   mu,
+			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+				{
+					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
+						FullRefresh: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh{
+							Metadata: md,
+						},
 					},
 				},
 			},
-		},
-		MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
-			{
-				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-					FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-						Members: memberProtos,
+			MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+				{
+					Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+						FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
+							Members: memberProtos,
+						},
 					},
 				},
 			},
-		},
-	}); err != nil {
-		log.Warn("Failed to notify new chat", zap.Error(err))
-	}
+		}); err != nil {
+			log.Warn("Failed to notify new chat", zap.Error(err))
+		}
+	}()
 
 	// todo: returned members needs testing
 	return &chatpb.StartChatResponse{Chat: md, Members: memberProtos}, nil
@@ -673,14 +676,6 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
 		}
 
-		if err := messaging.SendAnnouncement(
-			ctx,
-			s.messenger,
-			chatID,
-			messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID),
-		); err != nil {
-			log.Warn("Failed to send announcement", zap.Error(err))
-		}
 	} else {
 
 		if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {
@@ -696,26 +691,41 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		return nil, status.Errorf(codes.Internal, "failed to get chat data")
 	}
 
-	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-			FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-				Members: members,
-			},
-		},
-	}
+	go func() {
+		ctx := context.Background()
 
-	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMetadataUpdate: md, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
-		{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined_{
-				Joined: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined{
-					Member: newMember.ToProto(nil),
+		if hasPaymentIntent {
+			if err := messaging.SendAnnouncement(
+				ctx,
+				s.messenger,
+				chatID,
+				messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID),
+			); err != nil {
+				log.Warn("Failed to send announcement", zap.Error(err))
+			}
+		}
+
+		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
+					Members: members,
 				},
 			},
-		},
-	}})
-	if err != nil {
-		log.Warn("Failed to notify joined member", zap.Error(err))
-	}
+		}
+
+		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMetadataUpdate: md, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+			{
+				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined_{
+					Joined: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined{
+						Member: newMember.ToProto(nil),
+					},
+				},
+			},
+		}})
+		if err != nil {
+			log.Warn("Failed to notify joined member", zap.Error(err))
+		}
+	}()
 
 	return &chatpb.JoinChatResponse{Metadata: md, Members: members}, nil
 }
@@ -736,32 +746,36 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 		return nil, status.Errorf(codes.Internal, "failed to remove chat member")
 	}
 
-	md, members, err := s.getMetadataWithMembers(ctx, req.ChatId, userID)
-	if err != nil {
-		log.Warn("Failed to get chat data for update", zap.Error(err))
-		return &chatpb.LeaveChatResponse{}, nil
-	}
+	go func() {
+		ctx := context.Background()
 
-	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-			FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-				Members: members,
-			},
-		},
-	}
+		md, members, err := s.getMetadataWithMembers(ctx, req.ChatId, userID)
+		if err != nil {
+			log.Warn("Failed to get chat data for update", zap.Error(err))
+			return
+		}
 
-	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
-		{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Left_{
-				Left: &chatpb.StreamChatEventsResponse_MemberUpdate_Left{
-					Member: userID,
+		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
+					Members: members,
 				},
 			},
-		},
-	}})
-	if err != nil {
-		s.log.Warn("Failed to notify member leaving", zap.Error(err))
-	}
+		}
+
+		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+			{
+				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Left_{
+					Left: &chatpb.StreamChatEventsResponse_MemberUpdate_Left{
+						Member: userID,
+					},
+				},
+			},
+		}})
+		if err != nil {
+			s.log.Warn("Failed to notify member leaving", zap.Error(err))
+		}
+	}()
 
 	return &chatpb.LeaveChatResponse{}, nil
 }
@@ -811,27 +825,31 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 		return nil, status.Errorf(codes.Internal, "failed to set display name")
 	}
 
-	if err = messaging.SendAnnouncement(
-		ctx,
-		s.messenger,
-		req.ChatId,
-		messaging.NewRoomDisplayNameChangedAnnouncementContentBuilder(md.RoomNumber, req.DisplayName),
-	); err != nil {
-		log.Warn("Failed to send announcement", zap.Error(err))
-	}
+	go func() {
+		ctx := context.Background()
 
-	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
-		{
-			Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged_{
-				DisplayNameChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged{
-					NewDisplayName: req.DisplayName,
+		if err = messaging.SendAnnouncement(
+			ctx,
+			s.messenger,
+			req.ChatId,
+			messaging.NewRoomDisplayNameChangedAnnouncementContentBuilder(md.RoomNumber, req.DisplayName),
+		); err != nil {
+			log.Warn("Failed to send announcement", zap.Error(err))
+		}
+
+		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+			{
+				Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged_{
+					DisplayNameChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged{
+						NewDisplayName: req.DisplayName,
+					},
 				},
 			},
-		},
-	}})
-	if err != nil {
-		s.log.Warn("Failed to notify display name changed", zap.Error(err))
-	}
+		}})
+		if err != nil {
+			s.log.Warn("Failed to notify display name changed", zap.Error(err))
+		}
+	}()
 
 	return &chatpb.SetDisplayNameResponse{}, nil
 }
@@ -872,33 +890,38 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 		return nil, status.Errorf(codes.Internal, "failed to set cover charge")
 	}
 
-	if err = messaging.SendAnnouncement(
-		ctx,
-		s.messenger,
-		req.ChatId,
-		messaging.NewCoverChangedAnnouncementContentBuilder(req.CoverCharge.Quarks),
-	); err != nil {
-		log.Warn("Failed to send announcement", zap.Error(err))
-	}
+	go func() {
+		ctx := context.Background()
 
-	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
-		{
-			Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged_{
-				CoverChargeChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged{
-					NewCoverCharge: req.CoverCharge,
+		if err = messaging.SendAnnouncement(
+			ctx,
+			s.messenger,
+			req.ChatId,
+			messaging.NewCoverChangedAnnouncementContentBuilder(req.CoverCharge.Quarks),
+		); err != nil {
+			log.Warn("Failed to send announcement", zap.Error(err))
+		}
+
+		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+			{
+				Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged_{
+					CoverChargeChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged{
+						NewCoverCharge: req.CoverCharge,
+					},
 				},
 			},
-		},
-	}})
-	if err != nil {
-		s.log.Warn("Failed to notify cover changed", zap.Error(err))
-	}
+		}})
+		if err != nil {
+			s.log.Warn("Failed to notify cover changed", zap.Error(err))
+		}
+	}()
 
 	return &chatpb.SetCoverChargeResponse{}, nil
 }
 
 func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) (*chatpb.RemoveUserResponse, error) {
 	return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
+
 	/*
 		ownerID, err := s.authz.Authorize(ctx, req, &req.Auth)
 		if err != nil {
@@ -941,42 +964,46 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 			return nil, status.Errorf(codes.Internal, "failed to remove chat member")
 		}
 
-		if err = messaging.SendAnnouncement(
-			ctx,
-			s.messenger,
-			req.ChatId,
-			messaging.NewUserRemovedAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
-		); err != nil {
-			log.Warn("Failed to send announcement", zap.Error(err))
-		}
+		go func() {
+			ctx := context.Background()
 
-		_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
-		if err != nil {
-			log.Warn("Failed to get chat data", zap.Error(err))
-			return &chatpb.RemoveUserResponse{}, nil
-		}
+			if err = messaging.SendAnnouncement(
+				ctx,
+				s.messenger,
+				req.ChatId,
+				messaging.NewUserRemovedAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
+			); err != nil {
+				log.Warn("Failed to send announcement", zap.Error(err))
+			}
 
-		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-					Members: members,
-				},
-			},
-		}
+			_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
+			if err != nil {
+				log.Warn("Failed to get chat data or update", zap.Error(err))
+				return
+			}
 
-		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
-			{
-				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Removed_{
-					Removed: &chatpb.StreamChatEventsResponse_MemberUpdate_Removed{
-						Member:    req.UserId,
-						RemovedBy: ownerID,
+			mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+					FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
+						Members: members,
 					},
 				},
-			},
-		}})
-		if err != nil {
-			s.log.Warn("Failed to notify removed member", zap.Error(err))
-		}
+			}
+
+			err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+				{
+					Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Removed_{
+						Removed: &chatpb.StreamChatEventsResponse_MemberUpdate_Removed{
+							Member:    req.UserId,
+							RemovedBy: ownerID,
+						},
+					},
+				},
+			}})
+			if err != nil {
+				s.log.Warn("Failed to notify removed member", zap.Error(err))
+			}
+		}()
 
 		return &chatpb.RemoveUserResponse{}, nil
 	*/
@@ -1027,42 +1054,46 @@ func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*ch
 		return nil, status.Errorf(codes.Internal, "failed to mute chat member")
 	}
 
-	if err = messaging.SendAnnouncement(
-		ctx,
-		s.messenger,
-		req.ChatId,
-		messaging.NewUserMutedAnnouncementContentBuilder(ctx, s.profiles, ownerID, req.UserId),
-	); err != nil {
-		log.Warn("Failed to send announcement", zap.Error(err))
-	}
+	go func() {
+		ctx := context.Background()
 
-	_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
-	if err != nil {
-		log.Warn("Failed to get chat data", zap.Error(err))
-		return &chatpb.MuteUserResponse{}, nil
-	}
+		if err = messaging.SendAnnouncement(
+			ctx,
+			s.messenger,
+			req.ChatId,
+			messaging.NewUserMutedAnnouncementContentBuilder(ctx, s.profiles, ownerID, req.UserId),
+		); err != nil {
+			log.Warn("Failed to send announcement", zap.Error(err))
+		}
 
-	mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-		Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-			FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-				Members: members,
-			},
-		},
-	}
+		_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
+		if err != nil {
+			log.Warn("Failed to get chat data for update", zap.Error(err))
+			return
+		}
 
-	err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
-		{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Muted_{
-				Muted: &chatpb.StreamChatEventsResponse_MemberUpdate_Muted{
-					Member:  req.UserId,
-					MutedBy: ownerID,
+		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
+			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
+				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
+					Members: members,
 				},
 			},
-		},
-	}})
-	if err != nil {
-		s.log.Warn("Failed to notify muted member", zap.Error(err))
-	}
+		}
+
+		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+			{
+				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Muted_{
+					Muted: &chatpb.StreamChatEventsResponse_MemberUpdate_Muted{
+						Member:  req.UserId,
+						MutedBy: ownerID,
+					},
+				},
+			},
+		}})
+		if err != nil {
+			s.log.Warn("Failed to notify muted member", zap.Error(err))
+		}
+	}()
 
 	return &chatpb.MuteUserResponse{}, nil
 }

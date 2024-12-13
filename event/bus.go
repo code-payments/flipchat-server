@@ -87,7 +87,7 @@ func (b *Bus[Key, Event]) OnEvent(key Key, e Event) error {
 
 	// Execute handlers outside the lock
 	for _, h := range handlers {
-		h.OnEvent(key, e)
+		go h.OnEvent(key, e)
 	}
 
 	return nil
