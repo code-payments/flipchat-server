@@ -72,6 +72,7 @@ type Store interface {
 	GetChatID(ctx context.Context, roomID uint64) (*commonpb.ChatId, error)
 
 	GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*chatpb.Metadata, error)
+	GetChatMetadataBatched(ctx context.Context, chatIDs ...*commonpb.ChatId) ([]*chatpb.Metadata, error) // todo: add paging?
 	GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error)
 	GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*Member, error)
 	GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (*Member, error)
