@@ -192,8 +192,15 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 					MemberUpdate: clonedEvent.LegacyMemberUpdate,
 				}
 
-				// Inject chat metadata updates specific to this user for a latest message
+				// Inject unread count updates specific to this user for a latest message or read pointer update
+				var includeUnreadCountUpdate bool
 				if update.LastMessage != nil {
+					includeUnreadCountUpdate = true
+				}
+				if update.Pointer != nil && update.Pointer.Pointer.Type == messagingpb.Pointer_READ && bytes.Equal(update.Pointer.Member.Value, userID.Value) {
+					includeUnreadCountUpdate = true
+				}
+				if includeUnreadCountUpdate {
 					numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, update.ChatId, userID)
 					if err == nil {
 						// Assumes the full metadata update is only sent on flush
