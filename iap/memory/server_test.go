@@ -19,9 +19,10 @@ func TestIAP_MemoryServer(t *testing.T) {
 	}
 
 	accounts := account.NewInMemory()
+	iaps := NewInMemory()
 
 	// Provide a teardown function if necessary. Here it's no-op.
 	teardown := func() {}
 
-	tests.RunServerTests(t, accounts, verifier, validReceiptFunc, teardown)
+	tests.RunServerTests(t, accounts, iaps, verifier, validReceiptFunc, teardown)
 }

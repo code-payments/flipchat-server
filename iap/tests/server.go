@@ -20,20 +20,20 @@ import (
 )
 
 // RunServerTests runs a set of tests against the iap.Server.
-func RunServerTests(t *testing.T, accounts account.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string, teardown func()) {
-	for _, tf := range []func(t *testing.T, accountStore account.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string){
+func RunServerTests(t *testing.T, accounts account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string, teardown func()) {
+	for _, tf := range []func(t *testing.T, accountStore account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string){
 		testOnPurchaseCompleted,
 	} {
-		tf(t, accounts, verifer, validReceiptFunc)
+		tf(t, accounts, iaps, verifer, validReceiptFunc)
 		teardown()
 	}
 }
 
-func testOnPurchaseCompleted(t *testing.T, accounts account.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string) {
+func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string) {
 	log := zap.Must(zap.NewDevelopment())
 	authn := auth.NewKeyPairAuthenticator()
 	authz := account.NewAuthorizer(log, accounts, authn)
-	server := iap.NewServer(log, authz, accounts, nil, verifer) // todo: setup iap store
+	server := iap.NewServer(log, authz, accounts, iaps, verifer)
 
 	signer := model.MustGenerateKeyPair()
 
@@ -77,6 +77,35 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, verifer iap.V
 		isRegistered, err := accounts.IsRegistered(context.Background(), userID)
 		require.NoError(t, err)
 		require.True(t, isRegistered)
+
+		purchase, err := iaps.GetPurchase(context.Background(), req.Receipt.Value)
+		require.NoError(t, err)
+		require.Equal(t, req.Receipt.Value, purchase.Receipt)
+		require.Equal(t, req.Platform, purchase.Platform)
+		require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
+		require.Equal(t, iap.ProductCreateAccount, purchase.Product)
+		require.Equal(t, iap.StateFulfilled, purchase.State)
+
+		t.Run("Use existing receipt", func(t *testing.T) {
+			userID2 := model.MustGenerateUserID()
+			signer2 := model.MustGenerateKeyPair()
+			_, err := accounts.Bind(context.Background(), userID2, signer2.Proto())
+			require.NoError(t, err)
+
+			require.NoError(t, signer.Auth(req, &req.Auth))
+
+			resp, err := server.OnPurchaseCompleted(context.Background(), req)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.ProtoEqualError(&iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, resp))
+
+			isRegistered, err := accounts.IsRegistered(context.Background(), userID2)
+			require.NoError(t, err)
+			require.False(t, isRegistered)
+
+			purchase, err := iaps.GetPurchase(context.Background(), req.Receipt.Value)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
+		})
 	})
 
 	t.Run("Invalid Receipt", func(t *testing.T) {
@@ -101,5 +130,8 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, verifer iap.V
 		isRegistered, err := accounts.IsRegistered(context.Background(), userID)
 		require.NoError(t, err)
 		require.False(t, isRegistered)
+
+		_, err = iaps.GetPurchase(context.Background(), req.Receipt.Value)
+		require.Equal(t, iap.ErrNotFound, err)
 	})
 }

@@ -5,8 +5,9 @@ import (
 	"errors"
 	"time"
 
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	"google.golang.org/protobuf/proto"
+
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 )
 
 var (
