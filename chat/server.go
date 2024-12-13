@@ -689,15 +689,19 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	go func() {
 		ctx := context.Background()
 
+		var announcementContentBuilder messaging.AnnouncementContentBuilder
 		if hasPaymentIntent {
-			if err := messaging.SendAnnouncement(
-				ctx,
-				s.messenger,
-				chatID,
-				messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID),
-			); err != nil {
-				log.Warn("Failed to send announcement", zap.Error(err))
-			}
+			announcementContentBuilder = messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID)
+		} else {
+			announcementContentBuilder = messaging.NewUserWatchingChatAnnouncementContentBuilder(ctx)
+		}
+		if err := messaging.SendAnnouncement(
+			ctx,
+			s.messenger,
+			chatID,
+			announcementContentBuilder,
+		); err != nil {
+			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
 		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{

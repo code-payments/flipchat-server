@@ -44,6 +44,14 @@ func NewRoomIsLiveAnnouncementContentBuilder(roomNumber uint64) AnnouncementCont
 	}
 }
 
+func NewUserWatchingChatAnnouncementContentBuilder(ctx context.Context) AnnouncementContentBuilder {
+	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
+		return &messagingpb.LocalizedAnnouncementContent{
+			KeyOrText: "New watcher",
+		}, nil
+	}
+}
+
 func NewUserJoinedChatAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		profile, err := profiles.GetProfile(ctx, userID)
