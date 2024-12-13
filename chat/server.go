@@ -690,7 +690,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		ctx := context.Background()
 
 		var announcementContentBuilder messaging.AnnouncementContentBuilder
-		if hasPaymentIntent {
+		if newMember.HasSendPermission {
 			announcementContentBuilder = messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID)
 		} else {
 			announcementContentBuilder = messaging.NewUserWatchingChatAnnouncementContentBuilder(ctx)
