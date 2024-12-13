@@ -91,10 +91,11 @@ generator db {
 model User {
   // Fields
 
-  id          String      @id
-  displayName String?
-  isStaff     Boolean     @default(false)
-  publicKeys  PublicKey[]
+  id           String      @id
+  displayName  String?
+  isStaff      Boolean     @default(false)
+  isRegistered Boolean     @default(false)
+  publicKeys   PublicKey[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -384,11 +385,12 @@ const (
 type UserScalarFieldEnum string
 
 const (
-	UserScalarFieldEnumID          UserScalarFieldEnum = "id"
-	UserScalarFieldEnumDisplayName UserScalarFieldEnum = "displayName"
-	UserScalarFieldEnumIsStaff     UserScalarFieldEnum = "isStaff"
-	UserScalarFieldEnumCreatedAt   UserScalarFieldEnum = "createdAt"
-	UserScalarFieldEnumUpdatedAt   UserScalarFieldEnum = "updatedAt"
+	UserScalarFieldEnumID           UserScalarFieldEnum = "id"
+	UserScalarFieldEnumDisplayName  UserScalarFieldEnum = "displayName"
+	UserScalarFieldEnumIsStaff      UserScalarFieldEnum = "isStaff"
+	UserScalarFieldEnumIsRegistered UserScalarFieldEnum = "isRegistered"
+	UserScalarFieldEnumCreatedAt    UserScalarFieldEnum = "createdAt"
+	UserScalarFieldEnumUpdatedAt    UserScalarFieldEnum = "updatedAt"
 )
 
 type PublicKeyScalarFieldEnum string
@@ -532,6 +534,8 @@ const userFieldID userPrismaFields = "id"
 const userFieldDisplayName userPrismaFields = "displayName"
 
 const userFieldIsStaff userPrismaFields = "isStaff"
+
+const userFieldIsRegistered userPrismaFields = "isRegistered"
 
 const userFieldPublicKeys userPrismaFields = "publicKeys"
 
@@ -1064,20 +1068,22 @@ type UserModel struct {
 
 // InnerUser holds the actual data
 type InnerUser struct {
-	ID          string   `json:"id"`
-	DisplayName *string  `json:"displayName,omitempty"`
-	IsStaff     bool     `json:"isStaff"`
-	CreatedAt   DateTime `json:"createdAt"`
-	UpdatedAt   DateTime `json:"updatedAt"`
+	ID           string   `json:"id"`
+	DisplayName  *string  `json:"displayName,omitempty"`
+	IsStaff      bool     `json:"isStaff"`
+	IsRegistered bool     `json:"isRegistered"`
+	CreatedAt    DateTime `json:"createdAt"`
+	UpdatedAt    DateTime `json:"updatedAt"`
 }
 
 // RawUserModel is a struct for User when used in raw queries
 type RawUserModel struct {
-	ID          RawString   `json:"id"`
-	DisplayName *RawString  `json:"displayName,omitempty"`
-	IsStaff     RawBoolean  `json:"isStaff"`
-	CreatedAt   RawDateTime `json:"createdAt"`
-	UpdatedAt   RawDateTime `json:"updatedAt"`
+	ID           RawString   `json:"id"`
+	DisplayName  *RawString  `json:"displayName,omitempty"`
+	IsStaff      RawBoolean  `json:"isStaff"`
+	IsRegistered RawBoolean  `json:"isRegistered"`
+	CreatedAt    RawDateTime `json:"createdAt"`
+	UpdatedAt    RawDateTime `json:"updatedAt"`
 }
 
 // RelationsUser holds the relation data separately
@@ -1393,6 +1399,11 @@ type userQuery struct {
 	//
 	// @required
 	IsStaff userQueryIsStaffBoolean
+
+	// IsRegistered
+	//
+	// @required
+	IsRegistered userQueryIsRegisteredBoolean
 
 	PublicKeys userQueryPublicKeysRelations
 
@@ -2263,6 +2274,74 @@ func (r userQueryIsStaffBoolean) Cursor(cursor bool) userCursorParam {
 
 func (r userQueryIsStaffBoolean) Field() userPrismaFields {
 	return userFieldIsStaff
+}
+
+// base struct
+type userQueryIsRegisteredBoolean struct{}
+
+// Set the required value of IsRegistered
+func (r userQueryIsRegisteredBoolean) Set(value bool) userSetParam {
+
+	return userSetParam{
+		data: builder.Field{
+			Name:  "isRegistered",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of IsRegistered dynamically
+func (r userQueryIsRegisteredBoolean) SetIfPresent(value *Boolean) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r userQueryIsRegisteredBoolean) Equals(value bool) userWithPrismaIsRegisteredEqualsParam {
+
+	return userWithPrismaIsRegisteredEqualsParam{
+		data: builder.Field{
+			Name: "isRegistered",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryIsRegisteredBoolean) EqualsIfPresent(value *bool) userWithPrismaIsRegisteredEqualsParam {
+	if value == nil {
+		return userWithPrismaIsRegisteredEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r userQueryIsRegisteredBoolean) Order(direction SortOrder) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name:  "isRegistered",
+			Value: direction,
+		},
+	}
+}
+
+func (r userQueryIsRegisteredBoolean) Cursor(cursor bool) userCursorParam {
+	return userCursorParam{
+		data: builder.Field{
+			Name:  "isRegistered",
+			Value: cursor,
+		},
+	}
+}
+
+func (r userQueryIsRegisteredBoolean) Field() userPrismaFields {
+	return userFieldIsRegistered
 }
 
 // base struct
@@ -18568,6 +18647,7 @@ var userOutput = []builder.Output{
 	{Name: "id"},
 	{Name: "displayName"},
 	{Name: "isStaff"},
+	{Name: "isRegistered"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -18969,6 +19049,84 @@ func (p userWithPrismaIsStaffEqualsUniqueParam) isStaffField() {}
 
 func (userWithPrismaIsStaffEqualsUniqueParam) unique() {}
 func (userWithPrismaIsStaffEqualsUniqueParam) equals() {}
+
+type UserWithPrismaIsRegisteredEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	isRegisteredField()
+}
+
+type UserWithPrismaIsRegisteredSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	isRegisteredField()
+}
+
+type userWithPrismaIsRegisteredSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsRegisteredSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsRegisteredSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsRegisteredSetParam) userModel() {}
+
+func (p userWithPrismaIsRegisteredSetParam) isRegisteredField() {}
+
+type UserWithPrismaIsRegisteredWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	isRegisteredField()
+}
+
+type userWithPrismaIsRegisteredEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsRegisteredEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsRegisteredEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsRegisteredEqualsParam) userModel() {}
+
+func (p userWithPrismaIsRegisteredEqualsParam) isRegisteredField() {}
+
+func (userWithPrismaIsRegisteredSetParam) settable()  {}
+func (userWithPrismaIsRegisteredEqualsParam) equals() {}
+
+type userWithPrismaIsRegisteredEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsRegisteredEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsRegisteredEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsRegisteredEqualsUniqueParam) userModel()         {}
+func (p userWithPrismaIsRegisteredEqualsUniqueParam) isRegisteredField() {}
+
+func (userWithPrismaIsRegisteredEqualsUniqueParam) unique() {}
+func (userWithPrismaIsRegisteredEqualsUniqueParam) equals() {}
 
 type UserWithPrismaPublicKeysEqualsSetParam interface {
 	field() builder.Field

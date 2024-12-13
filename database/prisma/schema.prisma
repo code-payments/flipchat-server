@@ -17,10 +17,11 @@ generator db {
 model User {
   // Fields
 
-  id          String      @id
-  displayName String?
-  isStaff     Boolean     @default(false)
-  publicKeys  PublicKey[]
+  id           String      @id
+  displayName  String?
+  isStaff      Boolean     @default(false)
+  isRegistered Boolean     @default(false)
+  publicKeys   PublicKey[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

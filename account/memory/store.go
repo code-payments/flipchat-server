@@ -21,12 +21,16 @@ type memory struct {
 
 	// maps a publicKey (string representation) to a userID (also stored as a string). This allows quick lookups of the user by their public key.
 	keys map[string]string
+
+	// set of registered users
+	registeredUsers map[string]any
 }
 
 func NewInMemory() account.Store {
 	return &memory{
-		users: make(map[string][]string),
-		keys:  make(map[string]string),
+		users:           make(map[string][]string),
+		keys:            make(map[string]string),
+		registeredUsers: make(map[string]any),
 	}
 }
 
@@ -117,4 +121,29 @@ func (m *memory) IsAuthorized(_ context.Context, userID *commonpb.UserId, pubKey
 
 func (m *memory) IsStaff(ctx context.Context, userID *commonpb.UserId) (bool, error) {
 	return false, nil
+}
+
+func (m *memory) IsRegistered(ctx context.Context, userID *commonpb.UserId) (bool, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	_, ok := m.registeredUsers[string(userID.Value)]
+	return ok, nil
+}
+
+func (m *memory) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId, isRegistered bool) error {
+	m.Lock()
+	defer m.Unlock()
+
+	_, ok := m.users[string(userID.Value)]
+	if !ok {
+		return account.ErrNotFound
+	}
+
+	if isRegistered {
+		m.registeredUsers[string(userID.Value)] = true
+	} else {
+		delete(m.registeredUsers, string(userID.Value))
+	}
+	return nil
 }
