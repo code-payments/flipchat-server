@@ -78,9 +78,9 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 		require.NoError(t, err)
 		require.True(t, isRegistered)
 
-		purchase, err := iaps.GetPurchase(context.Background(), req.Receipt.Value)
+		purchase, err := iaps.GetPurchase(context.Background(), req.Receipt)
 		require.NoError(t, err)
-		require.Equal(t, req.Receipt.Value, purchase.Receipt)
+		require.NoError(t, protoutil.ProtoEqualError(req.Receipt, purchase.Receipt))
 		require.Equal(t, req.Platform, purchase.Platform)
 		require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
 		require.Equal(t, iap.ProductCreateAccount, purchase.Product)
@@ -102,7 +102,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 			require.NoError(t, err)
 			require.False(t, isRegistered)
 
-			purchase, err := iaps.GetPurchase(context.Background(), req.Receipt.Value)
+			purchase, err := iaps.GetPurchase(context.Background(), req.Receipt)
 			require.NoError(t, err)
 			require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
 		})
@@ -131,7 +131,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 		require.NoError(t, err)
 		require.False(t, isRegistered)
 
-		_, err = iaps.GetPurchase(context.Background(), req.Receipt.Value)
+		_, err = iaps.GetPurchase(context.Background(), req.Receipt)
 		require.Equal(t, iap.ErrNotFound, err)
 	})
 }

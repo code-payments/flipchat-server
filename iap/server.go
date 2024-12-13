@@ -56,7 +56,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	)
 
 	// Note: purchase is always assumed to be fulfilled
-	_, err = s.iaps.GetPurchase(ctx, req.Receipt.Value)
+	_, err = s.iaps.GetPurchase(ctx, req.Receipt)
 	if err == nil {
 		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
 	} else if err != ErrNotFound {
@@ -79,7 +79,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	}
 
 	err = s.iaps.CreatePurchase(ctx, &Purchase{
-		Receipt:   req.Receipt.Value,
+		Receipt:   req.Receipt,
 		Platform:  req.Platform,
 		User:      userID,
 		Product:   ProductCreateAccount,

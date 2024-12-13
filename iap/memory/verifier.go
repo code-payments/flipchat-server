@@ -42,11 +42,11 @@ func (m *MemoryVerifier) VerifyReceipt(ctx context.Context, receipt string) (boo
 	return false, nil
 }
 
-func generateKeyPair() (ed25519.PublicKey, ed25519.PrivateKey, error) {
+func GenerateKeyPair() (ed25519.PublicKey, ed25519.PrivateKey, error) {
 	return ed25519.GenerateKey(rand.Reader)
 }
 
-func generateValidReceipt(owner ed25519.PrivateKey, message string) string {
+func GenerateValidReceipt(owner ed25519.PrivateKey, message string) string {
 	signature := ed25519.Sign(owner, []byte(message))
 	return base64.StdEncoding.EncodeToString(signature) + "|" + message
 }

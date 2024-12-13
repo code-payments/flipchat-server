@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	iappb "github.com/code-payments/flipchat-protobuf-api/generated/go/iap/v1"
 )
 
 var (
@@ -32,7 +33,7 @@ const (
 )
 
 type Purchase struct {
-	Receipt   string
+	Receipt   *iappb.Receipt
 	Platform  commonpb.Platform
 	User      *commonpb.UserId
 	Product   Product
@@ -42,12 +43,12 @@ type Purchase struct {
 
 type Store interface {
 	CreatePurchase(ctx context.Context, purchase *Purchase) error
-	GetPurchase(ctx context.Context, receipt string) (*Purchase, error)
+	GetPurchase(ctx context.Context, receipt *iappb.Receipt) (*Purchase, error)
 }
 
 func (p *Purchase) Clone() *Purchase {
 	return &Purchase{
-		Receipt:   p.Receipt,
+		Receipt:   proto.Clone(p.Receipt).(*iappb.Receipt),
 		Platform:  p.Platform,
 		User:      proto.Clone(p.User).(*commonpb.UserId),
 		Product:   p.Product,

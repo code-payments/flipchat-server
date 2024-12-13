@@ -7,7 +7,7 @@ import (
 )
 
 func TestMemoryVerifier(t *testing.T) {
-	pub, priv, err := generateKeyPair()
+	pub, priv, err := GenerateKeyPair()
 	if err != nil {
 		t.Fatalf("error generating key pair: %v", err)
 	}
@@ -17,7 +17,7 @@ func TestMemoryVerifier(t *testing.T) {
 		return "paid_feature"
 	}
 	validReceiptFunc := func(msg string) string {
-		return generateValidReceipt(priv, msg)
+		return GenerateValidReceipt(priv, msg)
 	}
 
 	teardown := func() {}

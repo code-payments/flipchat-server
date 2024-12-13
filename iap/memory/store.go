@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync"
 
+	iappb "github.com/code-payments/flipchat-protobuf-api/generated/go/iap/v1"
+
 	"github.com/code-payments/flipchat-server/iap"
 )
 
@@ -30,21 +32,21 @@ func (s *InMemoryStore) CreatePurchase(ctx context.Context, purchase *iap.Purcha
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, ok := s.purchases[purchase.Receipt]
+	_, ok := s.purchases[purchase.Receipt.Value]
 	if ok {
 		return iap.ErrExists
 	}
 
-	s.purchases[purchase.Receipt] = purchase.Clone()
+	s.purchases[purchase.Receipt.Value] = purchase.Clone()
 
 	return nil
 }
 
-func (s *InMemoryStore) GetPurchase(ctx context.Context, receipt string) (*iap.Purchase, error) {
+func (s *InMemoryStore) GetPurchase(ctx context.Context, receipt *iappb.Receipt) (*iap.Purchase, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	purchase, ok := s.purchases[receipt]
+	purchase, ok := s.purchases[receipt.Value]
 	if !ok {
 		return nil, iap.ErrNotFound
 	}

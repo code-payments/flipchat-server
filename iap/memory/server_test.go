@@ -8,14 +8,14 @@ import (
 )
 
 func TestIAP_MemoryServer(t *testing.T) {
-	pub, priv, err := generateKeyPair()
+	pub, priv, err := GenerateKeyPair()
 	if err != nil {
 		t.Fatalf("error generating key pair: %v", err)
 	}
 
 	verifier := NewMemoryVerifier(pub)
 	validReceiptFunc := func(msg string) string {
-		return generateValidReceipt(priv, msg)
+		return GenerateValidReceipt(priv, msg)
 	}
 
 	accounts := account.NewInMemory()
