@@ -22,9 +22,6 @@ type ChatEvent struct {
 	FlushedMessages []*messagingpb.Message
 	PointerUpdate   *chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate
 	IsTyping        *messagingpb.IsTyping
-
-	LegacyMetadataUpdate *chatpb.Metadata                              // Deprecated
-	LegacyMemberUpdate   *chatpb.StreamChatEventsResponse_MemberUpdate // Deprecated
 }
 
 func (e *ChatEvent) Clone() *ChatEvent {
@@ -38,9 +35,6 @@ func (e *ChatEvent) Clone() *ChatEvent {
 		FlushedMessages: protoutil.SliceClone(e.FlushedMessages),
 		PointerUpdate:   proto.Clone(e.PointerUpdate).(*chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate),
 		IsTyping:        proto.Clone(e.IsTyping).(*messagingpb.IsTyping),
-
-		LegacyMetadataUpdate: proto.Clone(e.LegacyMetadataUpdate).(*chatpb.Metadata),
-		LegacyMemberUpdate:   proto.Clone(e.LegacyMemberUpdate).(*chatpb.StreamChatEventsResponse_MemberUpdate),
 	}
 }
 
