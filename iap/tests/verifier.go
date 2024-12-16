@@ -29,6 +29,14 @@ func testValidReceipt(t *testing.T, v iap.Verifier, msgGen MessageGenerator, val
 	//t.Logf("message: %s", message)
 	//t.Logf("valid receipt: %s", validReceipt)
 
+	identifier, err := v.GetReceiptIdentifier(ctx, validReceipt)
+	if err != nil {
+		t.Fatalf("unexpected error getting identifier: %v", err)
+	}
+	if identifier == nil {
+		t.Errorf("expected identifier to be non-nil")
+	}
+
 	valid, err := v.VerifyReceipt(ctx, validReceipt)
 	if err != nil {
 		t.Fatalf("unexpected error verifying valid receipt: %v", err)

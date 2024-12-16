@@ -42,6 +42,15 @@ func (m *MemoryVerifier) VerifyReceipt(ctx context.Context, receipt string) (boo
 	return false, nil
 }
 
+func (m *MemoryVerifier) GetReceiptIdentifier(ctx context.Context, receipt string) ([]byte, error) {
+	signature, _, err := parseReceipt(receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	return signature, nil
+}
+
 func generateKeyPair() (ed25519.PublicKey, ed25519.PrivateKey, error) {
 	return ed25519.GenerateKey(rand.Reader)
 }
