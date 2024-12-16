@@ -25,7 +25,7 @@ func RunStoreTests(t *testing.T, s iap.Store, teardown func()) {
 
 func testIapStore_HappyPath(t *testing.T, store iap.Store) {
 	expected := &iap.Purchase{
-		ReceiptID: "receipt",
+		ReceiptID: []byte("receipt"),
 		Platform:  commonpb.Platform_APPLE,
 		User:      model.MustGenerateUserID(),
 		Product:   iap.ProductCreateAccount,

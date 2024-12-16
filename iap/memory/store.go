@@ -37,21 +37,21 @@ func (s *InMemoryStore) CreatePurchase(ctx context.Context, purchase *iap.Purcha
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, ok := s.purchases[purchase.ReceiptID]
+	_, ok := s.purchases[string(purchase.ReceiptID)]
 	if ok {
 		return iap.ErrExists
 	}
 
-	s.purchases[purchase.ReceiptID] = purchase.Clone()
+	s.purchases[string(purchase.ReceiptID)] = purchase.Clone()
 
 	return nil
 }
 
-func (s *InMemoryStore) GetPurchase(ctx context.Context, receiptId string) (*iap.Purchase, error) {
+func (s *InMemoryStore) GetPurchase(ctx context.Context, receiptID []byte) (*iap.Purchase, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	purchase, ok := s.purchases[receiptId]
+	purchase, ok := s.purchases[string(receiptID)]
 	if !ok {
 		return nil, iap.ErrNotFound
 	}

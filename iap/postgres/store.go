@@ -39,10 +39,11 @@ func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) erro
 		return errors.New("state must be fulfilled")
 	}
 
+	encodedReceiptID := pg.Encode(purchase.ReceiptID)
 	encodedUserID := pg.Encode(purchase.User.Value)
 
 	_, err := s.client.Iap.FindUnique(
-		db.Iap.ReceiptID.Equals(purchase.ReceiptID),
+		db.Iap.ReceiptID.Equals(encodedReceiptID),
 	).Exec(ctx)
 	if err == nil {
 		return iap.ErrExists
@@ -51,7 +52,7 @@ func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) erro
 	}
 
 	_, err = s.client.Iap.CreateOne(
-		db.Iap.ReceiptID.Set(purchase.ReceiptID),
+		db.Iap.ReceiptID.Set(encodedReceiptID),
 		db.Iap.UserID.Set(encodedUserID),
 		db.Iap.Platform.Set(int(purchase.Platform)),
 		db.Iap.Product.Set(int(purchase.Product)),
@@ -60,9 +61,11 @@ func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) erro
 	return err
 }
 
-func (s *store) GetPurchase(ctx context.Context, receiptId string) (*iap.Purchase, error) {
+func (s *store) GetPurchase(ctx context.Context, receiptID []byte) (*iap.Purchase, error) {
+	encodedReceiptID := pg.Encode(receiptID)
+
 	res, err := s.client.Iap.FindUnique(
-		db.Iap.ReceiptID.Equals(receiptId),
+		db.Iap.ReceiptID.Equals(encodedReceiptID),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
@@ -75,13 +78,18 @@ func (s *store) GetPurchase(ctx context.Context, receiptId string) (*iap.Purchas
 }
 
 func fromModel(m *db.IapModel) (*iap.Purchase, error) {
+	decodedReceiptID, err := pg.Decode(m.ReceiptID)
+	if err != nil {
+		return nil, err
+	}
+
 	decodedUserID, err := pg.Decode(m.UserID)
 	if err != nil {
 		return nil, err
 	}
 
 	return &iap.Purchase{
-		ReceiptID: m.ReceiptID,
+		ReceiptID: decodedReceiptID,
 		Platform:  commonpb.Platform(m.Platform),
 		User:      &commonpb.UserId{Value: decodedUserID},
 		Product:   iap.Product(m.Product),

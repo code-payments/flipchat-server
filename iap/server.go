@@ -2,12 +2,14 @@ package iap
 
 import (
 	"context"
+	"encoding/base64"
 	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	iappb "github.com/code-payments/flipchat-protobuf-api/generated/go/iap/v1"
 
 	"github.com/code-payments/flipchat-server/account"
@@ -16,11 +18,12 @@ import (
 )
 
 type Server struct {
-	log      *zap.Logger
-	authz    auth.Authorizer
-	accounts account.Store
-	iaps     Store
-	verifier Verifier
+	log            *zap.Logger
+	authz          auth.Authorizer
+	accounts       account.Store
+	iaps           Store
+	appleVerifier  Verifier
+	googleVerifier Verifier
 
 	iappb.UnimplementedIapServer
 }
@@ -30,14 +33,16 @@ func NewServer(
 	authz auth.Authorizer,
 	accounts account.Store,
 	iaps Store,
-	verifier Verifier,
+	appleVerifier Verifier,
+	googleVerifier Verifier,
 ) *Server {
 	return &Server{
-		log:      log,
-		authz:    authz,
-		accounts: accounts,
-		iaps:     iaps,
-		verifier: verifier,
+		log:            log,
+		authz:          authz,
+		accounts:       accounts,
+		iaps:           iaps,
+		appleVerifier:  appleVerifier,
+		googleVerifier: googleVerifier,
 	}
 }
 
@@ -49,16 +54,27 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		return nil, err
 	}
 
-	receiptId := GetReceiptId(req.Receipt, req.Platform)
+	var verifier Verifier
+	switch req.Platform {
+	case commonpb.Platform_APPLE:
+		verifier = s.appleVerifier
+	case commonpb.Platform_GOOGLE:
+		verifier = s.googleVerifier
+	default:
+		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_DENIED}, nil
+	}
+
+	// todo: use Z's branch to pull from the verifier
+	receiptID := []byte(req.Receipt.Value)
 
 	log := s.log.With(
 		zap.String("user_id", model.UserIDString(userID)),
 		zap.String("platform", req.Platform.String()),
-		zap.String("receipt_id", receiptId),
+		zap.String("receipt_id", base64.StdEncoding.EncodeToString(receiptID)),
 	)
 
 	// Note: purchase is always assumed to be fulfilled
-	_, err = s.iaps.GetPurchase(ctx, receiptId)
+	_, err = s.iaps.GetPurchase(ctx, receiptID)
 	if err == nil {
 		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
 	} else if err != ErrNotFound {
@@ -66,7 +82,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		return nil, status.Error(codes.Internal, "failed to check existing purchase")
 	}
 
-	isVerified, err := s.verifier.VerifyReceipt(ctx, req.Receipt.Value)
+	isVerified, err := verifier.VerifyReceipt(ctx, req.Receipt.Value)
 	if err != nil {
 		log.Warn("Failed to verify receipt", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to set registration flag")
@@ -81,7 +97,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	}
 
 	err = s.iaps.CreatePurchase(ctx, &Purchase{
-		ReceiptID: receiptId,
+		ReceiptID: receiptID,
 		Platform:  req.Platform,
 		User:      userID,
 		Product:   ProductCreateAccount,

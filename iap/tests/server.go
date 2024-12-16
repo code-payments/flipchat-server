@@ -33,7 +33,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 	log := zap.Must(zap.NewDevelopment())
 	authn := auth.NewKeyPairAuthenticator()
 	authz := account.NewAuthorizer(log, accounts, authn)
-	server := iap.NewServer(log, authz, accounts, iaps, verifer)
+	server := iap.NewServer(log, authz, accounts, iaps, verifer, verifer)
 
 	signer := model.MustGenerateKeyPair()
 
@@ -67,7 +67,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 			Auth:     nil,
 		}
 
-		receiptId := iap.GetReceiptId(req.Receipt, req.Platform)
+		receiptID := []byte(req.Receipt.Value)
 
 		// Now that the user is bound, `authz` should recognize them and authorize the request.
 		require.NoError(t, signer.Auth(req, &req.Auth))
@@ -80,9 +80,9 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 		require.NoError(t, err)
 		require.True(t, isRegistered)
 
-		purchase, err := iaps.GetPurchase(context.Background(), receiptId)
+		purchase, err := iaps.GetPurchase(context.Background(), receiptID)
 		require.NoError(t, err)
-		require.Equal(t, receiptId, purchase.ReceiptID)
+		require.Equal(t, receiptID, purchase.ReceiptID)
 		require.Equal(t, req.Platform, purchase.Platform)
 		require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
 		require.Equal(t, iap.ProductCreateAccount, purchase.Product)
@@ -104,7 +104,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 			require.NoError(t, err)
 			require.False(t, isRegistered)
 
-			purchase, err := iaps.GetPurchase(context.Background(), receiptId)
+			purchase, err := iaps.GetPurchase(context.Background(), receiptID)
 			require.NoError(t, err)
 			require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
 		})
@@ -122,7 +122,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 			Auth:     nil,
 		}
 
-		receiptId := iap.GetReceiptId(req.Receipt, req.Platform)
+		receiptID := []byte(req.Receipt.Value)
 
 		// Now that the user is bound, `authz` should recognize them and authorize the request.
 		require.NoError(t, signer.Auth(req, &req.Auth))
@@ -135,7 +135,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 		require.NoError(t, err)
 		require.False(t, isRegistered)
 
-		_, err = iaps.GetPurchase(context.Background(), receiptId)
+		_, err = iaps.GetPurchase(context.Background(), receiptID)
 		require.Equal(t, iap.ErrNotFound, err)
 	})
 }

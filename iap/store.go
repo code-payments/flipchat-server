@@ -32,7 +32,7 @@ const (
 )
 
 type Purchase struct {
-	ReceiptID string
+	ReceiptID []byte
 	Platform  commonpb.Platform
 	User      *commonpb.UserId
 	Product   Product
@@ -42,7 +42,7 @@ type Purchase struct {
 
 type Store interface {
 	CreatePurchase(ctx context.Context, purchase *Purchase) error
-	GetPurchase(ctx context.Context, receiptId string) (*Purchase, error)
+	GetPurchase(ctx context.Context, receiptId []byte) (*Purchase, error)
 }
 
 func (p *Purchase) Clone() *Purchase {
