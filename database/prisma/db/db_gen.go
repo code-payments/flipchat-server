@@ -254,11 +254,11 @@ model PushToken {
 model Iap {
   // Fields
 
-  receipt  String @id
-  platform Int    @default(0) @db.SmallInt // Platform enum: Unknown: 0, Apple: 1, Google: 2
-  userId   String
-  product  Int    @default(0) @db.SmallInt // Product enum: Unknown: 0, RegisterAccount: 1
-  state    Int    @default(0) @db.SmallInt // State enum: Unknown: 0, WaitingForPayment: 1, WaitingForFulfillment: 2, Fulfilled: 3
+  receiptId String @id
+  platform  Int    @default(0) @db.SmallInt // Platform enum: Unknown: 0, Apple: 1, Google: 2
+  userId    String
+  product   Int    @default(0) @db.SmallInt // Product enum: Unknown: 0, CreateAccount: 1
+  state     Int    @default(0) @db.SmallInt // State enum: Unknown: 0, WaitingForPayment: 1, WaitingForFulfillment: 2, Fulfilled: 3
 
   createdAt DateTime @default(now())
 
@@ -499,7 +499,7 @@ const (
 type IapScalarFieldEnum string
 
 const (
-	IapScalarFieldEnumReceipt   IapScalarFieldEnum = "receipt"
+	IapScalarFieldEnumReceiptID IapScalarFieldEnum = "receiptId"
 	IapScalarFieldEnumPlatform  IapScalarFieldEnum = "platform"
 	IapScalarFieldEnumUserID    IapScalarFieldEnum = "userId"
 	IapScalarFieldEnumProduct   IapScalarFieldEnum = "product"
@@ -691,7 +691,7 @@ const pushTokenFieldUpdatedAt pushTokenPrismaFields = "updatedAt"
 
 type iapPrismaFields = prismaFields
 
-const iapFieldReceipt iapPrismaFields = "receipt"
+const iapFieldReceiptID iapPrismaFields = "receiptId"
 
 const iapFieldPlatform iapPrismaFields = "platform"
 
@@ -1479,7 +1479,7 @@ type IapModel struct {
 
 // InnerIap holds the actual data
 type InnerIap struct {
-	Receipt   string   `json:"receipt"`
+	ReceiptID string   `json:"receiptId"`
 	Platform  int      `json:"platform"`
 	UserID    string   `json:"userId"`
 	Product   int      `json:"product"`
@@ -1489,7 +1489,7 @@ type InnerIap struct {
 
 // RawIapModel is a struct for Iap when used in raw queries
 type RawIapModel struct {
-	Receipt   RawString   `json:"receipt"`
+	ReceiptID RawString   `json:"receiptId"`
 	Platform  RawInt      `json:"platform"`
 	UserID    RawString   `json:"userId"`
 	Product   RawInt      `json:"product"`
@@ -18763,10 +18763,10 @@ var Iap = iapQuery{}
 // iapQuery exposes query functions for the iap model
 type iapQuery struct {
 
-	// Receipt
+	// ReceiptID
 	//
 	// @required
-	Receipt iapQueryReceiptString
+	ReceiptID iapQueryReceiptIDString
 
 	// Platform
 	//
@@ -18846,34 +18846,34 @@ func (iapQuery) And(params ...IapWhereParam) iapDefaultParam {
 }
 
 // base struct
-type iapQueryReceiptString struct{}
+type iapQueryReceiptIDString struct{}
 
-// Set the required value of Receipt
-func (r iapQueryReceiptString) Set(value string) iapWithPrismaReceiptSetParam {
+// Set the required value of ReceiptID
+func (r iapQueryReceiptIDString) Set(value string) iapWithPrismaReceiptIDSetParam {
 
-	return iapWithPrismaReceiptSetParam{
+	return iapWithPrismaReceiptIDSetParam{
 		data: builder.Field{
-			Name:  "receipt",
+			Name:  "receiptId",
 			Value: value,
 		},
 	}
 
 }
 
-// Set the optional value of Receipt dynamically
-func (r iapQueryReceiptString) SetIfPresent(value *String) iapWithPrismaReceiptSetParam {
+// Set the optional value of ReceiptID dynamically
+func (r iapQueryReceiptIDString) SetIfPresent(value *String) iapWithPrismaReceiptIDSetParam {
 	if value == nil {
-		return iapWithPrismaReceiptSetParam{}
+		return iapWithPrismaReceiptIDSetParam{}
 	}
 
 	return r.Set(*value)
 }
 
-func (r iapQueryReceiptString) Equals(value string) iapWithPrismaReceiptEqualsUniqueParam {
+func (r iapQueryReceiptIDString) Equals(value string) iapWithPrismaReceiptIDEqualsUniqueParam {
 
-	return iapWithPrismaReceiptEqualsUniqueParam{
+	return iapWithPrismaReceiptIDEqualsUniqueParam{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "equals",
@@ -18884,35 +18884,35 @@ func (r iapQueryReceiptString) Equals(value string) iapWithPrismaReceiptEqualsUn
 	}
 }
 
-func (r iapQueryReceiptString) EqualsIfPresent(value *string) iapWithPrismaReceiptEqualsUniqueParam {
+func (r iapQueryReceiptIDString) EqualsIfPresent(value *string) iapWithPrismaReceiptIDEqualsUniqueParam {
 	if value == nil {
-		return iapWithPrismaReceiptEqualsUniqueParam{}
+		return iapWithPrismaReceiptIDEqualsUniqueParam{}
 	}
 	return r.Equals(*value)
 }
 
-func (r iapQueryReceiptString) Order(direction SortOrder) iapDefaultParam {
+func (r iapQueryReceiptIDString) Order(direction SortOrder) iapDefaultParam {
 	return iapDefaultParam{
 		data: builder.Field{
-			Name:  "receipt",
+			Name:  "receiptId",
 			Value: direction,
 		},
 	}
 }
 
-func (r iapQueryReceiptString) Cursor(cursor string) iapCursorParam {
+func (r iapQueryReceiptIDString) Cursor(cursor string) iapCursorParam {
 	return iapCursorParam{
 		data: builder.Field{
-			Name:  "receipt",
+			Name:  "receiptId",
 			Value: cursor,
 		},
 	}
 }
 
-func (r iapQueryReceiptString) In(value []string) iapParamUnique {
+func (r iapQueryReceiptIDString) In(value []string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "in",
@@ -18923,17 +18923,17 @@ func (r iapQueryReceiptString) In(value []string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) InIfPresent(value []string) iapParamUnique {
+func (r iapQueryReceiptIDString) InIfPresent(value []string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.In(value)
 }
 
-func (r iapQueryReceiptString) NotIn(value []string) iapParamUnique {
+func (r iapQueryReceiptIDString) NotIn(value []string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "notIn",
@@ -18944,17 +18944,17 @@ func (r iapQueryReceiptString) NotIn(value []string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) NotInIfPresent(value []string) iapParamUnique {
+func (r iapQueryReceiptIDString) NotInIfPresent(value []string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.NotIn(value)
 }
 
-func (r iapQueryReceiptString) Lt(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) Lt(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "lt",
@@ -18965,17 +18965,17 @@ func (r iapQueryReceiptString) Lt(value string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) LtIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) LtIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.Lt(*value)
 }
 
-func (r iapQueryReceiptString) Lte(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) Lte(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "lte",
@@ -18986,17 +18986,17 @@ func (r iapQueryReceiptString) Lte(value string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) LteIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) LteIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.Lte(*value)
 }
 
-func (r iapQueryReceiptString) Gt(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) Gt(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "gt",
@@ -19007,17 +19007,17 @@ func (r iapQueryReceiptString) Gt(value string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) GtIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) GtIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.Gt(*value)
 }
 
-func (r iapQueryReceiptString) Gte(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) Gte(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "gte",
@@ -19028,17 +19028,17 @@ func (r iapQueryReceiptString) Gte(value string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) GteIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) GteIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.Gte(*value)
 }
 
-func (r iapQueryReceiptString) Contains(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) Contains(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "contains",
@@ -19049,17 +19049,17 @@ func (r iapQueryReceiptString) Contains(value string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) ContainsIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) ContainsIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.Contains(*value)
 }
 
-func (r iapQueryReceiptString) StartsWith(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) StartsWith(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "startsWith",
@@ -19070,17 +19070,17 @@ func (r iapQueryReceiptString) StartsWith(value string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) StartsWithIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) StartsWithIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.StartsWith(*value)
 }
 
-func (r iapQueryReceiptString) EndsWith(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) EndsWith(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "endsWith",
@@ -19091,17 +19091,17 @@ func (r iapQueryReceiptString) EndsWith(value string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) EndsWithIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) EndsWithIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.EndsWith(*value)
 }
 
-func (r iapQueryReceiptString) Mode(value QueryMode) iapParamUnique {
+func (r iapQueryReceiptIDString) Mode(value QueryMode) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "mode",
@@ -19112,17 +19112,17 @@ func (r iapQueryReceiptString) Mode(value QueryMode) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) ModeIfPresent(value *QueryMode) iapParamUnique {
+func (r iapQueryReceiptIDString) ModeIfPresent(value *QueryMode) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.Mode(*value)
 }
 
-func (r iapQueryReceiptString) Not(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) Not(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "not",
@@ -19133,7 +19133,7 @@ func (r iapQueryReceiptString) Not(value string) iapParamUnique {
 	}
 }
 
-func (r iapQueryReceiptString) NotIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) NotIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
@@ -19142,10 +19142,10 @@ func (r iapQueryReceiptString) NotIfPresent(value *string) iapParamUnique {
 
 // deprecated: Use StartsWith instead.
 
-func (r iapQueryReceiptString) HasPrefix(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) HasPrefix(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "starts_with",
@@ -19157,7 +19157,7 @@ func (r iapQueryReceiptString) HasPrefix(value string) iapParamUnique {
 }
 
 // deprecated: Use StartsWithIfPresent instead.
-func (r iapQueryReceiptString) HasPrefixIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) HasPrefixIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
@@ -19166,10 +19166,10 @@ func (r iapQueryReceiptString) HasPrefixIfPresent(value *string) iapParamUnique 
 
 // deprecated: Use EndsWith instead.
 
-func (r iapQueryReceiptString) HasSuffix(value string) iapParamUnique {
+func (r iapQueryReceiptIDString) HasSuffix(value string) iapParamUnique {
 	return iapParamUnique{
 		data: builder.Field{
-			Name: "receipt",
+			Name: "receiptId",
 			Fields: []builder.Field{
 				{
 					Name:  "ends_with",
@@ -19181,15 +19181,15 @@ func (r iapQueryReceiptString) HasSuffix(value string) iapParamUnique {
 }
 
 // deprecated: Use EndsWithIfPresent instead.
-func (r iapQueryReceiptString) HasSuffixIfPresent(value *string) iapParamUnique {
+func (r iapQueryReceiptIDString) HasSuffixIfPresent(value *string) iapParamUnique {
 	if value == nil {
 		return iapParamUnique{}
 	}
 	return r.HasSuffix(*value)
 }
 
-func (r iapQueryReceiptString) Field() iapPrismaFields {
-	return iapFieldReceipt
+func (r iapQueryReceiptIDString) Field() iapPrismaFields {
+	return iapFieldReceiptID
 }
 
 // base struct
@@ -26933,7 +26933,7 @@ type iapActions struct {
 }
 
 var iapOutput = []builder.Output{
-	{Name: "receipt"},
+	{Name: "receiptId"},
 	{Name: "platform"},
 	{Name: "userId"},
 	{Name: "product"},
@@ -27105,83 +27105,83 @@ func (p iapSetParam) field() builder.Field {
 
 func (p iapSetParam) iapModel() {}
 
-type IapWithPrismaReceiptEqualsSetParam interface {
+type IapWithPrismaReceiptIDEqualsSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	equals()
 	iapModel()
-	receiptField()
+	receiptIDField()
 }
 
-type IapWithPrismaReceiptSetParam interface {
+type IapWithPrismaReceiptIDSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	iapModel()
-	receiptField()
+	receiptIDField()
 }
 
-type iapWithPrismaReceiptSetParam struct {
+type iapWithPrismaReceiptIDSetParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p iapWithPrismaReceiptSetParam) field() builder.Field {
+func (p iapWithPrismaReceiptIDSetParam) field() builder.Field {
 	return p.data
 }
 
-func (p iapWithPrismaReceiptSetParam) getQuery() builder.Query {
+func (p iapWithPrismaReceiptIDSetParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p iapWithPrismaReceiptSetParam) iapModel() {}
+func (p iapWithPrismaReceiptIDSetParam) iapModel() {}
 
-func (p iapWithPrismaReceiptSetParam) receiptField() {}
+func (p iapWithPrismaReceiptIDSetParam) receiptIDField() {}
 
-type IapWithPrismaReceiptWhereParam interface {
+type IapWithPrismaReceiptIDWhereParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	iapModel()
-	receiptField()
+	receiptIDField()
 }
 
-type iapWithPrismaReceiptEqualsParam struct {
+type iapWithPrismaReceiptIDEqualsParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p iapWithPrismaReceiptEqualsParam) field() builder.Field {
+func (p iapWithPrismaReceiptIDEqualsParam) field() builder.Field {
 	return p.data
 }
 
-func (p iapWithPrismaReceiptEqualsParam) getQuery() builder.Query {
+func (p iapWithPrismaReceiptIDEqualsParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p iapWithPrismaReceiptEqualsParam) iapModel() {}
+func (p iapWithPrismaReceiptIDEqualsParam) iapModel() {}
 
-func (p iapWithPrismaReceiptEqualsParam) receiptField() {}
+func (p iapWithPrismaReceiptIDEqualsParam) receiptIDField() {}
 
-func (iapWithPrismaReceiptSetParam) settable()  {}
-func (iapWithPrismaReceiptEqualsParam) equals() {}
+func (iapWithPrismaReceiptIDSetParam) settable()  {}
+func (iapWithPrismaReceiptIDEqualsParam) equals() {}
 
-type iapWithPrismaReceiptEqualsUniqueParam struct {
+type iapWithPrismaReceiptIDEqualsUniqueParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p iapWithPrismaReceiptEqualsUniqueParam) field() builder.Field {
+func (p iapWithPrismaReceiptIDEqualsUniqueParam) field() builder.Field {
 	return p.data
 }
 
-func (p iapWithPrismaReceiptEqualsUniqueParam) getQuery() builder.Query {
+func (p iapWithPrismaReceiptIDEqualsUniqueParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p iapWithPrismaReceiptEqualsUniqueParam) iapModel()     {}
-func (p iapWithPrismaReceiptEqualsUniqueParam) receiptField() {}
+func (p iapWithPrismaReceiptIDEqualsUniqueParam) iapModel()       {}
+func (p iapWithPrismaReceiptIDEqualsUniqueParam) receiptIDField() {}
 
-func (iapWithPrismaReceiptEqualsUniqueParam) unique() {}
-func (iapWithPrismaReceiptEqualsUniqueParam) equals() {}
+func (iapWithPrismaReceiptIDEqualsUniqueParam) unique() {}
+func (iapWithPrismaReceiptIDEqualsUniqueParam) equals() {}
 
 type IapWithPrismaPlatformEqualsSetParam interface {
 	field() builder.Field
@@ -28139,7 +28139,7 @@ func (r pushTokenCreateOne) Tx() PushTokenUniqueTxResult {
 
 // Creates a single iap.
 func (r iapActions) CreateOne(
-	_receipt IapWithPrismaReceiptSetParam,
+	_receiptID IapWithPrismaReceiptIDSetParam,
 	_userID IapWithPrismaUserIDSetParam,
 
 	optional ...IapSetParam,
@@ -28155,7 +28155,7 @@ func (r iapActions) CreateOne(
 
 	var fields []builder.Field
 
-	fields = append(fields, _receipt.field())
+	fields = append(fields, _receiptID.field())
 	fields = append(fields, _userID.field())
 
 	for _, q := range optional {
@@ -37647,7 +37647,7 @@ func (r iapActions) UpsertOne(
 
 func (r iapUpsertOne) Create(
 
-	_receipt IapWithPrismaReceiptSetParam,
+	_receiptID IapWithPrismaReceiptIDSetParam,
 	_userID IapWithPrismaUserIDSetParam,
 
 	optional ...IapSetParam,
@@ -37656,7 +37656,7 @@ func (r iapUpsertOne) Create(
 	v.query = r.query
 
 	var fields []builder.Field
-	fields = append(fields, _receipt.field())
+	fields = append(fields, _receiptID.field())
 	fields = append(fields, _userID.field())
 
 	for _, q := range optional {

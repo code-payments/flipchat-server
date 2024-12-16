@@ -67,6 +67,8 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 			Auth:     nil,
 		}
 
+		receiptId := iap.GetReceiptId(req.Receipt, req.Platform)
+
 		// Now that the user is bound, `authz` should recognize them and authorize the request.
 		require.NoError(t, signer.Auth(req, &req.Auth))
 
@@ -78,9 +80,9 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 		require.NoError(t, err)
 		require.True(t, isRegistered)
 
-		purchase, err := iaps.GetPurchase(context.Background(), req.Receipt)
+		purchase, err := iaps.GetPurchase(context.Background(), receiptId)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.ProtoEqualError(req.Receipt, purchase.Receipt))
+		require.Equal(t, receiptId, purchase.ReceiptID)
 		require.Equal(t, req.Platform, purchase.Platform)
 		require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
 		require.Equal(t, iap.ProductCreateAccount, purchase.Product)
@@ -102,7 +104,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 			require.NoError(t, err)
 			require.False(t, isRegistered)
 
-			purchase, err := iaps.GetPurchase(context.Background(), req.Receipt)
+			purchase, err := iaps.GetPurchase(context.Background(), receiptId)
 			require.NoError(t, err)
 			require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
 		})
@@ -120,6 +122,8 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 			Auth:     nil,
 		}
 
+		receiptId := iap.GetReceiptId(req.Receipt, req.Platform)
+
 		// Now that the user is bound, `authz` should recognize them and authorize the request.
 		require.NoError(t, signer.Auth(req, &req.Auth))
 
@@ -131,7 +135,7 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 		require.NoError(t, err)
 		require.False(t, isRegistered)
 
-		_, err = iaps.GetPurchase(context.Background(), req.Receipt)
+		_, err = iaps.GetPurchase(context.Background(), receiptId)
 		require.Equal(t, iap.ErrNotFound, err)
 	})
 }

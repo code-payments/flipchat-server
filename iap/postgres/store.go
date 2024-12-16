@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	iappb "github.com/code-payments/flipchat-protobuf-api/generated/go/iap/v1"
 
 	pg "github.com/code-payments/flipchat-server/database/postgres"
 	"github.com/code-payments/flipchat-server/database/prisma/db"
@@ -43,7 +42,7 @@ func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) erro
 	encodedUserID := pg.Encode(purchase.User.Value)
 
 	_, err := s.client.Iap.FindUnique(
-		db.Iap.Receipt.Equals(purchase.Receipt.Value),
+		db.Iap.ReceiptID.Equals(purchase.ReceiptID),
 	).Exec(ctx)
 	if err == nil {
 		return iap.ErrExists
@@ -52,7 +51,7 @@ func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) erro
 	}
 
 	_, err = s.client.Iap.CreateOne(
-		db.Iap.Receipt.Set(purchase.Receipt.Value),
+		db.Iap.ReceiptID.Set(purchase.ReceiptID),
 		db.Iap.UserID.Set(encodedUserID),
 		db.Iap.Platform.Set(int(purchase.Platform)),
 		db.Iap.Product.Set(int(purchase.Product)),
@@ -61,9 +60,9 @@ func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) erro
 	return err
 }
 
-func (s *store) GetPurchase(ctx context.Context, receipt *iappb.Receipt) (*iap.Purchase, error) {
+func (s *store) GetPurchase(ctx context.Context, receiptId string) (*iap.Purchase, error) {
 	res, err := s.client.Iap.FindUnique(
-		db.Iap.Receipt.Equals(receipt.Value),
+		db.Iap.ReceiptID.Equals(receiptId),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
@@ -82,7 +81,7 @@ func fromModel(m *db.IapModel) (*iap.Purchase, error) {
 	}
 
 	return &iap.Purchase{
-		Receipt:   &iappb.Receipt{Value: m.Receipt},
+		ReceiptID: m.ReceiptID,
 		Platform:  commonpb.Platform(m.Platform),
 		User:      &commonpb.UserId{Value: decodedUserID},
 		Product:   iap.Product(m.Product),

@@ -49,14 +49,16 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		return nil, err
 	}
 
+	receiptId := GetReceiptId(req.Receipt, req.Platform)
+
 	log := s.log.With(
 		zap.String("user_id", model.UserIDString(userID)),
 		zap.String("platform", req.Platform.String()),
-		zap.String("receipt", req.Receipt.Value),
+		zap.String("receipt_id", receiptId),
 	)
 
 	// Note: purchase is always assumed to be fulfilled
-	_, err = s.iaps.GetPurchase(ctx, req.Receipt)
+	_, err = s.iaps.GetPurchase(ctx, receiptId)
 	if err == nil {
 		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
 	} else if err != ErrNotFound {
@@ -79,7 +81,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	}
 
 	err = s.iaps.CreatePurchase(ctx, &Purchase{
-		Receipt:   req.Receipt,
+		ReceiptID: receiptId,
 		Platform:  req.Platform,
 		User:      userID,
 		Product:   ProductCreateAccount,

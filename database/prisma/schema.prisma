@@ -180,11 +180,11 @@ model PushToken {
 model Iap {
   // Fields
 
-  receipt  String @id
-  platform Int    @default(0) @db.SmallInt // Platform enum: Unknown: 0, Apple: 1, Google: 2
-  userId   String
-  product  Int    @default(0) @db.SmallInt // Product enum: Unknown: 0, CreateAccount: 1
-  state    Int    @default(0) @db.SmallInt // State enum: Unknown: 0, WaitingForPayment: 1, WaitingForFulfillment: 2, Fulfilled: 3
+  receiptId String @id
+  platform  Int    @default(0) @db.SmallInt // Platform enum: Unknown: 0, Apple: 1, Google: 2
+  userId    String
+  product   Int    @default(0) @db.SmallInt // Product enum: Unknown: 0, CreateAccount: 1
+  state     Int    @default(0) @db.SmallInt // State enum: Unknown: 0, WaitingForPayment: 1, WaitingForFulfillment: 2, Fulfilled: 3
 
   createdAt DateTime @default(now())
 
