@@ -28,6 +28,8 @@ require (
 
 require github.com/ReneKroon/ttlcache v1.7.0
 
+require go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352 // indirect
+
 require (
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	firebase.google.com/go/v4 v4.15.0
@@ -39,12 +41,14 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.0 // indirect
 	github.com/containerd/continuity v0.0.0-20190827140505-75bee3e2ccb6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/devsisters/go-applereceipt v0.0.0-20240805020915-fa22a0160fc2
 	github.com/docker/cli v20.10.7+incompatible // indirect
 	github.com/docker/docker v20.10.7+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.1.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/fullsailor/pkcs7 v0.0.0-20190404230743-d7302db945fa
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
