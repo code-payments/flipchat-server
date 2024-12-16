@@ -48,7 +48,7 @@ func NewRoomIsLiveAnnouncementContentBuilder(roomNumber uint64) AnnouncementCont
 func NewUserWatchingChatAnnouncementContentBuilder(ctx context.Context) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: "New watcher",
+			KeyOrText: "New spectator",
 		}, nil
 	}
 }
