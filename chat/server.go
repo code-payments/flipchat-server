@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -34,7 +33,6 @@ import (
 	"github.com/code-payments/flipchat-server/moderation"
 	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
-	"github.com/code-payments/flipchat-server/query"
 )
 
 const (
@@ -42,8 +40,7 @@ const (
 	StreamPingDelay  = 5 * time.Second
 	StreamTimeout    = time.Second
 
-	MaxFlushedChatBatchSize = 1024
-	FlushedChatBatchSize    = 32
+	MaxChatEventBatchSize = 1024
 )
 
 var (
@@ -161,7 +158,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 		userKey,
 		StreamBufferSize,
 		func(events []*event.ChatEvent) (*chatpb.StreamChatEventsResponse_EventBatch, bool) {
-			if len(events) > MaxFlushedChatBatchSize {
+			if len(events) > MaxChatEventBatchSize {
 				log.Warn("Chat event batch size exceeds proto limit")
 				return nil, false
 			}
@@ -202,8 +199,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				if includeUnreadCountUpdate {
 					numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, update.ChatId, userID, readPtr)
 					if err == nil {
-						// Assumes the full metadata update is only sent on flush
-						// or chat creation.
+						// Assumes the full metadata update is only sent on chat creation.
 						update.MetadataUpdates = append(
 							update.MetadataUpdates,
 							&chatpb.StreamChatEventsResponse_MetadataUpdate{
@@ -276,8 +272,6 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 	streamHealthCh := protoutil.MonitorStreamHealth(ctx, log, stream, func(t *messagingpb.StreamMessagesRequest) bool {
 		return t.GetPong() != nil
 	})
-
-	go s.flushInitialState(ctx, userID, ss)
 
 	for {
 		select {
@@ -1104,7 +1098,6 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 			s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
 		}
 
-		// Assumes the full metadata update is only sent on flush
 		clonedEvent.MetadataUpdates = append(clonedEvent.MetadataUpdates, &chatpb.StreamChatEventsResponse_MetadataUpdate{
 			Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_LastActivityChanged_{
 				LastActivityChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_LastActivityChanged{
@@ -1292,71 +1285,4 @@ func (s *Server) getUnreadCount(ctx context.Context, chatID *commonpb.ChatId, ca
 		return MaxUnreadCount, true, nil
 	}
 	return uint32(unread), false, nil
-}
-
-func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId, ss event.Stream[[]*event.ChatEvent]) {
-	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
-
-	chatIDs, err := s.chats.GetChatsForUser(ctx, userID)
-	switch err {
-	case nil:
-	case ErrChatNotFound:
-		return
-	default:
-		log.Warn("Failed to get chats for user (stream flush)", zap.Error(err))
-		return
-	}
-
-	metadata, err := s.getMetadataBatched(ctx, chatIDs, userID)
-	if err != nil {
-		log.Warn("Failed to get metadata for chats (stream flush)", zap.Error(err))
-		return
-	}
-
-	events := make([]*event.ChatEvent, len(metadata))
-	for i, md := range metadata {
-		e := &event.ChatEvent{
-			ChatID: md.ChatId,
-			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
-				{
-					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
-						FullRefresh: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh{
-							Metadata: md,
-						},
-					},
-				},
-			},
-		}
-		events[i] = e
-
-		messages, err := s.messages.GetMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
-		if err != nil {
-			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err))
-		} else if len(messages) > 0 {
-			e.MessageUpdate = messages[len(messages)-1]
-		}
-	}
-
-	sort.Slice(events, func(i, j int) bool {
-		timestampAtI := events[i].MetadataUpdates[0].GetFullRefresh().Metadata.LastActivity.AsTime()
-		timestampAtJ := events[j].MetadataUpdates[0].GetFullRefresh().Metadata.LastActivity.AsTime()
-		return timestampAtI.After(timestampAtJ)
-	})
-
-	var batch []*event.ChatEvent
-	for _, e := range events {
-		batch = append(batch, e)
-		if len(batch) >= FlushedChatBatchSize {
-			if err = ss.Notify(batch, StreamTimeout); err != nil {
-				log.Info("Failed to notify stream (stream flush)", zap.Error(err))
-				return
-			}
-			batch = nil
-		}
-	}
-	if len(batch) > 0 {
-		if err = ss.Notify(batch, StreamTimeout); err != nil {
-			log.Warn("Failed to notify stream (stream flush)", zap.Error(err))
-		}
-	}
 }

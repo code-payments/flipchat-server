@@ -32,8 +32,7 @@ const (
 	streamPingDelay  = 5 * time.Second
 	streamTimeout    = time.Second
 
-	maxFlushedMessageBatchSize = 1024
-	flushedMessageBatchSize    = maxFlushedMessageBatchSize
+	maxMessageEventBatchSize = 1024
 )
 
 type Server struct {
@@ -157,15 +156,12 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 			if e.MessageUpdate != nil {
 				messages = append(messages, e.MessageUpdate)
 			}
-			if len(e.FlushedMessages) > 0 {
-				messages = append(messages, e.FlushedMessages...)
-			}
 
 			if len(messages) == 0 {
 				return nil, false
 			}
-			if len(messages) > maxFlushedMessageBatchSize {
-				log.Warn("Flushed message batch size exceeds proto limit")
+			if len(messages) > maxMessageEventBatchSize {
+				log.Warn("Message batch size exceeds proto limit")
 				return nil, false
 			}
 			return &messagingpb.StreamMessagesResponse_MessageBatch{
@@ -203,19 +199,6 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 	streamHealthCh := protoutil.MonitorStreamHealth(ctx, log, stream, func(t *messagingpb.StreamMessagesRequest) bool {
 		return t.GetPong() != nil
 	})
-
-	var latestOnly bool
-	var resumeFrom *messagingpb.MessageId
-	switch typed := params.Resume.(type) {
-	case *messagingpb.StreamMessagesRequest_Params_LastKnownMessageId:
-		resumeFrom = typed.LastKnownMessageId // todo: this needs tests
-	case *messagingpb.StreamMessagesRequest_Params_LatestOnly:
-		latestOnly = typed.LatestOnly // todo: this needs tests
-	}
-
-	if !latestOnly {
-		go s.flushMessages(ctx, params.ChatId, userID, resumeFrom, ss)
-	}
 
 	for {
 		select {
@@ -436,41 +419,6 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 	}
 
 	return &messagingpb.NotifyIsTypingResponse{}, nil
-}
-
-func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, resumeFrom *messagingpb.MessageId, stream event.Stream[*event.ChatEvent]) {
-	log := s.log.With(
-		zap.String("user_id", model.UserIDString(userID)),
-		zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)),
-	)
-
-	queryOptions := []query.Option{query.WithLimit(10240)} // todo: paged calls
-	if resumeFrom != nil {
-		queryOptions = append(queryOptions, query.WithToken(&commonpb.PagingToken{Value: resumeFrom.Value}))
-	}
-	messages, err := s.messages.GetMessages(ctx, chatID, queryOptions...)
-	if err != nil {
-		log.Warn("Failed to get messages for flush", zap.Error(err))
-		return
-	}
-
-	var batch []*messagingpb.Message
-	for _, message := range messages {
-		batch = append(batch, message)
-		if len(batch) >= flushedMessageBatchSize {
-			if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
-				log.Info("Failed to send message to stream", zap.Error(err))
-				return
-			}
-			batch = nil
-		}
-	}
-	if len(batch) > 0 {
-		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
-			log.Info("Failed to send message to stream", zap.Error(err))
-			return
-		}
-	}
 }
 
 func (s *Server) handleChatUpdates(chatID *commonpb.ChatId, event *event.ChatEvent) {
