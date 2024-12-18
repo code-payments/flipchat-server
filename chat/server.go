@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -1317,6 +1318,11 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 			events = append(events, e)
 		}
 	}
+	sort.Slice(events, func(i, j int) bool {
+		timestampAtI := events[i].MessageUpdate.Ts.AsTime()
+		timestampAtJ := events[j].MessageUpdate.Ts.AsTime()
+		return timestampAtI.After(timestampAtJ)
+	})
 	var batch []*event.ChatEvent
 	for _, e := range events {
 		batch = append(batch, e)
