@@ -8,7 +8,7 @@ import (
 	"github.com/code-payments/flipchat-server/iap/tests"
 )
 
-func TestAppleVerifier(t *testing.T) {
+func TestAndroidVerifier(t *testing.T) {
 	// From real Android app on real environment.
 	testPurchaseToken := "gcjkgkiehhchodpancdfjgfo.AO-J1OyEz6mLitFxK7gDOBN0iv4_9f5Xc6dIAdK_tLj2SGi9msJz-R5Xo3PcbC3fUYdG9SeQ6ngy2nwLe-LW2ORtPt6JQZte4w"
 
