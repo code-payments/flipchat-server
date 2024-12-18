@@ -64,12 +64,20 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_DENIED}, nil
 	}
 
-	// todo: use Z's branch to pull from the verifier
-	receiptID := []byte(req.Receipt.Value)
-
 	log := s.log.With(
 		zap.String("user_id", model.UserIDString(userID)),
 		zap.String("platform", req.Platform.String()),
+		zap.String("receipt", req.Receipt.Value),
+	)
+
+	// todo: use Z's branch to pull from the verifier
+	receiptID, err := []byte(req.Receipt.Value), nil
+	if err != nil {
+		log.Warn("Failed to get receipt ID", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to get receipt ID")
+	}
+
+	log = s.log.With(
 		zap.String("receipt_id", base64.StdEncoding.EncodeToString(receiptID)),
 	)
 
