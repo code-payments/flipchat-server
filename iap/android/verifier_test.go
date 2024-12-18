@@ -1,4 +1,4 @@
-//go:build integration
+//go:build android
 
 package android
 
@@ -18,7 +18,16 @@ func TestAppleVerifier(t *testing.T) {
 	// TODO: Replace this with a real serviceAccount json.
 	serviceAccount := []byte(`{
 		"type": "service_account",
-		// ???
+		"project_id": "flipchat-fd439",
+		"private_key_id": "e9e710489780df977d4925d71f2460a37d7e2392",
+		"private_key": "<REPLACE_ME>",
+		"client_email": "flipchat-server@flipchat-fd439.iam.gserviceaccount.com",
+		"client_id": "107283323988202137316",
+		"auth_uri": "https://accounts.google.com/o/oauth2/auth",
+		"token_uri": "https://oauth2.googleapis.com/token",
+		"auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+		"client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/flipchat-server%40flipchat-fd439.iam.gserviceaccount.com",
+		"universe_domain": "googleapis.com"
 	}`)
 
 	verifier := NewAndroidVerifier(
