@@ -9,10 +9,19 @@ import (
 	"github.com/code-payments/flipchat-server/iap"
 )
 
-type AppleVerifier struct{}
+type AppleVerifier struct {
+	// PackageName is the app's package name, e.g. "com.flipchat.app".
+	packageName string
 
-func NewAppleVerifier() iap.Verifier {
-	return &AppleVerifier{}
+	// ProductName is the name of the product that the receipt should be for.
+	productName string
+}
+
+func NewAppleVerifier(pkgName string, product string) iap.Verifier {
+	return &AppleVerifier{
+		packageName: pkgName,
+		productName: product,
+	}
 }
 
 func (m *AppleVerifier) VerifyReceipt(ctx context.Context, encodedReceipt string) (bool, error) {
@@ -26,12 +35,12 @@ func (m *AppleVerifier) VerifyReceipt(ctx context.Context, encodedReceipt string
 	}
 
 	// Verify the bundle ID.
-	if receipt.BundleIdentifier != "com.flipchat.app" {
+	if receipt.BundleIdentifier != m.packageName {
 		return false, nil
 	}
 
 	// Verify the that the receipt is for the correct product.
-	if receipt.InAppPurchaseReceipts[0].ProductIdentifier != "com.flipchat.iap.createAccount" {
+	if receipt.InAppPurchaseReceipts[0].ProductIdentifier != m.productName {
 		return false, nil
 	}
 

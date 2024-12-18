@@ -1,20 +1,30 @@
-package apple
+//go:build integration
+
+package android
 
 import (
 	"testing"
 
-	"github.com/code-payments/flipchat-server/iap/apple/resources"
 	"github.com/code-payments/flipchat-server/iap/tests"
 )
 
 func TestAppleVerifier(t *testing.T) {
-	// This represents a mock base64-encoded PKCS#7 receipt. In a real environment,
-	// the iOS app dev would provide you with a valid receipt from the device or sandbox.
-	base64Receipt := resources.ValidAppleReceipt
+	// From real Android app on real environment.
+	testPurchaseToken := "gcjkgkiehhchodpancdfjgfo.AO-J1OyEz6mLitFxK7gDOBN0iv4_9f5Xc6dIAdK_tLj2SGi9msJz-R5Xo3PcbC3fUYdG9SeQ6ngy2nwLe-LW2ORtPt6JQZte4w"
 
-	verifier := NewAppleVerifier(
-		"com.flipchat.app",
-		"com.flipchat.iap.createAccount",
+	// From test environment.
+	//testPurchaseToken := "cmpkkdbgkebjhnalcgjinpba.AO-J1OzkqS9nR3iaT5C8C6HfVp_dqWvYoVjt8HACHXKDCXNioqPifcOxx3g33mZ36OAYqQvzxnUUX_YkNgRvlzSYQ7vBD6wRsQ"
+
+	// TODO: Replace this with a real serviceAccount json.
+	serviceAccount := []byte(`{
+		"type": "service_account",
+		// ???
+	}`)
+
+	verifier := NewAndroidVerifier(
+		serviceAccount,
+		"xyz.flipchat.app",
+		"com.flipchat.iap.createaccount",
 	)
 
 	// The test harness requires a MessageGenerator function. For Apple receipts,
@@ -26,7 +36,7 @@ func TestAppleVerifier(t *testing.T) {
 	// validReceiptFunc simulates returning the iOS app developer’s base64 receipt.
 	// We simply return our placeholder base64Receipt.
 	validReceiptFunc := func(_ string) string {
-		return base64Receipt
+		return testPurchaseToken
 	}
 
 	// No-op teardown.
