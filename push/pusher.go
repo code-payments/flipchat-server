@@ -41,15 +41,11 @@ func NewFCMPusher(log *zap.Logger, tokens TokenStore, client FCMClient) *FCMPush
 }
 
 func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, data map[string]string) error {
-	var allPushTokens []Token
-	for _, user := range users {
-		tokens, err := p.tokens.GetTokens(ctx, user)
-		if err != nil {
-			return err
-		}
-		allPushTokens = append(allPushTokens, tokens...)
+	pushTokens, err := p.tokens.GetTokensBatch(ctx, users...)
+	if err != nil {
+		p.log.Warn("Failed to get push tokens", zap.Error(err))
+		return err
 	}
-	pushTokens := allPushTokens
 
 	if len(pushTokens) == 0 {
 		p.log.Debug("Dropping push, no tokens for users", zap.Int("num_users", len(users)))

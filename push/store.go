@@ -20,6 +20,9 @@ type TokenStore interface {
 	// GetTokens returns all tokens for a user.
 	GetTokens(ctx context.Context, userID *commonpb.UserId) ([]Token, error)
 
+	// GetTokensBatch returns all tokens for a batch of users.
+	GetTokensBatch(ctx context.Context, userIDs ...*commonpb.UserId) ([]Token, error)
+
 	// AddToken adds a token for a user.
 	//
 	// If the token already exists for the same user and device, it will be updated.
