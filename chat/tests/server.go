@@ -519,6 +519,9 @@ func testServer(
 		stream, err := client.StreamChatEvents(ctx)
 		require.NoError(t, err)
 
+		// To avoid races with flush
+		time.Sleep(200 * time.Millisecond)
+
 		req := &chatpb.StreamChatEventsRequest{
 			Type: &chatpb.StreamChatEventsRequest_Params_{
 				Params: &chatpb.StreamChatEventsRequest_Params{
