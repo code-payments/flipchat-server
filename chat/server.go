@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -34,7 +33,6 @@ import (
 	"github.com/code-payments/flipchat-server/moderation"
 	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
-	"github.com/code-payments/flipchat-server/query"
 )
 
 const (
@@ -42,8 +40,7 @@ const (
 	StreamPingDelay  = 5 * time.Second
 	StreamTimeout    = time.Second
 
-	MaxFlushedChatBatchSize = 1024
-	FlushedChatBatchSize    = 32
+	MaxChatEventBatchSize = 1024
 )
 
 var (
@@ -161,7 +158,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 		userKey,
 		StreamBufferSize,
 		func(events []*event.ChatEvent) (*chatpb.StreamChatEventsResponse_EventBatch, bool) {
-			if len(events) > MaxFlushedChatBatchSize {
+			if len(events) > MaxChatEventBatchSize {
 				log.Warn("Chat event batch size exceeds proto limit")
 				return nil, false
 			}
@@ -187,9 +184,6 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 					LastMessage:     clonedEvent.MessageUpdate,
 					Pointer:         clonedEvent.PointerUpdate,
 					IsTyping:        clonedEvent.IsTyping,
-
-					Metadata:     clonedEvent.LegacyMetadataUpdate,
-					MemberUpdate: clonedEvent.LegacyMemberUpdate,
 				}
 
 				// Inject unread count updates specific to this user for a latest message or read pointer update
@@ -205,8 +199,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				if includeUnreadCountUpdate {
 					numUnread, hasMoreUnread, err := s.getUnreadCount(ctx, update.ChatId, userID, readPtr)
 					if err == nil {
-						// Assumes the full metadata update is only sent on flush
-						// or chat creation.
+						// Assumes the full metadata update is only sent on chat creation.
 						update.MetadataUpdates = append(
 							update.MetadataUpdates,
 							&chatpb.StreamChatEventsResponse_MetadataUpdate{
@@ -220,13 +213,6 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 						)
 					} else {
 						log.Warn("Failed to get unread count", zap.Error(err))
-					}
-
-					md, err := s.getMetadata(ctx, e.ChatID, userID)
-					if err == nil {
-						update.Metadata = md
-					} else {
-						log.Warn("Failed to get metadata", zap.Error(err))
 					}
 				}
 
@@ -286,8 +272,6 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 	streamHealthCh := protoutil.MonitorStreamHealth(ctx, log, stream, func(t *messagingpb.StreamMessagesRequest) bool {
 		return t.GetPong() != nil
 	})
-
-	go s.flushInitialState(ctx, userID, ss)
 
 	for {
 		select {
@@ -530,18 +514,8 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			}
 		}
 
-		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-					Members: memberProtos,
-				},
-			},
-		}
-
 		if err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{
-			ChatID:               md.ChatId,
-			LegacyMetadataUpdate: md,
-			LegacyMemberUpdate:   mu,
+			ChatID: md.ChatId,
 			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
 				{
 					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
@@ -713,15 +687,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
-		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-					Members: members,
-				},
-			},
-		}
-
-		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMetadataUpdate: md, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+		err = s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
 			{
 				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined_{
 					Joined: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined{
@@ -754,36 +720,18 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 		return nil, status.Errorf(codes.Internal, "failed to remove chat member")
 	}
 
-	go func() {
-		ctx := context.Background()
-
-		md, members, err := s.getMetadataWithMembers(ctx, req.ChatId, userID)
-		if err != nil {
-			log.Warn("Failed to get chat data for update", zap.Error(err))
-			return
-		}
-
-		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-					Members: members,
+	err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+		{
+			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Left_{
+				Left: &chatpb.StreamChatEventsResponse_MemberUpdate_Left{
+					Member: userID,
 				},
 			},
-		}
-
-		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
-			{
-				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Left_{
-					Left: &chatpb.StreamChatEventsResponse_MemberUpdate_Left{
-						Member: userID,
-					},
-				},
-			},
-		}})
-		if err != nil {
-			s.log.Warn("Failed to notify member leaving", zap.Error(err))
-		}
-	}()
+		},
+	}})
+	if err != nil {
+		s.log.Warn("Failed to notify member leaving", zap.Error(err))
+	}
 
 	return &chatpb.LeaveChatResponse{}, nil
 }
@@ -845,7 +793,7 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
-		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
 			{
 				Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged_{
 					DisplayNameChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged{
@@ -910,7 +858,7 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
-		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
 			{
 				Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged_{
 					CoverChargeChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged{
@@ -984,21 +932,7 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 				log.Warn("Failed to send announcement", zap.Error(err))
 			}
 
-			_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
-			if err != nil {
-				log.Warn("Failed to get chat data or update", zap.Error(err))
-				return
-			}
-
-			mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-					FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-						Members: members,
-					},
-				},
-			}
-
-			err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+			err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
 				{
 					Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Removed_{
 						Removed: &chatpb.StreamChatEventsResponse_MemberUpdate_Removed{
@@ -1074,21 +1008,7 @@ func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*ch
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
-		_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, nil)
-		if err != nil {
-			log.Warn("Failed to get chat data for update", zap.Error(err))
-			return
-		}
-
-		mu := &chatpb.StreamChatEventsResponse_MemberUpdate{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-				FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
-					Members: members,
-				},
-			},
-		}
-
-		err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{ChatID: md.ChatId, LegacyMemberUpdate: mu, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
 			{
 				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Muted_{
 					Muted: &chatpb.StreamChatEventsResponse_MemberUpdate_Muted{
@@ -1178,10 +1098,6 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 			s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
 		}
 
-		if clonedEvent.LegacyMetadataUpdate != nil {
-			clonedEvent.LegacyMetadataUpdate.LastActivity = clonedEvent.MessageUpdate.Ts
-		}
-		// Assumes the full metadata update is only sent on flush
 		clonedEvent.MetadataUpdates = append(clonedEvent.MetadataUpdates, &chatpb.StreamChatEventsResponse_MetadataUpdate{
 			Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_LastActivityChanged_{
 				LastActivityChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_LastActivityChanged{
@@ -1369,72 +1285,4 @@ func (s *Server) getUnreadCount(ctx context.Context, chatID *commonpb.ChatId, ca
 		return MaxUnreadCount, true, nil
 	}
 	return uint32(unread), false, nil
-}
-
-func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId, ss event.Stream[[]*event.ChatEvent]) {
-	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
-
-	chatIDs, err := s.chats.GetChatsForUser(ctx, userID)
-	switch err {
-	case nil:
-	case ErrChatNotFound:
-		return
-	default:
-		log.Warn("Failed to get chats for user (stream flush)", zap.Error(err))
-		return
-	}
-
-	metadata, err := s.getMetadataBatched(ctx, chatIDs, userID)
-	if err != nil {
-		log.Warn("Failed to get metadata for chats (stream flush)", zap.Error(err))
-		return
-	}
-
-	events := make([]*event.ChatEvent, len(metadata))
-	for i, md := range metadata {
-		e := &event.ChatEvent{
-			ChatID: md.ChatId,
-			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
-				{
-					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
-						FullRefresh: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh{
-							Metadata: md,
-						},
-					},
-				},
-			},
-			LegacyMetadataUpdate: md,
-		}
-		events[i] = e
-
-		messages, err := s.messages.GetMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
-		if err != nil {
-			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err))
-		} else if len(messages) > 0 {
-			e.MessageUpdate = messages[len(messages)-1]
-		}
-	}
-
-	sort.Slice(events, func(i, j int) bool {
-		timestampAtI := events[i].MetadataUpdates[0].GetFullRefresh().Metadata.LastActivity.AsTime()
-		timestampAtJ := events[j].MetadataUpdates[0].GetFullRefresh().Metadata.LastActivity.AsTime()
-		return timestampAtI.After(timestampAtJ)
-	})
-
-	var batch []*event.ChatEvent
-	for _, e := range events {
-		batch = append(batch, e)
-		if len(batch) >= FlushedChatBatchSize {
-			if err = ss.Notify(batch, StreamTimeout); err != nil {
-				log.Info("Failed to notify stream (stream flush)", zap.Error(err))
-				return
-			}
-			batch = nil
-		}
-	}
-	if len(batch) > 0 {
-		if err = ss.Notify(batch, StreamTimeout); err != nil {
-			log.Warn("Failed to notify stream (stream flush)", zap.Error(err))
-		}
-	}
 }

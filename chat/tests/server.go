@@ -554,9 +554,6 @@ func testServer(
 			}
 		}()
 
-		// TODO: There's a bit of a race for 'flush initial state', so we just wait a bit
-		time.Sleep(200 * time.Millisecond)
-
 		verifyExpectedFullMemberRefresh := func(update *chatpb.StreamChatEventsResponse_MemberUpdate, expected []chat.Member) {
 			refresh := update.GetFullRefresh()
 			require.NotNil(t, refresh)
