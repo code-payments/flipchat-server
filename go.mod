@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v0.17.0
 	github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84
 	github.com/code-payments/code-server v1.10.20-0.20241113221941-16bb545e1277
-	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241213150647-064d2e82a2a3
+	github.com/code-payments/flipchat-protobuf-api v0.0.0-20241216184556-2e9f7af81dff
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/jackc/pgconn v1.10.0
