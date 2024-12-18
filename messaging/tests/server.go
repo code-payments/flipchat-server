@@ -130,6 +130,9 @@ func testServerHappy(
 		}
 	}()
 
+	// Note: It's possible flush message picks up the first few messages.
+	time.Sleep(500 * time.Millisecond)
+
 	var expected []*messagingpb.Message
 	t.Run("Send Messages", func(t *testing.T) {
 		for i := range 10 {
