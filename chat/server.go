@@ -1294,6 +1294,7 @@ func (s *Server) getUnreadCount(ctx context.Context, chatID *commonpb.ChatId, ca
 
 func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId, ss event.Stream[[]*event.ChatEvent]) {
 	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
+
 	chatIDs, err := s.chats.GetChatsForUser(ctx, userID)
 	switch err {
 	case nil:
@@ -1303,26 +1304,45 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		log.Warn("Failed to get chats for user (stream flush)", zap.Error(err))
 		return
 	}
-	events := make([]*event.ChatEvent, 0)
-	for _, chatID := range chatIDs {
-		log := log.With(zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
 
-		messages, err := s.messages.GetMessages(ctx, chatID, query.WithDescending(), query.WithLimit(1))
+	metadata, err := s.getMetadataBatched(ctx, chatIDs, userID)
+	if err != nil {
+		log.Warn("Failed to get metadata for chats (stream flush)", zap.Error(err))
+		return
+	}
+
+	events := make([]*event.ChatEvent, len(metadata))
+	for i, md := range metadata {
+		log := log.With(zap.String("user_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)))
+
+		e := &event.ChatEvent{
+			ChatID: md.ChatId,
+			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+				{
+					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
+						FullRefresh: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh{
+							Metadata: md,
+						},
+					},
+				},
+			},
+		}
+		events[i] = e
+
+		messages, err := s.messages.GetMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
 		if err != nil {
 			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err))
 		} else if len(messages) > 0 {
-			e := &event.ChatEvent{
-				ChatID:        chatID,
-				MessageUpdate: messages[len(messages)-1],
-			}
-			events = append(events, e)
+			e.MessageUpdate = messages[len(messages)-1]
 		}
 	}
+
 	sort.Slice(events, func(i, j int) bool {
-		timestampAtI := events[i].MessageUpdate.Ts.AsTime()
-		timestampAtJ := events[j].MessageUpdate.Ts.AsTime()
+		timestampAtI := events[i].MetadataUpdates[0].GetFullRefresh().Metadata.LastActivity.AsTime()
+		timestampAtJ := events[j].MetadataUpdates[0].GetFullRefresh().Metadata.LastActivity.AsTime()
 		return timestampAtI.After(timestampAtJ)
 	})
+
 	var batch []*event.ChatEvent
 	for _, e := range events {
 		batch = append(batch, e)
