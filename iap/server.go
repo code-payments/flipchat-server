@@ -93,7 +93,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	isVerified, err := verifier.VerifyReceipt(ctx, req.Receipt.Value)
 	if err != nil {
 		log.Warn("Failed to verify receipt", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to set registration flag")
+		return nil, status.Error(codes.Internal, "failed to verify receipt")
 	} else if !isVerified {
 		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
 	}
