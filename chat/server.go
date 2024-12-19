@@ -692,11 +692,17 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
+		protoMember := newMember.ToProto(nil)
+		err = s.populateMemberData(ctx, []*chatpb.Member{protoMember}, nil)
+		if err != nil {
+			log.Warn("failed to populate additional member data", zap.Error(err))
+		}
+
 		err = s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
 			{
 				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined_{
 					Joined: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined{
-						Member: newMember.ToProto(nil),
+						Member: protoMember,
 					},
 				},
 			},
