@@ -75,6 +75,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		log.Warn("Failed to verify receipt", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to verify receipt")
 	} else if !isVerified {
+		log.Warn("Receipt failed validation")
 		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
 	}
 
