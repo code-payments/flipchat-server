@@ -184,3 +184,37 @@ func (s *store) IsStaff(ctx context.Context, userID *commonpb.UserId) (bool, err
 
 	return res.IsStaff, nil
 }
+
+func (s *store) IsRegistered(ctx context.Context, userID *commonpb.UserId) (bool, error) {
+	encodedUserID := pg.Encode(userID.Value)
+
+	res, err := s.client.User.FindUnique(
+		db.User.ID.Equals(encodedUserID),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return res.IsRegistered, nil
+}
+
+func (s *store) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId, isRegistered bool) error {
+	encodedUserID := pg.Encode(userID.Value)
+
+	_, err := s.client.User.FindUnique(
+		db.User.ID.Equals(encodedUserID),
+	).Update(
+		db.User.IsRegistered.Set(isRegistered),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return account.ErrNotFound
+	}
+
+	return err
+}

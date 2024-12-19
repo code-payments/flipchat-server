@@ -17,10 +17,11 @@ generator db {
 model User {
   // Fields
 
-  id          String      @id
-  displayName String?
-  isStaff     Boolean     @default(false)
-  publicKeys  PublicKey[]
+  id           String      @id
+  displayName  String?
+  isStaff      Boolean     @default(false)
+  isRegistered Boolean     @default(false)
+  publicKeys   PublicKey[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -174,4 +175,22 @@ model PushToken {
 
   @@id([userId, appInstallId])
   @@map("flipchat_pushtokens")
+}
+
+model Iap {
+  // Fields
+
+  receiptId String @id
+  platform  Int    @default(0) @db.SmallInt // Platform enum: Unknown: 0, Apple: 1, Google: 2
+  userId    String
+  product   Int    @default(0) @db.SmallInt // Product enum: Unknown: 0, CreateAccount: 1
+  state     Int    @default(0) @db.SmallInt // State enum: Unknown: 0, WaitingForPayment: 1, WaitingForFulfillment: 2, Fulfilled: 3
+
+  createdAt DateTime @default(now())
+
+  // Relations
+
+  // Constraints
+
+  @@map("flipchat_iap")
 }

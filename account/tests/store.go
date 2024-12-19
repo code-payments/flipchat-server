@@ -17,14 +17,15 @@ import (
 
 func RunStoreTests(t *testing.T, s account.Store, teardown func()) {
 	for _, tf := range []func(t *testing.T, s account.Store){
-		testStore,
+		testStore_keyManagement,
+		testStore_registrationStatus,
 	} {
 		tf(t, s)
 		teardown()
 	}
 }
 
-func testStore(t *testing.T, s account.Store) {
+func testStore_keyManagement(t *testing.T, s account.Store) {
 	ctx := context.Background()
 
 	user := model.MustGenerateUserID()
@@ -71,4 +72,35 @@ func testStore(t *testing.T, s account.Store) {
 	}
 
 	t.Logf("testRoundTrip: %d key pairs", len(keyPairs))
+}
+
+func testStore_registrationStatus(t *testing.T, s account.Store) {
+	ctx := context.Background()
+
+	user := model.MustGenerateUserID()
+
+	isRegistered, err := s.IsRegistered(ctx, user)
+	require.Nil(t, err)
+	require.False(t, isRegistered)
+
+	require.Equal(t, account.ErrNotFound, s.SetRegistrationFlag(ctx, user, true))
+
+	user, err = s.Bind(ctx, user, model.MustGenerateKeyPair().Proto())
+	require.NoError(t, err)
+
+	isRegistered, err = s.IsRegistered(ctx, user)
+	require.Nil(t, err)
+	require.False(t, isRegistered)
+
+	require.NoError(t, s.SetRegistrationFlag(ctx, user, true))
+
+	isRegistered, err = s.IsRegistered(ctx, user)
+	require.Nil(t, err)
+	require.True(t, isRegistered)
+
+	require.NoError(t, s.SetRegistrationFlag(ctx, user, false))
+
+	isRegistered, err = s.IsRegistered(ctx, user)
+	require.Nil(t, err)
+	require.False(t, isRegistered)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -16,9 +15,6 @@ import (
 	codecommon "github.com/code-payments/code-server/pkg/code/common"
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codetestutil "github.com/code-payments/code-server/pkg/testutil"
-
-	"github.com/code-payments/flipchat-server/profile"
-	memProfile "github.com/code-payments/flipchat-server/profile/memory"
 
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
@@ -37,13 +33,11 @@ func RunServerTests(t *testing.T, s account.Store, teardown func()) {
 }
 
 func testServer(t *testing.T, store account.Store) {
-	profiles := memProfile.NewInMemory()
 	codeStores := codedata.NewTestDataProvider()
 
 	server := account.NewServer(
 		zap.Must(zap.NewDevelopment()),
 		store,
-		profiles,
 		auth.NewKeyPairAuthenticator(),
 	)
 
@@ -59,11 +53,10 @@ func testServer(t *testing.T, store account.Store) {
 	var keys []model.KeyPair
 	var userId *commonpb.UserId
 
-	t.Run("Register with Display Name", func(t *testing.T) {
+	t.Run("Register", func(t *testing.T) {
 		keys = append(keys, model.MustGenerateKeyPair())
 		req := &accountpb.RegisterRequest{
-			PublicKey:   keys[0].Proto(),
-			DisplayName: "hello!",
+			PublicKey: keys[0].Proto(),
 		}
 		require.NoError(t, keys[0].Sign(req, &req.Signature))
 
@@ -78,10 +71,6 @@ func testServer(t *testing.T, store account.Store) {
 			} else {
 				require.NoError(t, protoutil.ProtoEqualError(userId, resp.UserId))
 			}
-
-			p, err := profiles.GetProfile(ctx, resp.UserId)
-			require.NoError(t, err)
-			require.Equal(t, "hello!", p.GetDisplayName())
 		}
 	})
 
@@ -133,8 +122,7 @@ func testServer(t *testing.T, store account.Store) {
 	t.Run("Cannot Remove Another Accounts Key", func(t *testing.T) {
 		other := model.MustGenerateKeyPair()
 		register := &accountpb.RegisterRequest{
-			PublicKey:   other.Proto(),
-			DisplayName: "hello!",
+			PublicKey: other.Proto(),
 		}
 		require.NoError(t, other.Sign(register, &register.Signature))
 
@@ -157,8 +145,7 @@ func testServer(t *testing.T, store account.Store) {
 	t.Run("Cannot Remove Another Accounts Key Indirectly", func(t *testing.T) {
 		other := model.MustGenerateKeyPair()
 		register := &accountpb.RegisterRequest{
-			PublicKey:   other.Proto(),
-			DisplayName: "hello!",
+			PublicKey: other.Proto(),
 		}
 		require.NoError(t, other.Sign(register, &register.Signature))
 
@@ -291,28 +278,17 @@ func testServer(t *testing.T, store account.Store) {
 		require.Equal(t, expected.PublicKey().ToBytes(), resp.PaymentDestination.Value)
 	})
 
-	t.Run("Register without Display Name", func(t *testing.T) {
+	t.Run("Register with Display Name", func(t *testing.T) {
 		other := model.MustGenerateKeyPair()
 		req := &accountpb.RegisterRequest{
-			PublicKey: other.Proto(),
+			PublicKey:   other.Proto(),
+			DisplayName: "hello!",
 		}
 		require.NoError(t, other.Sign(req, &req.Signature))
 
-		var otherUserId *commonpb.UserId
-		for range 2 {
-			resp, err := client.Register(ctx, req)
-			require.NoError(t, err)
-			require.Equal(t, accountpb.RegisterResponse_OK, resp.Result)
-			require.NotNil(t, resp.UserId)
-
-			if otherUserId == nil {
-				otherUserId = resp.UserId
-			} else {
-				require.NoError(t, protoutil.ProtoEqualError(otherUserId, resp.UserId))
-			}
-
-			_, err = profiles.GetProfile(ctx, resp.UserId)
-			assert.Equal(t, profile.ErrNotFound, err)
-		}
+		resp, err := client.Register(ctx, req)
+		require.NoError(t, err)
+		require.Equal(t, accountpb.RegisterResponse_DENIED, resp.Result)
+		require.Nil(t, resp.UserId)
 	})
 }

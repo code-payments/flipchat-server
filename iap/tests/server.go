@@ -20,20 +20,20 @@ import (
 )
 
 // RunServerTests runs a set of tests against the iap.Server.
-func RunServerTests(t *testing.T, s account.Store, teardown func()) {
-	for _, tf := range []func(t *testing.T, s account.Store){
+func RunServerTests(t *testing.T, accounts account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string, teardown func()) {
+	for _, tf := range []func(t *testing.T, accountStore account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string){
 		testOnPurchaseCompleted,
 	} {
-		tf(t, s)
+		tf(t, accounts, iaps, verifer, validReceiptFunc)
 		teardown()
 	}
 }
 
-func testOnPurchaseCompleted(t *testing.T, store account.Store) {
+func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string) {
 	log := zap.Must(zap.NewDevelopment())
 	authn := auth.NewKeyPairAuthenticator()
-	authz := account.NewAuthorizer(log, store, authn)
-	server := iap.NewServer(log, authz)
+	authz := account.NewAuthorizer(log, accounts, authn)
+	server := iap.NewServer(log, authz, accounts, iaps, verifer, verifer)
 
 	signer := model.MustGenerateKeyPair()
 
@@ -55,17 +55,20 @@ func testOnPurchaseCompleted(t *testing.T, store account.Store) {
 		require.NotNil(t, req.Auth)
 	})
 
-	t.Run("Authorized", func(t *testing.T) {
+	t.Run("Valid Receipt", func(t *testing.T) {
 		// Bind the user's key in the store so that `authz` can recognize them.
 		userID := model.MustGenerateUserID()
-		_, err := store.Bind(context.Background(), userID, signer.Proto())
+		_, err := accounts.Bind(context.Background(), userID, signer.Proto())
 		require.NoError(t, err)
 
 		req := &iappb.OnPurchaseCompletedRequest{
 			Platform: commonpb.Platform_GOOGLE,
-			Receipt:  &iappb.Receipt{}, // A dummy receipt for testing
+			Receipt:  &iappb.Receipt{Value: validReceiptFunc("create account")}, // A valid dummy receipt for testing
 			Auth:     nil,
 		}
+
+		receiptID, err := verifer.GetReceiptIdentifier(context.Background(), req.Receipt.Value)
+		require.NoError(t, err)
 
 		// Now that the user is bound, `authz` should recognize them and authorize the request.
 		require.NoError(t, signer.Auth(req, &req.Auth))
@@ -73,5 +76,67 @@ func testOnPurchaseCompleted(t *testing.T, store account.Store) {
 		resp, err := server.OnPurchaseCompleted(context.Background(), req)
 		require.NoError(t, err)
 		require.NoError(t, protoutil.ProtoEqualError(&iappb.OnPurchaseCompletedResponse{}, resp))
+
+		isRegistered, err := accounts.IsRegistered(context.Background(), userID)
+		require.NoError(t, err)
+		require.True(t, isRegistered)
+
+		purchase, err := iaps.GetPurchase(context.Background(), receiptID)
+		require.NoError(t, err)
+		require.Equal(t, receiptID, purchase.ReceiptID)
+		require.Equal(t, req.Platform, purchase.Platform)
+		require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
+		require.Equal(t, iap.ProductCreateAccount, purchase.Product)
+		require.Equal(t, iap.StateFulfilled, purchase.State)
+
+		t.Run("Use existing receipt", func(t *testing.T) {
+			userID2 := model.MustGenerateUserID()
+			signer2 := model.MustGenerateKeyPair()
+			_, err := accounts.Bind(context.Background(), userID2, signer2.Proto())
+			require.NoError(t, err)
+
+			require.NoError(t, signer.Auth(req, &req.Auth))
+
+			resp, err := server.OnPurchaseCompleted(context.Background(), req)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.ProtoEqualError(&iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, resp))
+
+			isRegistered, err := accounts.IsRegistered(context.Background(), userID2)
+			require.NoError(t, err)
+			require.False(t, isRegistered)
+
+			purchase, err := iaps.GetPurchase(context.Background(), receiptID)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.ProtoEqualError(userID, purchase.User))
+		})
+	})
+
+	t.Run("Invalid Receipt", func(t *testing.T) {
+		// Bind the user's key in the store so that `authz` can recognize them.
+		userID := model.MustGenerateUserID()
+		_, err := accounts.Bind(context.Background(), userID, signer.Proto())
+		require.NoError(t, err)
+
+		req := &iappb.OnPurchaseCompletedRequest{
+			Platform: commonpb.Platform_GOOGLE,
+			Receipt:  &iappb.Receipt{Value: "invalid"}, // An invalid dummy receipt for testing
+			Auth:     nil,
+		}
+
+		receiptID := []byte(req.Receipt.Value)
+
+		// Now that the user is bound, `authz` should recognize them and authorize the request.
+		require.NoError(t, signer.Auth(req, &req.Auth))
+
+		resp, err := server.OnPurchaseCompleted(context.Background(), req)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(&iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, resp))
+
+		isRegistered, err := accounts.IsRegistered(context.Background(), userID)
+		require.NoError(t, err)
+		require.False(t, isRegistered)
+
+		_, err = iaps.GetPurchase(context.Background(), receiptID)
+		require.Equal(t, iap.ErrNotFound, err)
 	})
 }

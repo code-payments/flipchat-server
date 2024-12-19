@@ -17,7 +17,6 @@ import (
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/flags"
 	"github.com/code-payments/flipchat-server/model"
-	"github.com/code-payments/flipchat-server/profile"
 )
 
 const loginWindow = 5 * time.Minute
@@ -25,17 +24,15 @@ const loginWindow = 5 * time.Minute
 type Server struct {
 	log      *zap.Logger
 	store    Store
-	profiles profile.Store
 	verifier auth.Authenticator
 
 	accountpb.UnimplementedAccountServer
 }
 
-func NewServer(log *zap.Logger, store Store, profiles profile.Store, verifier auth.Authenticator) *Server {
+func NewServer(log *zap.Logger, store Store, verifier auth.Authenticator) *Server {
 	return &Server{
 		log:      log,
 		store:    store,
-		profiles: profiles,
 		verifier: verifier,
 	}
 }
@@ -57,6 +54,10 @@ func (s *Server) Register(ctx context.Context, req *accountpb.RegisterRequest) (
 		return nil, err
 	}
 
+	if len(req.DisplayName) > 0 {
+		return &accountpb.RegisterResponse{Result: accountpb.RegisterResponse_DENIED}, nil
+	}
+
 	userID, err := model.GenerateUserId()
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate user id")
@@ -65,12 +66,6 @@ func (s *Server) Register(ctx context.Context, req *accountpb.RegisterRequest) (
 	prev, err := s.store.Bind(ctx, userID, req.PublicKey)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "")
-	}
-
-	if len(req.DisplayName) > 0 {
-		if err = s.profiles.SetDisplayName(ctx, userID, req.DisplayName); err != nil {
-			return nil, status.Error(codes.Internal, "failed to set display name")
-		}
 	}
 
 	return &accountpb.RegisterResponse{
@@ -251,20 +246,18 @@ func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRe
 		return nil, status.Errorf(codes.Internal, "failed to get staff flag")
 	}
 
-	// todo: Replace with an IAP check
-	userProfile, err := s.profiles.GetProfile(ctx, req.UserId)
-	if err != nil && !errors.Is(err, profile.ErrNotFound) {
-		return nil, status.Errorf(codes.Internal, "failed to get registered account status")
+	isRegistered, err := s.store.IsRegistered(ctx, req.UserId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get registration flag")
 	}
-	isRegisteredAccount := len(userProfile.GetDisplayName()) > 0
 
 	return &accountpb.GetUserFlagsResponse{
 		Result: accountpb.GetUserFlagsResponse_OK,
 		UserFlags: &accountpb.UserFlags{
 			IsStaff:             isStaff,
+			IsRegisteredAccount: isRegistered,
 			StartGroupFee:       &commonpb.PaymentAmount{Quarks: flags.StartGroupFee},
 			FeeDestination:      &commonpb.PublicKey{Value: flags.FeeDestination.PublicKey().ToBytes()},
-			IsRegisteredAccount: isRegisteredAccount,
 		},
 	}, nil
 }
