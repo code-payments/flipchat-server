@@ -43,30 +43,73 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 }
 
 func testChatStore_Metadata(t *testing.T, store chat.Store) {
-	chatID := model.MustGenerateChatID()
-	expected := &chatpb.Metadata{
-		ChatId:       chatID,
+	chatID1 := model.MustGenerateChatID()
+	expected1 := &chatpb.Metadata{
+		ChatId:       chatID1,
 		Type:         chatpb.Metadata_GROUP,
+		Owner:        model.MustGenerateUserID(),
+		CoverCharge:  &commonpb.PaymentAmount{Quarks: 1},
 		RoomNumber:   1,
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
 
-	metadata := proto.Clone(expected).(*chatpb.Metadata)
-	metadata.RoomNumber = 0
-	metadata.NumUnread = 20
+	chatID2 := model.MustGenerateChatID()
+	expected2 := &chatpb.Metadata{
+		ChatId:       chatID2,
+		Type:         chatpb.Metadata_GROUP,
+		Owner:        model.MustGenerateUserID(),
+		CoverCharge:  &commonpb.PaymentAmount{Quarks: 2},
+		RoomNumber:   2,
+		NumUnread:    0,
+		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
+	}
 
-	result, err := store.GetChatMetadata(context.Background(), chatID)
+	metadata1 := proto.Clone(expected1).(*chatpb.Metadata)
+	metadata1.RoomNumber = 0
+	metadata1.IsPushEnabled = true
+	metadata1.CanDisablePush = true
+	metadata1.NumUnread = 14
+	metadata1.HasMoreUnread = true
+
+	metadata2 := proto.Clone(expected2).(*chatpb.Metadata)
+	metadata2.RoomNumber = 0
+	metadata2.IsPushEnabled = true
+	metadata2.CanDisablePush = true
+	metadata2.NumUnread = 42
+	metadata2.HasMoreUnread = true
+
+	result, err := store.GetChatMetadata(context.Background(), chatID1)
 	require.ErrorIs(t, err, chat.ErrChatNotFound)
 	require.Nil(t, result)
 
-	created, err := store.CreateChat(context.Background(), metadata)
+	created, err := store.CreateChat(context.Background(), metadata1)
 	require.NoError(t, err)
-	require.NoError(t, protoutil.ProtoEqualError(expected, created))
+	require.NoError(t, protoutil.ProtoEqualError(expected1, created))
 
-	result, err = store.GetChatMetadata(context.Background(), chatID)
+	result, err = store.GetChatMetadata(context.Background(), chatID1)
 	require.NoError(t, err)
-	require.NoError(t, protoutil.ProtoEqualError(expected, result))
+	require.NoError(t, protoutil.ProtoEqualError(expected1, result))
+
+	created, err = store.CreateChat(context.Background(), metadata2)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected2, created))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID2)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected2, result))
+
+	_, err = store.GetChatMetadataBatched(context.Background(), model.MustGenerateChatID())
+	require.Equal(t, chat.ErrChatNotFound, err)
+
+	_, err = store.GetChatMetadataBatched(context.Background(), chatID1, chatID2, model.MustGenerateChatID())
+	require.Equal(t, chat.ErrChatNotFound, err)
+
+	results, err := store.GetChatMetadataBatched(context.Background(), chatID1, chatID2)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	require.NoError(t, protoutil.ProtoEqualError(expected1, results[0]))
+	require.NoError(t, protoutil.ProtoEqualError(expected2, results[1]))
 }
 
 func testChatStore_GetAllChatsForUser(t *testing.T, store chat.Store) {

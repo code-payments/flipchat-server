@@ -18,6 +18,7 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
+	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codekin "github.com/code-payments/code-server/pkg/kin"
@@ -516,6 +517,9 @@ func testServer(
 		streamKeyPair := model.MustGenerateKeyPair()
 		_, _ = accounts.Bind(ctx, streamUser, streamKeyPair.Proto())
 
+		streamUserProfile := &profilepb.UserProfile{DisplayName: "Stream User"}
+		require.NoError(t, profiles.SetDisplayName(context.Background(), streamUser, streamUserProfile.DisplayName))
+
 		stream, err := client.StreamChatEvents(ctx)
 		require.NoError(t, err)
 
@@ -528,6 +532,9 @@ func testServer(
 		}
 		require.NoError(t, streamKeyPair.Auth(req.GetParams(), &req.GetParams().Auth))
 		require.NoError(t, stream.Send(req))
+
+		// To avoid races with flush
+		time.Sleep(200 * time.Millisecond)
 
 		updateCh := make(chan *chatpb.StreamChatEventsResponse_ChatUpdate, 1024)
 
@@ -553,9 +560,6 @@ func testServer(
 				}
 			}
 		}()
-
-		// TODO: There's a bit of a race for 'flush initial state', so we just wait a bit
-		time.Sleep(200 * time.Millisecond)
 
 		verifyExpectedFullMemberRefresh := func(update *chatpb.StreamChatEventsResponse_MemberUpdate, expected []chat.Member) {
 			refresh := update.GetFullRefresh()
@@ -642,6 +646,7 @@ func testServer(
 		require.Empty(t, u.MetadataUpdates)
 		require.Len(t, u.MemberUpdates, 1)
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetJoined().Member.UserId, streamUser))
+		require.Equal(t, streamUserProfile.DisplayName, u.MemberUpdates[0].GetJoined().Member.Identity.DisplayName)
 
 		// Other user updates chat cover charge
 		setCoverCharge := &chatpb.SetCoverChargeRequest{

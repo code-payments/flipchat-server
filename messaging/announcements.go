@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"fmt"
 
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -16,7 +17,7 @@ import (
 )
 
 var (
-	announcementPrinter = message.NewPrinter(language.English)
+	kinAmountPrinter = message.NewPrinter(language.English)
 )
 
 type AnnouncementContentBuilder func() (*messagingpb.LocalizedAnnouncementContent, error)
@@ -39,7 +40,15 @@ func SendAnnouncement(ctx context.Context, messenger Messenger, chatID *commonpb
 func NewRoomIsLiveAnnouncementContentBuilder(roomNumber uint64) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: announcementPrinter.Sprintf("This room is live! Tell people to download Flipchat and join room #%d to join this chat", roomNumber),
+			KeyOrText: fmt.Sprintf("This room is live! Tell people to download Flipchat and join room #%d to join this chat", roomNumber),
+		}, nil
+	}
+}
+
+func NewUserWatchingChatAnnouncementContentBuilder(ctx context.Context) AnnouncementContentBuilder {
+	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
+		return &messagingpb.LocalizedAnnouncementContent{
+			KeyOrText: "New spectator",
 		}, nil
 	}
 }
@@ -52,7 +61,7 @@ func NewUserJoinedChatAnnouncementContentBuilder(ctx context.Context, profiles p
 		}
 
 		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: announcementPrinter.Sprintf("%s joined", profile.DisplayName),
+			KeyOrText: fmt.Sprintf("%s joined", profile.DisplayName),
 		}, nil
 	}
 }
@@ -60,7 +69,7 @@ func NewUserJoinedChatAnnouncementContentBuilder(ctx context.Context, profiles p
 func NewRoomDisplayNameChangedAnnouncementContentBuilder(roomNumber uint64, displayName string) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: announcementPrinter.Sprintf("Room name changed to \"#%d: %s\"", roomNumber, displayName),
+			KeyOrText: fmt.Sprintf("Room name changed to \"#%d: %s\"", roomNumber, displayName),
 		}, nil
 	}
 }
@@ -68,7 +77,7 @@ func NewRoomDisplayNameChangedAnnouncementContentBuilder(roomNumber uint64, disp
 func NewCoverChangedAnnouncementContentBuilder(quarks uint64) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: announcementPrinter.Sprintf("Cover changed to ⬢ %d Kin", codekin.FromQuarks(quarks)),
+			KeyOrText: kinAmountPrinter.Sprintf("Cover changed to ⬢ %d Kin", codekin.FromQuarks(quarks)),
 		}, nil
 	}
 }
@@ -81,7 +90,7 @@ func NewUserRemovedAnnouncementContentBuilder(ctx context.Context, profiles prof
 		}
 
 		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: announcementPrinter.Sprintf("%s was removed", profile.DisplayName),
+			KeyOrText: fmt.Sprintf("%s was removed", profile.DisplayName),
 		}, nil
 	}
 }
@@ -99,7 +108,7 @@ func NewUserMutedAnnouncementContentBuilder(ctx context.Context, profiles profil
 		}
 
 		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: announcementPrinter.Sprintf("%s muted %s", muterProfile.DisplayName, muteeProfile.DisplayName),
+			KeyOrText: fmt.Sprintf("%s muted %s", muterProfile.DisplayName, muteeProfile.DisplayName),
 		}, nil
 	}
 }
