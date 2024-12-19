@@ -67,7 +67,8 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 			Auth:     nil,
 		}
 
-		receiptID := []byte(req.Receipt.Value)
+		receiptID, err := verifer.GetReceiptIdentifier(context.Background(), req.Receipt.Value)
+		require.NoError(t, err)
 
 		// Now that the user is bound, `authz` should recognize them and authorize the request.
 		require.NoError(t, signer.Auth(req, &req.Auth))

@@ -70,8 +70,15 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		zap.String("receipt", req.Receipt.Value),
 	)
 
-	// todo: use Z's branch to pull from the verifier
-	receiptID, err := []byte(req.Receipt.Value), nil
+	isVerified, err := verifier.VerifyReceipt(ctx, req.Receipt.Value)
+	if err != nil {
+		log.Warn("Failed to verify receipt", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to verify receipt")
+	} else if !isVerified {
+		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
+	}
+
+	receiptID, err := verifier.GetReceiptIdentifier(ctx, req.Receipt.Value)
 	if err != nil {
 		log.Warn("Failed to get receipt ID", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to get receipt ID")
@@ -88,14 +95,6 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	} else if err != ErrNotFound {
 		log.Warn("Failed to check existing purchase", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to check existing purchase")
-	}
-
-	isVerified, err := verifier.VerifyReceipt(ctx, req.Receipt.Value)
-	if err != nil {
-		log.Warn("Failed to verify receipt", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to verify receipt")
-	} else if !isVerified {
-		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
 	}
 
 	err = s.accounts.SetRegistrationFlag(ctx, userID, true)
