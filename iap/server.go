@@ -1,6 +1,7 @@
 package iap
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"time"
@@ -70,7 +71,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		zap.String("receipt", req.Receipt.Value),
 	)
 
-	log.Info("Got a receipt")
+	log.Debug("Got a receipt")
 
 	isVerified, err := verifier.VerifyReceipt(ctx, req.Receipt.Value)
 	if err != nil {
@@ -92,9 +93,14 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	)
 
 	// Note: purchase is always assumed to be fulfilled
-	_, err = s.iaps.GetPurchase(ctx, receiptID)
+	purchase, err := s.iaps.GetPurchase(ctx, receiptID)
 	if err == nil {
-		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, nil
+		if bytes.Equal(userID.Value, purchase.User.Value) {
+			// Purchase is already fulfilled for this user, so it's a no-op. Return success
+			return &iappb.OnPurchaseCompletedResponse{}, nil
+		}
+		log.Warn("Denying attempt to use an already fulfilled receipt")
+		return &iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_DENIED}, nil
 	} else if err != ErrNotFound {
 		log.Warn("Failed to check existing purchase", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to check existing purchase")

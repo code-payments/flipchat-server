@@ -90,16 +90,20 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 		require.Equal(t, iap.StateFulfilled, purchase.State)
 
 		t.Run("Use existing receipt", func(t *testing.T) {
-			userID2 := model.MustGenerateUserID()
-			signer2 := model.MustGenerateKeyPair()
-			_, err := accounts.Bind(context.Background(), userID2, signer2.Proto())
-			require.NoError(t, err)
-
-			require.NoError(t, signer.Auth(req, &req.Auth))
-
 			resp, err := server.OnPurchaseCompleted(context.Background(), req)
 			require.NoError(t, err)
-			require.NoError(t, protoutil.ProtoEqualError(&iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_INVALID_RECEIPT}, resp))
+			require.NoError(t, protoutil.ProtoEqualError(&iappb.OnPurchaseCompletedResponse{}, resp))
+
+			userID2 := model.MustGenerateUserID()
+			signer2 := model.MustGenerateKeyPair()
+			_, err = accounts.Bind(context.Background(), userID2, signer2.Proto())
+			require.NoError(t, err)
+
+			require.NoError(t, signer2.Auth(req, &req.Auth))
+
+			resp, err = server.OnPurchaseCompleted(context.Background(), req)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.ProtoEqualError(&iappb.OnPurchaseCompletedResponse{Result: iappb.OnPurchaseCompletedResponse_DENIED}, resp))
 
 			isRegistered, err := accounts.IsRegistered(context.Background(), userID2)
 			require.NoError(t, err)
