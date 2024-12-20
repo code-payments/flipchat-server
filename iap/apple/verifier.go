@@ -28,9 +28,6 @@ func (m *AppleVerifier) VerifyReceipt(ctx context.Context, encodedReceipt string
 
 	receipt, err := applereceipt.DecodeBase64(encodedReceipt, applepki.CertPool())
 	if err != nil {
-		// Not returning an error here because we're testing the verifier, not the
-		// receipt parsing.
-
 		return false, err
 	}
 
