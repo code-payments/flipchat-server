@@ -31,7 +31,7 @@ func (m *AppleVerifier) VerifyReceipt(ctx context.Context, encodedReceipt string
 		// Not returning an error here because we're testing the verifier, not the
 		// receipt parsing.
 
-		return false, nil
+		return false, err
 	}
 
 	// Verify the bundle ID.
