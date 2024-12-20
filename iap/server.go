@@ -70,6 +70,8 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 		zap.String("receipt", req.Receipt.Value),
 	)
 
+	log.Info("Got a receipt")
+
 	isVerified, err := verifier.VerifyReceipt(ctx, req.Receipt.Value)
 	if err != nil {
 		log.Warn("Failed to verify receipt", zap.Error(err))
