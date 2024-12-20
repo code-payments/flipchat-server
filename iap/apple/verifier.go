@@ -39,10 +39,13 @@ func (m *AppleVerifier) VerifyReceipt(ctx context.Context, encodedReceipt string
 		return false, nil
 	}
 
+	// NOTE: this is omitted because Apple may not provide it as part of the envelope.
+	// See https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html
+
 	// Verify the that the receipt is for the correct product.
-	if receipt.InAppPurchaseReceipts[0].ProductIdentifier != m.productName {
-		return false, nil
-	}
+	// if receipt.InAppPurchaseReceipts[0].ProductIdentifier != m.productName {
+	// return false, nil
+	// }
 
 	// TODO: verify the AppVersion field in the receipt?
 	// receipt.AppVersion
