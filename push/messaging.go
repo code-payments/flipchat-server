@@ -112,23 +112,19 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 		return nil
 	}
 
-	var title, body string
+	var title string
 	switch md.Type {
 	case chatpb.Metadata_GROUP:
 		title = fmt.Sprintf("#%d", md.RoomNumber)
 		if len(md.DisplayName) > 0 {
 			title = fmt.Sprintf("#%d: %s", md.RoomNumber, md.DisplayName)
 		}
-		body = fmt.Sprintf("%s: %s", sender.DisplayName, pushPreview)
 	case chatpb.Metadata_TWO_WAY:
 		title = sender.DisplayName
-		body = pushPreview
 	}
 
-	data := map[string]string{
-		"chat_id": base64.StdEncoding.EncodeToString(chatID.Value),
-	}
-	if err := h.pusher.SendPushes(ctx, chatID, pushMembers, title, body, data); err != nil {
+	data := make(map[string]string)
+	if err := h.pusher.SendPushes(ctx, chatID, pushMembers, title, pushPreview, &sender.DisplayName, data); err != nil {
 		h.log.Warn("Failed to send pushes", zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)), zap.Error(err))
 	}
 

@@ -3,6 +3,8 @@ package push
 import (
 	"context"
 	"encoding/base64"
+	"errors"
+	"fmt"
 
 	"firebase.google.com/go/v4/messaging"
 	"go.uber.org/zap"
@@ -11,13 +13,17 @@ import (
 )
 
 type Pusher interface {
-	// SendPushes sends a basic visible push to a user.
-	SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, data map[string]string) error
+	SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, sender *string, data map[string]string) error
+	SendSilentPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, data map[string]string) error
 }
 
 type NoOpPusher struct{}
 
-func (n *NoOpPusher) SendPushes(_ context.Context, _ *commonpb.ChatId, _ []*commonpb.UserId, _, _ string) error {
+func (n *NoOpPusher) SendPushes(_ context.Context, _ *commonpb.ChatId, _ []*commonpb.UserId, _, _ string, _ map[string]string) error {
+	return nil
+}
+
+func (n *NoOpPusher) SendSilentPushes(_ context.Context, _ *commonpb.ChatId, _ []*commonpb.UserId, _ map[string]string) error {
 	return nil
 }
 
@@ -27,7 +33,6 @@ type FCMPusher struct {
 	client FCMClient
 }
 
-// FCMClient interface to make testing easier
 type FCMClient interface {
 	SendEachForMulticast(ctx context.Context, message *messaging.MulticastMessage) (*messaging.BatchResponse, error)
 }
@@ -40,11 +45,25 @@ func NewFCMPusher(log *zap.Logger, tokens TokenStore, client FCMClient) *FCMPush
 	}
 }
 
-func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, data map[string]string) error {
-	pushTokens, err := p.tokens.GetTokensBatch(ctx, users...)
+func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, sender *string, data map[string]string) error {
+	return p.sendMessage(ctx, chatID, users, title, body, sender, data, false)
+}
+
+func (p *FCMPusher) SendSilentPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, data map[string]string) error {
+	// return p.sendMessage(ctx, chatID, users, "", "", nil, data, true)
+	return errors.New("not tested")
+}
+
+func (p *FCMPusher) sendMessage(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, sender *string, data map[string]string, silent bool) error {
+	pushTokens, err := p.getTokenList(ctx, users)
 	if err != nil {
-		p.log.Warn("Failed to get push tokens", zap.Error(err))
 		return err
+	}
+
+	// A single MulticastMessage may contain up to 500 registration tokens.
+	if len(pushTokens) > 500 {
+		p.log.Warn("Dropping push, too many tokens", zap.Int("num_tokens", len(pushTokens)))
+		return nil
 	}
 
 	if len(pushTokens) == 0 {
@@ -52,35 +71,17 @@ func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, use
 		return nil
 	}
 
-	tokens := make([]string, len(pushTokens))
-	for i, token := range pushTokens {
-		tokens[i] = token.Token
-	}
+	tokens := extractTokens(pushTokens)
+	message := p.buildMessage(chatID, tokens, title, body, sender, data, silent)
 
-	message := &messaging.MulticastMessage{
-		Tokens: tokens,
-		Notification: &messaging.Notification{
-			Title: title,
-			Body:  body,
-		},
-		APNS: &messaging.APNSConfig{
-			Payload: &messaging.APNSPayload{
-				Aps: &messaging.Aps{
-					Alert: &messaging.ApsAlert{
-						Title: title,
-						Body:  body,
-					},
-					ThreadID: base64.StdEncoding.EncodeToString(chatID.Value),
-				},
-			},
-		},
-		Data: data,
-	}
-
-	// Send the message to all tokens
 	response, err := p.client.SendEachForMulticast(ctx, message)
 	if err != nil {
 		return err
+	}
+
+	if response == nil {
+		p.log.Debug("No response from FCM")
+		return nil
 	}
 
 	p.log.Debug("Send pushes", zap.Int("success", response.SuccessCount), zap.Int("failed", response.FailureCount))
@@ -88,7 +89,64 @@ func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, use
 		return nil
 	}
 
+	p.processResponse(response, pushTokens, tokens)
+
+	return nil
+}
+
+func (p *FCMPusher) buildMessage(chatID *commonpb.ChatId, tokens []string, title, body string, sender *string, data map[string]string, silent bool) *messaging.MulticastMessage {
+	encodedChatId := base64.StdEncoding.EncodeToString(chatID.Value)
+
+	// Apple specific payload
+	aps := &messaging.Aps{
+		ThreadID: encodedChatId,
+	}
+
+	data["chat_id"] = encodedChatId
+
+	if silent {
+		// Setting this to true, ensures that the notification is
+		// treated as a silent push, which does not display a
+		// notification banner or alert but allows the app to
+		// process data in the background.
+
+		aps.ContentAvailable = true
+	} else {
+		// This is a regular notification (user-visible), so include
+		// the title and body in the notification payload.
+
+		// For iOS
+		aps.Alert = &messaging.ApsAlert{
+			Title: title,
+			Body:  body,
+		}
+		if sender != nil {
+			aps.Alert.Body = fmt.Sprintf("%s: %s", *sender, body)
+		}
+
+		// For Android
+		data["title"] = title
+		data["body"] = body
+		if sender != nil {
+			data["body"] = fmt.Sprintf("%s: %s", *sender, body) // todo: Fix this when we have forced upgrade
+			data["sender"] = *sender
+		}
+	}
+
+	return &messaging.MulticastMessage{
+		Tokens: tokens,
+		APNS: &messaging.APNSConfig{
+			Payload: &messaging.APNSPayload{
+				Aps: aps,
+			},
+		},
+		Data: data,
+	}
+}
+
+func (p *FCMPusher) processResponse(response *messaging.BatchResponse, pushTokens []Token, tokens []string) {
 	var invalidTokens []Token
+
 	for i, resp := range response.Responses {
 		if resp.Success {
 			continue
@@ -105,7 +163,6 @@ func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, use
 	}
 
 	if len(invalidTokens) > 0 {
-		// Remove invalid tokens in the background
 		go func() {
 			ctx := context.Background()
 			for _, token := range invalidTokens {
@@ -114,6 +171,20 @@ func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, use
 			p.log.Debug("Removed invalid tokens", zap.Int("count", len(invalidTokens)))
 		}()
 	}
+}
 
-	return nil
+func (p *FCMPusher) getTokenList(ctx context.Context, users []*commonpb.UserId) ([]Token, error) {
+	allPushTokens, err := p.tokens.GetTokensBatch(ctx, users...)
+	if err != nil {
+		return nil, err
+	}
+	return allPushTokens, nil
+}
+
+func extractTokens(pushTokens []Token) []string {
+	tokens := make([]string, len(pushTokens))
+	for i, token := range pushTokens {
+		tokens[i] = token.Token
+	}
+	return tokens
 }
