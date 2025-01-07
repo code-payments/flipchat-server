@@ -78,7 +78,7 @@ func testFCMPusher_SendPush(t *testing.T, store push.TokenStore) {
 		"chat_id": base64.StdEncoding.EncodeToString(chatID.Value),
 		"my-data": "data is gold",
 		"title":   "Test Title",
-		"body":    "Test Body",
+		"body":    "Test Sender: Test Body",
 		"sender":  "Test Sender",
 	}
 	assert.Equal(t, expectedData, fcmClient.sentMessage.Data)
@@ -86,7 +86,7 @@ func testFCMPusher_SendPush(t *testing.T, store push.TokenStore) {
 	// Verify APS content for a visible push
 	assert.False(t, fcmClient.sentMessage.APNS.Payload.Aps.ContentAvailable)
 	assert.Equal(t, expectedData["title"], fcmClient.sentMessage.APNS.Payload.Aps.Alert.Title)
-	assert.Equal(t, fmt.Sprintf("%s: %s", expectedData["sender"], expectedData["body"]), fcmClient.sentMessage.APNS.Payload.Aps.Alert.Body)
+	assert.Equal(t, expectedData["body"], fcmClient.sentMessage.APNS.Payload.Aps.Alert.Body)
 
 	// Verify the correct tokens were included
 	expectedTokens := []string{

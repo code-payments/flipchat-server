@@ -128,6 +128,7 @@ func (p *FCMPusher) buildMessage(chatID *commonpb.ChatId, tokens []string, title
 		data["title"] = title
 		data["body"] = body
 		if sender != nil {
+			data["body"] = fmt.Sprintf("%s: %s", *sender, body) // todo: Fix this when we have forced upgrade
 			data["sender"] = *sender
 		}
 	}

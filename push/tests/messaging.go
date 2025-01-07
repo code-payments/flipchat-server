@@ -50,9 +50,12 @@ func (m *mockPusher) SendSilentPushes(ctx context.Context, chatID *commonpb.Chat
 }
 
 func (m *mockPusher) reset() {
+	m.lastChatID = nil
 	m.lastPushMembers = nil
 	m.lastTitle = ""
 	m.lastBody = ""
+	m.lastSender = nil
+	m.lastData = nil
 }
 
 func RunMessagingTests(
