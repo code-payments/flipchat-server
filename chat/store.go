@@ -72,6 +72,7 @@ type Store interface {
 	GetChatID(ctx context.Context, roomID uint64) (*commonpb.ChatId, error)
 
 	GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*chatpb.Metadata, error)
+	GetChatMetadataBatched(ctx context.Context, chatIDs ...*commonpb.ChatId) ([]*chatpb.Metadata, error) // todo: add paging?
 	GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error)
 	GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*Member, error)
 	GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (*Member, error)
@@ -89,6 +90,8 @@ type Store interface {
 
 	SetPushState(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId, isPushEnabled bool) error
 	IsPushEnabled(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error)
+
+	SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, displayName string) error
 
 	SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error
 

@@ -16,11 +16,11 @@ type ChatEvent struct {
 	ChatID    *commonpb.ChatId
 	Timestamp time.Time
 
-	ChatUpdate      *chatpb.Metadata
-	PointerUpdate   *chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate
-	MemberUpdate    *chatpb.StreamChatEventsResponse_MemberUpdate
+	MetadataUpdates []*chatpb.MetadataUpdate
+	MemberUpdates   []*chatpb.MemberUpdate
 	MessageUpdate   *messagingpb.Message
 	FlushedMessages []*messagingpb.Message
+	PointerUpdate   *chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate
 	IsTyping        *messagingpb.IsTyping
 }
 
@@ -29,27 +29,13 @@ func (e *ChatEvent) Clone() *ChatEvent {
 		ChatID:    proto.Clone(e.ChatID).(*commonpb.ChatId),
 		Timestamp: e.Timestamp,
 
-		ChatUpdate:      proto.Clone(e.ChatUpdate).(*chatpb.Metadata),
-		PointerUpdate:   proto.Clone(e.PointerUpdate).(*chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate),
-		MemberUpdate:    proto.Clone(e.MemberUpdate).(*chatpb.StreamChatEventsResponse_MemberUpdate),
+		MetadataUpdates: protoutil.SliceClone(e.MetadataUpdates),
+		MemberUpdates:   protoutil.SliceClone(e.MemberUpdates),
 		MessageUpdate:   proto.Clone(e.MessageUpdate).(*messagingpb.Message),
 		FlushedMessages: protoutil.SliceClone(e.FlushedMessages),
+		PointerUpdate:   proto.Clone(e.PointerUpdate).(*chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate),
 		IsTyping:        proto.Clone(e.IsTyping).(*messagingpb.IsTyping),
 	}
-}
-
-type ByLastActivityTimestamp []*ChatEvent
-
-func (a ByLastActivityTimestamp) Len() int      { return len(a) }
-func (a ByLastActivityTimestamp) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a ByLastActivityTimestamp) Less(i, j int) bool {
-	if a[i].ChatUpdate == nil {
-		return false
-	}
-	if a[j].ChatUpdate == nil {
-		return true
-	}
-	return a[i].ChatUpdate.LastActivity.AsTime().Before(a[j].ChatUpdate.LastActivity.AsTime())
 }
 
 type Handler[Key, Event any] interface {
@@ -95,7 +81,7 @@ func (b *Bus[Key, Event]) OnEvent(key Key, e Event) error {
 
 	// Execute handlers outside the lock
 	for _, h := range handlers {
-		h.OnEvent(key, e)
+		go h.OnEvent(key, e)
 	}
 
 	return nil

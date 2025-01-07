@@ -16,6 +16,7 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
 	"github.com/code-payments/flipchat-server/chat"
+	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/query"
 )
 
@@ -62,6 +63,23 @@ func (s *InMemoryStore) GetChatMetadata(_ context.Context, chatID *commonpb.Chat
 	}
 
 	return proto.Clone(md).(*chatpb.Metadata), nil
+}
+
+func (s *InMemoryStore) GetChatMetadataBatched(ctx context.Context, chatIDs ...*commonpb.ChatId) ([]*chatpb.Metadata, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var metadata []*chatpb.Metadata
+	for _, chatID := range chatIDs {
+		md, ok := s.chats[string(chatID.Value)]
+		if !ok {
+			return nil, chat.ErrChatNotFound
+		}
+
+		metadata = append(metadata, md)
+	}
+
+	return protoutil.SliceClone(metadata), nil
 }
 
 func (s *InMemoryStore) GetChatsForUser(_ context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
@@ -159,8 +177,15 @@ func (s *InMemoryStore) CreateChat(_ context.Context, md *chatpb.Metadata) (*cha
 	if md.RoomNumber != 0 {
 		return nil, errors.New("cannot create chat with room number")
 	}
+	if len(md.DisplayName) > 0 {
+		// todo: May not always be the case in the future, but true for current flows
+		return nil, errors.New("cannot create chat with display name")
+	}
 
 	md.NumUnread = 0
+	md.HasMoreUnread = false
+	md.IsPushEnabled = false
+	md.CanDisablePush = false
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -230,6 +255,20 @@ func (s *InMemoryStore) RemoveMember(_ context.Context, chatID *commonpb.ChatId,
 			break
 		}
 	}
+
+	return nil
+}
+
+func (s *InMemoryStore) SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, displayName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	md, ok := s.chats[string(chatID.Value)]
+	if !ok {
+		return chat.ErrChatNotFound
+	}
+
+	md.DisplayName = displayName
 
 	return nil
 }

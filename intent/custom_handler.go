@@ -8,8 +8,7 @@ import (
 	codeintent "github.com/code-payments/code-server/pkg/code/data/intent"
 )
 
-// todo: Move this stuff as part of code-server when we're ready. Sketching out
-//       an initial implementation until we have persistence.
+// todo: Move this stuff as part of code-server when we're ready.
 
 type StatusCode uint8
 

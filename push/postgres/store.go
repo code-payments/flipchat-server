@@ -56,6 +56,33 @@ func (s *store) GetTokens(ctx context.Context, userID *commonpb.UserId) ([]push.
 	return res, nil
 }
 
+func (s *store) GetTokensBatch(ctx context.Context, userIDs ...*commonpb.UserId) ([]push.Token, error) {
+
+	encodedUserIDs := make([]string, len(userIDs))
+	for i, userID := range userIDs {
+		encodedUserIDs[i] = pg.Encode(userID.Value)
+	}
+
+	tokens, err := s.client.PushToken.FindMany(
+		db.PushToken.UserID.In(encodedUserIDs),
+	).Exec(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]push.Token, len(tokens))
+	for i, token := range tokens {
+		res[i] = push.Token{
+			Type:         pushpb.TokenType(token.Type),
+			Token:        token.Token,
+			AppInstallID: token.AppInstallID,
+		}
+	}
+
+	return res, nil
+}
+
 func (s *store) AddToken(ctx context.Context, userID *commonpb.UserId, appInstallID *commonpb.AppInstallId, tokenType pushpb.TokenType, token string) error {
 
 	encodedUserID := pg.Encode(userID.Value)

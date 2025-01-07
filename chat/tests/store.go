@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/code-payments/code-server/pkg/kin"
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
@@ -32,6 +33,8 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 		testChatStore_JoinLeave,
 		testChatStore_JoinLeaveWithPermissions,
 		testChatStore_AddRemove,
+		testChatStore_SetDisplayName,
+		testChatStore_SetCoverCharge,
 		testChatStore_AdvanceLastChatActivity,
 	} {
 		tf(t, s)
@@ -40,31 +43,73 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 }
 
 func testChatStore_Metadata(t *testing.T, store chat.Store) {
-	chatID := model.MustGenerateChatID()
-	expected := &chatpb.Metadata{
-		ChatId:       chatID,
+	chatID1 := model.MustGenerateChatID()
+	expected1 := &chatpb.Metadata{
+		ChatId:       chatID1,
 		Type:         chatpb.Metadata_GROUP,
-		Title:        "This is my chat!",
+		Owner:        model.MustGenerateUserID(),
+		CoverCharge:  &commonpb.PaymentAmount{Quarks: 1},
 		RoomNumber:   1,
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
 
-	metadata := proto.Clone(expected).(*chatpb.Metadata)
-	metadata.RoomNumber = 0
-	metadata.NumUnread = 20
+	chatID2 := model.MustGenerateChatID()
+	expected2 := &chatpb.Metadata{
+		ChatId:       chatID2,
+		Type:         chatpb.Metadata_GROUP,
+		Owner:        model.MustGenerateUserID(),
+		CoverCharge:  &commonpb.PaymentAmount{Quarks: 2},
+		RoomNumber:   2,
+		NumUnread:    0,
+		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
+	}
 
-	result, err := store.GetChatMetadata(context.Background(), chatID)
+	metadata1 := proto.Clone(expected1).(*chatpb.Metadata)
+	metadata1.RoomNumber = 0
+	metadata1.IsPushEnabled = true
+	metadata1.CanDisablePush = true
+	metadata1.NumUnread = 14
+	metadata1.HasMoreUnread = true
+
+	metadata2 := proto.Clone(expected2).(*chatpb.Metadata)
+	metadata2.RoomNumber = 0
+	metadata2.IsPushEnabled = true
+	metadata2.CanDisablePush = true
+	metadata2.NumUnread = 42
+	metadata2.HasMoreUnread = true
+
+	result, err := store.GetChatMetadata(context.Background(), chatID1)
 	require.ErrorIs(t, err, chat.ErrChatNotFound)
 	require.Nil(t, result)
 
-	created, err := store.CreateChat(context.Background(), metadata)
+	created, err := store.CreateChat(context.Background(), metadata1)
 	require.NoError(t, err)
-	require.NoError(t, protoutil.ProtoEqualError(expected, created))
+	require.NoError(t, protoutil.ProtoEqualError(expected1, created))
 
-	result, err = store.GetChatMetadata(context.Background(), chatID)
+	result, err = store.GetChatMetadata(context.Background(), chatID1)
 	require.NoError(t, err)
-	require.NoError(t, protoutil.ProtoEqualError(expected, result))
+	require.NoError(t, protoutil.ProtoEqualError(expected1, result))
+
+	created, err = store.CreateChat(context.Background(), metadata2)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected2, created))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID2)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected2, result))
+
+	_, err = store.GetChatMetadataBatched(context.Background(), model.MustGenerateChatID())
+	require.Equal(t, chat.ErrChatNotFound, err)
+
+	_, err = store.GetChatMetadataBatched(context.Background(), chatID1, chatID2, model.MustGenerateChatID())
+	require.Equal(t, chat.ErrChatNotFound, err)
+
+	results, err := store.GetChatMetadataBatched(context.Background(), chatID1, chatID2)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	require.NoError(t, protoutil.ProtoEqualError(expected1, results[0]))
+	require.NoError(t, protoutil.ProtoEqualError(expected2, results[1]))
 }
 
 func testChatStore_GetAllChatsForUser(t *testing.T, store chat.Store) {
@@ -466,6 +511,52 @@ func testChatStore_AddRemove(t *testing.T, store chat.Store) {
 		require.NoError(t, protoutil.ProtoEqualError(members[i].UserID, actual[i].UserID))
 		require.NoError(t, protoutil.ProtoEqualError(members[i].AddedBy, actual[i].AddedBy))
 	}
+}
+
+func testChatStore_SetDisplayName(t *testing.T, store chat.Store) {
+	chatID := model.MustGenerateChatID()
+
+	require.Equal(t, chat.ErrChatNotFound, store.SetDisplayName(context.Background(), chatID, "My Room"))
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId:       chatID,
+		Type:         chatpb.Metadata_GROUP,
+		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
+	})
+	require.NoError(t, err)
+
+	result, err := store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Empty(t, result.DisplayName)
+
+	require.NoError(t, store.SetDisplayName(context.Background(), chatID, "My Room"))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, "My Room", result.DisplayName)
+}
+
+func testChatStore_SetCoverCharge(t *testing.T, store chat.Store) {
+	chatID := model.MustGenerateChatID()
+
+	require.Equal(t, chat.ErrChatNotFound, store.SetCoverCharge(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId:       chatID,
+		Type:         chatpb.Metadata_GROUP,
+		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
+	})
+	require.NoError(t, err)
+
+	result, err := store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Nil(t, result.CoverCharge)
+
+	require.NoError(t, store.SetCoverCharge(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, kin.ToQuarks(100), result.CoverCharge.Quarks)
 }
 
 func testChatStore_AdvanceLastChatActivity(t *testing.T, store chat.Store) {

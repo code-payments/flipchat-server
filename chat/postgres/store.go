@@ -7,10 +7,11 @@ import (
 	"slices"
 	"time"
 
-	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
 	"github.com/code-payments/flipchat-server/chat"
 	pg "github.com/code-payments/flipchat-server/database/postgres"
@@ -63,6 +64,11 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		room = uint64(roomNumber)
 	}
 
+	var name string
+	if displayName, ok := m.DisplayName(); ok {
+		name = displayName
+	}
+
 	coverCharge := (*commonpb.PaymentAmount)(nil)
 	if m.CoverCharge != 0 {
 		coverCharge = &commonpb.PaymentAmount{Quarks: uint64(m.CoverCharge)}
@@ -71,11 +77,15 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 	return &chatpb.Metadata{
 		ChatId: &commonpb.ChatId{Value: decodedChatID},
 
-		Type:       chatpb.Metadata_ChatType(m.Type),
-		Title:      m.Title,
-		RoomNumber: room,
+		Type:        chatpb.Metadata_ChatType(m.Type),
+		DisplayName: name,
+		RoomNumber:  room,
 
-		NumUnread: 0, // not stored in the DB on this model
+		IsPushEnabled:  false, // not stored in the DB on this model
+		CanDisablePush: false, // not stored in the DB on this model
+
+		NumUnread:     0,     // not stored in the DB on this model
+		HasMoreUnread: false, // not stored in the DB on this model
 
 		CoverCharge: coverCharge,
 
@@ -110,7 +120,7 @@ func (s *store) GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*
 		db.Chat.ID.Equals(encodedChatID),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || res == nil {
+	if errors.Is(err, db.ErrNotFound) {
 		return nil, chat.ErrChatNotFound
 	} else if err != nil {
 		return nil, err
@@ -129,8 +139,52 @@ func (s *store) GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*
 	return fromModel(res)
 }
 
-func (s *store) GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
+func (s *store) GetChatMetadataBatched(ctx context.Context, chatIDs ...*commonpb.ChatId) ([]*chatpb.Metadata, error) {
+	encodedChatIDs := make([]string, len(chatIDs))
+	for i, chatID := range chatIDs {
+		encodedChatIDs[i] = pg.Encode(chatID.Value)
+	}
 
+	// Find the rooms
+	results, err := s.client.Chat.FindMany(
+		db.Chat.ID.In(encodedChatIDs),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return nil, chat.ErrChatNotFound
+	} else if err != nil {
+		return nil, err
+	}
+
+	if len(results) != len(chatIDs) {
+		return nil, chat.ErrChatNotFound
+	}
+
+	metadata := make([]*chatpb.Metadata, len(chatIDs))
+	for i, res := range results {
+		// Find the owner (host), currently assumed to only be one
+		if res.CreatedBy != "" {
+			decodedOwnerID, err := pg.Decode(res.CreatedBy)
+			if err != nil {
+				return nil, err
+			}
+
+			metadata[i], err = fromModelWithOwner(&res, &commonpb.UserId{Value: decodedOwnerID})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			metadata[i], err = fromModel(&res)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return metadata, nil
+}
+
+func (s *store) GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
 	encodedUserID := pg.Encode(userID.Value)
 
 	res, err := s.client.Member.FindMany(
@@ -305,6 +359,10 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 	if md.RoomNumber != 0 {
 		return nil, errors.New("cannot create chat with room number")
 	}
+	if len(md.DisplayName) > 0 {
+		// todo: May not always be the case in the future, but true for current flows
+		return nil, errors.New("cannot create chat with display name")
+	}
 
 	encodedChatID := pg.Encode(md.ChatId.Value)
 
@@ -374,7 +432,6 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 	// Create the chat room
 	res, err = s.client.Chat.CreateOne(
 		db.Chat.ID.Set(encodedChatID),
-		db.Chat.Title.Set(md.Title),
 		opt...,
 	).Exec(ctx)
 
@@ -467,6 +524,22 @@ func (s *store) RemoveMember(ctx context.Context, chatID *commonpb.ChatId, membe
 
 	if errors.Is(err, db.ErrNotFound) {
 		return chat.ErrMemberNotFound
+	}
+
+	return err
+}
+
+func (s *store) SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, displayName string) error {
+	encodedChatID := pg.Encode(chatID.Value)
+
+	_, err := s.client.Chat.FindUnique(
+		db.Chat.ID.Equals(encodedChatID),
+	).Update(
+		db.Chat.DisplayName.Set(db.String(displayName)),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return chat.ErrChatNotFound
 	}
 
 	return err

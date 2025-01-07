@@ -3,10 +3,12 @@ package messaging
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"slices"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -17,6 +19,7 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/model"
@@ -29,8 +32,8 @@ const (
 	streamPingDelay  = 5 * time.Second
 	streamTimeout    = time.Second
 
-	maxFlushedMessageBatchSize = 1024
-	flushedMessageBatchSize    = maxFlushedMessageBatchSize
+	maxMessageEventBatchSize = 1024
+	flushedMessageBatchSize  = maxMessageEventBatchSize
 )
 
 type Server struct {
@@ -38,8 +41,10 @@ type Server struct {
 	authz    auth.Authorizer
 	rpcAuthz auth.Messaging
 
+	accounts account.Store
 	messages MessageStore
 	pointers PointerStore
+
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent]
 
 	streamsMu sync.RWMutex
@@ -52,6 +57,7 @@ func NewServer(
 	log *zap.Logger,
 	authz auth.Authorizer,
 	rpcAuthz auth.Messaging,
+	accounts account.Store,
 	messages MessageStore,
 	pointers PointerStore,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
@@ -61,8 +67,10 @@ func NewServer(
 		authz:    authz,
 		rpcAuthz: rpcAuthz,
 
+		accounts: accounts,
 		messages: messages,
 		pointers: pointers,
+
 		eventBus: eventBus,
 
 		streams: make(map[string][]event.Stream[*event.ChatEvent]),
@@ -95,9 +103,18 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		return err
 	}
 
+	minLogLevel := zap.DebugLevel
+	isStaff, _ := s.accounts.IsStaff(ctx, userID)
+	if isStaff {
+		minLogLevel = zap.InfoLevel
+	}
+
+	streamID := uuid.New()
+
 	log := s.log.With(
 		zap.String("chat_id", base64.StdEncoding.EncodeToString(params.ChatId.Value)),
 		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("stream_id", streamID.String()),
 	)
 
 	allow, err := s.rpcAuthz.CanStreamMessages(ctx, params.ChatId, userID)
@@ -147,8 +164,8 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 			if len(messages) == 0 {
 				return nil, false
 			}
-			if len(messages) > maxFlushedMessageBatchSize {
-				log.Warn("Flushed message batch size exceeds proto limit")
+			if len(messages) > maxMessageEventBatchSize {
+				log.Warn("Message batch size exceeds proto limit")
 				return nil, false
 			}
 			return &messagingpb.StreamMessagesResponse_MessageBatch{
@@ -157,7 +174,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		},
 	)
 
-	log.Debug("Initializing stream")
+	log.Log(minLogLevel, "Initializing stream")
 
 	chatStreams = append(chatStreams, ss)
 	s.streams[chatKey] = chatStreams
@@ -166,7 +183,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 	defer func() {
 		s.streamsMu.Lock()
 
-		log.Debug("Closing streamer")
+		log.Log(minLogLevel, "Closing streamer")
 
 		// We check to see if the current active stream is the one that we created.
 		// If it is, we can just remove it since it's closed. Otherwise, we leave it
@@ -195,7 +212,6 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 	case *messagingpb.StreamMessagesRequest_Params_LatestOnly:
 		latestOnly = typed.LatestOnly // todo: this needs tests
 	}
-
 	if !latestOnly {
 		go s.flushMessages(ctx, params.ChatId, userID, resumeFrom, ss)
 	}
@@ -204,7 +220,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		select {
 		case batch, ok := <-ss.Channel():
 			if !ok {
-				log.Debug("stream closed; ending stream")
+				log.Log(minLogLevel, "Stream closed; ending stream")
 				return status.Error(codes.Aborted, "stream closed")
 			}
 
@@ -214,12 +230,13 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 				},
 			}
 
+			log.Log(minLogLevel, "Forwarding chat messages", zap.Int("batch_size", len(batch.Messages)))
 			if err = stream.Send(resp); err != nil {
 				log.Info("Failed to forward chat message", zap.Error(err))
 				return err
 			}
 		case <-sendPingCh:
-			log.Debug("sending ping to client")
+			log.Log(minLogLevel, "Sending ping to client")
 
 			sendPingCh = time.After(streamPingDelay)
 
@@ -232,17 +249,43 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 				},
 			})
 			if err != nil {
-				log.Debug("stream is unhealthy; aborting")
+				log.Log(minLogLevel, "Stream is unhealthy; aborting")
 				return status.Error(codes.Aborted, "terminating unhealthy stream")
 			}
 		case <-streamHealthCh:
-			log.Debug("stream is unhealthy; aborting")
+			log.Log(minLogLevel, "Stream is unhealthy; aborting")
 			return status.Error(codes.Aborted, "terminating unhealthy stream")
 		case <-ctx.Done():
-			log.Debug("stream context cancelled; ending stream")
+			log.Log(minLogLevel, "Stream context cancelled; ending stream")
 			return status.Error(codes.Canceled, "")
 		}
 	}
+}
+
+func (s *Server) GetMessage(ctx context.Context, req *messagingpb.GetMessageRequest) (*messagingpb.GetMessageResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	allow, err := s.rpcAuthz.CanGetMessage(ctx, req.ChatId, userID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
+	} else if !allow {
+		return &messagingpb.GetMessageResponse{Result: messagingpb.GetMessageResponse_DENIED}, nil
+	}
+
+	message, err := s.messages.GetMessage(ctx, req.ChatId, req.MessageId)
+	if errors.Is(err, ErrMessageNotFound) {
+		return &messagingpb.GetMessageResponse{Result: messagingpb.GetMessageResponse_NOT_FOUND}, nil
+	} else if err != nil {
+		s.log.Error("Failed to get message", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to get message")
+	}
+
+	return &messagingpb.GetMessageResponse{
+		Message: message,
+	}, nil
 }
 
 func (s *Server) GetMessages(ctx context.Context, req *messagingpb.GetMessagesRequest) (*messagingpb.GetMessagesResponse, error) {
@@ -275,49 +318,63 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		return nil, err
 	}
 
-	switch req.Content[0].Type.(type) {
+	var reference *messagingpb.MessageId
+	switch typed := req.Content[0].Type.(type) {
 	case *messagingpb.Content_Text:
+	//case *messagingpb.Content_Reaction:
+	//	reference = typed.Reaction.OriginalMessageId
+	case *messagingpb.Content_Reply:
+		reference = typed.Reply.OriginalMessageId
 	default:
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 	}
 
 	allow, err := s.rpcAuthz.CanSendMessage(ctx, req.ChatId, userID)
 	if err != nil {
+		s.log.Warn("Failed to do rpc authz checks", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 	}
 
+	if reference != nil {
+		_, err := s.messages.GetMessage(ctx, req.ChatId, reference)
+		if errors.Is(err, ErrMessageNotFound) {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get message reference", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to get message reference")
+		}
+	}
+
 	msg := &messagingpb.Message{
 		SenderId: userID,
 		Content:  req.Content,
-		Ts:       timestamppb.Now(),
 	}
 
-	if err := s.Send(ctx, req.ChatId, msg); err != nil {
+	sent, err := s.Send(ctx, req.ChatId, msg)
+	if err != nil {
+		s.log.Warn("Failed to send message", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to send message")
 	}
 
 	return &messagingpb.SendMessageResponse{
-		Message: msg,
+		Message: sent,
 	}, nil
 }
 
-func (s *Server) Send(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) error {
-	if msg.Ts == nil {
-		msg.Ts = timestamppb.Now()
-	}
-
-	if err := s.messages.PutMessage(ctx, chatID, msg); err != nil {
+func (s *Server) Send(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {
+	created, err := s.messages.PutMessage(ctx, chatID, msg)
+	if err != nil {
 		s.log.Error("Failed to put chat message", zap.Error(err))
-		return err
+		return nil, err
 	}
 
-	if err := s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MessageUpdate: msg}); err != nil {
+	if err := s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MessageUpdate: created}); err != nil {
 		s.log.Warn("Failed to notify event bus", zap.Error(err))
 	}
 
-	return nil
+	return created, nil
 }
 
 func (s *Server) AdvancePointer(ctx context.Context, req *messagingpb.AdvancePointerRequest) (*messagingpb.AdvancePointerResponse, error) {
@@ -380,41 +437,6 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 	return &messagingpb.NotifyIsTypingResponse{}, nil
 }
 
-func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, resumeFrom *messagingpb.MessageId, stream event.Stream[*event.ChatEvent]) {
-	log := s.log.With(
-		zap.String("user_id", model.UserIDString(userID)),
-		zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)),
-	)
-
-	queryOptions := []query.Option{query.WithLimit(10240)} // todo: paged calls
-	if resumeFrom != nil {
-		queryOptions = append(queryOptions, query.WithToken(&commonpb.PagingToken{Value: resumeFrom.Value}))
-	}
-	messages, err := s.messages.GetMessages(ctx, chatID, queryOptions...)
-	if err != nil {
-		log.Warn("Failed to get messages for flush", zap.Error(err))
-		return
-	}
-
-	var batch []*messagingpb.Message
-	for _, message := range messages {
-		batch = append(batch, message)
-		if len(batch) >= flushedMessageBatchSize {
-			if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
-				log.Info("Failed to send message to stream", zap.Error(err))
-				return
-			}
-			batch = nil
-		}
-	}
-	if len(batch) > 0 {
-		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
-			log.Info("Failed to send message to stream", zap.Error(err))
-			return
-		}
-	}
-}
-
 func (s *Server) handleChatUpdates(chatID *commonpb.ChatId, event *event.ChatEvent) {
 	// Fast pass filtering to avoid excessive locking.
 	//
@@ -431,6 +453,39 @@ func (s *Server) handleChatUpdates(chatID *commonpb.ChatId, event *event.ChatEve
 	for _, stream := range streams {
 		if err := stream.Notify(event, streamTimeout); err != nil {
 			s.log.Warn("Failed to notify stream", zap.Error(err), zap.String("user_id", stream.ID()))
+		}
+	}
+}
+
+func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, resumeFrom *messagingpb.MessageId, stream event.Stream[*event.ChatEvent]) {
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)),
+	)
+	queryOptions := []query.Option{query.WithLimit(10240)} // todo: paged calls
+	if resumeFrom != nil {
+		queryOptions = append(queryOptions, query.WithToken(&commonpb.PagingToken{Value: resumeFrom.Value}))
+	}
+	messages, err := s.messages.GetMessages(ctx, chatID, queryOptions...)
+	if err != nil {
+		log.Warn("Failed to get messages for flush", zap.Error(err))
+		return
+	}
+	var batch []*messagingpb.Message
+	for _, message := range messages {
+		batch = append(batch, message)
+		if len(batch) >= flushedMessageBatchSize {
+			if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
+				log.Info("Failed to send message to stream", zap.Error(err))
+				return
+			}
+			batch = nil
+		}
+	}
+	if len(batch) > 0 {
+		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
+			log.Info("Failed to send message to stream", zap.Error(err))
+			return
 		}
 	}
 }

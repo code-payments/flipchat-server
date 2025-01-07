@@ -99,16 +99,26 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	}
 
 	var pushPreview string
-	if len(msg.Content) > 0 && msg.Content[0].GetText().GetText() != "" {
-		pushPreview = msg.Content[0].GetText().GetText()
-	} else {
-		pushPreview = "Sent a message"
+	switch typed := msg.Content[0].Type.(type) {
+	case *messagingpb.Content_Text:
+		pushPreview = typed.Text.Text
+	case *messagingpb.Content_LocalizedAnnouncement:
+		// todo: this needs tests
+		pushPreview = typed.LocalizedAnnouncement.KeyOrText
+	case *messagingpb.Content_Reply:
+		// todo: this needs tests
+		pushPreview = typed.Reply.ReplyText
+	default:
+		return nil
 	}
 
 	var title, body string
 	switch md.Type {
 	case chatpb.Metadata_GROUP:
-		title = fmt.Sprintf("Room #%d", md.RoomNumber)
+		title = fmt.Sprintf("#%d", md.RoomNumber)
+		if len(md.DisplayName) > 0 {
+			title = fmt.Sprintf("#%d: %s", md.RoomNumber, md.DisplayName)
+		}
 		body = fmt.Sprintf("%s: %s", sender.DisplayName, pushPreview)
 	case chatpb.Metadata_TWO_WAY:
 		title = sender.DisplayName

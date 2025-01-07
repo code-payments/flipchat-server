@@ -71,6 +71,7 @@ func testServerHappy(
 		log,
 		authz,
 		NewAlwaysAllowRpcAuthz(),
+		accountStore,
 		messageDB,
 		pointerDB,
 		bus,
@@ -156,6 +157,73 @@ func testServerHappy(
 			notification := <-eventCh
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 		}
+
+		/*
+			for i := range 10 {
+				send := &messagingpb.SendMessageRequest{
+					ChatId: chatID,
+					Content: []*messagingpb.Content{
+						{
+							Type: &messagingpb.Content_Reaction{
+								Reaction: &messagingpb.ReactionContent{
+									OriginalMessageId: expected[i].MessageId,
+									Emoji:             "👍",
+								},
+							},
+						},
+					},
+				}
+				require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+				sent, err := client.SendMessage(ctx, send)
+				require.NoError(t, err)
+				require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+
+				expected = append(expected, sent.Message)
+
+				notification := <-eventCh
+				require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			}
+		*/
+
+		for i := range 10 {
+			send := &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Reply{
+							Reply: &messagingpb.ReplyContent{
+								OriginalMessageId: expected[i].MessageId,
+								ReplyText:         fmt.Sprintf("reply-%d", i),
+							},
+						},
+					},
+				},
+			}
+			require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+
+			expected = append(expected, sent.Message)
+
+			notification := <-eventCh
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+		}
+	})
+
+	t.Run("GetMessage", func(t *testing.T) {
+		get := &messagingpb.GetMessageRequest{
+			ChatId:    chatID,
+			MessageId: expected[0].MessageId,
+		}
+		require.NoError(t, keyPair.Auth(get, &get.Auth))
+
+		message, err := client.GetMessage(ctx, get)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.GetMessageResponse_OK, message.Result)
+		require.NoError(t, protoutil.ProtoEqualError(expected[0], message.Message))
 	})
 
 	t.Run("GetMessages", func(t *testing.T) {
@@ -210,6 +278,43 @@ func testServerHappy(
 		case <-time.After(500 * time.Millisecond):
 		}
 	})
+
+	t.Run("Send message with invalid reference", func(t *testing.T) {
+		contentsWithReference := [][]*messagingpb.Content{
+			{
+				{
+					Type: &messagingpb.Content_Reaction{
+						Reaction: &messagingpb.ReactionContent{
+							OriginalMessageId: messaging.MustGenerateMessageID(),
+							Emoji:             "👎",
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Reply{
+						Reply: &messagingpb.ReplyContent{
+							OriginalMessageId: messaging.MustGenerateMessageID(),
+							ReplyText:         "invald-reply",
+						},
+					},
+				},
+			},
+		}
+
+		for _, content := range contentsWithReference {
+			send := &messagingpb.SendMessageRequest{
+				ChatId:  chatID,
+				Content: content,
+			}
+			require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
+		}
+	})
 }
 
 func testServerDuplicateStreams(
@@ -229,6 +334,7 @@ func testServerDuplicateStreams(
 		log,
 		authz,
 		NewAlwaysAllowRpcAuthz(),
+		accountStore,
 		messageDB,
 		pointerDB,
 		bus,

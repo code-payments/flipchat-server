@@ -47,6 +47,25 @@ func (m *memory) GetTokens(_ context.Context, userID *commonpb.UserId) ([]push.T
 	return tokens, nil
 }
 
+func (m *memory) GetTokensBatch(ctx context.Context, userIDs ...*commonpb.UserId) ([]push.Token, error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	var tokens []push.Token
+	for _, userID := range userIDs {
+		userTokens, ok := m.tokens[string(userID.Value)]
+		if !ok {
+			continue
+		}
+
+		for _, token := range userTokens {
+			tokens = append(tokens, token)
+		}
+	}
+
+	return tokens, nil
+}
+
 func (m *memory) AddToken(_ context.Context, userID *commonpb.UserId, appInstallID *commonpb.AppInstallId, tokenType pushpb.TokenType, token string) error {
 	m.Lock()
 	defer m.Unlock()

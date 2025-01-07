@@ -139,14 +139,28 @@ func testMultipleUsers(t *testing.T, store push.TokenStore) {
 	require.NoError(t, err)
 
 	// Verify user1's tokens
-	tokens, err := store.GetTokens(ctx, user1)
+	tokens1, err := store.GetTokens(ctx, user1)
 	require.NoError(t, err)
-	assert.Len(t, tokens, 1)
-	assert.Equal(t, "token1", tokens[0].Token)
+	assert.Len(t, tokens1, 1)
+	assert.Equal(t, "token1", tokens1[0].Token)
 
 	// Verify user2's tokens
-	tokens, err = store.GetTokens(ctx, user2)
+	tokens2, err := store.GetTokens(ctx, user2)
 	require.NoError(t, err)
-	assert.Len(t, tokens, 1)
-	assert.Equal(t, "token2", tokens[0].Token)
+	assert.Len(t, tokens2, 1)
+	assert.Equal(t, "token2", tokens2[0].Token)
+
+	// Get all users' tokens in a batch
+	tokens, err := store.GetTokensBatch(ctx, user1, user2)
+	require.NoError(t, err)
+	assert.Len(t, tokens, 2)
+
+	// Verify token contents
+	tokenMap := make(map[string]push.Token)
+	for _, token := range tokens {
+		tokenMap[token.Token] = token
+	}
+
+	assert.Equal(t, tokens1[0], tokenMap["token1"])
+	assert.Equal(t, tokens2[0], tokenMap["token2"])
 }

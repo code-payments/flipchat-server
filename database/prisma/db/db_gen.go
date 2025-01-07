@@ -91,9 +91,11 @@ generator db {
 model User {
   // Fields
 
-  id          String      @id
-  displayName String?
-  publicKeys  PublicKey[]
+  id           String      @id
+  displayName  String?
+  isStaff      Boolean     @default(false)
+  isRegistered Boolean     @default(false)
+  publicKeys   PublicKey[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -140,11 +142,11 @@ model Intent {
 model Chat {
   // Fields
 
-  id          String @id
-  title       String
-  roomNumber  Int?   @unique
-  coverCharge BigInt @default(0)
-  type        Int    @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
+  id          String  @id
+  displayName String?
+  roomNumber  Int?    @unique
+  coverCharge BigInt  @default(0)
+  type        Int     @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
 
   createdBy      String   @default("")
   createdAt      DateTime @default(now())
@@ -195,7 +197,9 @@ model Message {
   chatId   String
   senderId String?
 
-  content Bytes // protobuf repeated "Content" message (min: 1, max: 2)
+  version     Int   @default(0) @db.SmallInt // MessageVersion enum: Message: 0, Content: 1
+  contentType Int   @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, LocalizedAnnouncement: 2, NaclBoxEncryptedContent: 4, ReactionContent: 5, ReplyContent: 6
+  content     Bytes // protobuf serialized opaque data
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -245,6 +249,24 @@ model PushToken {
 
   @@id([userId, appInstallId])
   @@map("flipchat_pushtokens")
+}
+
+model Iap {
+  // Fields
+
+  receiptId String @id
+  platform  Int    @default(0) @db.SmallInt // Platform enum: Unknown: 0, Apple: 1, Google: 2
+  userId    String
+  product   Int    @default(0) @db.SmallInt // Product enum: Unknown: 0, CreateAccount: 1
+  state     Int    @default(0) @db.SmallInt // State enum: Unknown: 0, WaitingForPayment: 1, WaitingForFulfillment: 2, Fulfilled: 3
+
+  createdAt DateTime @default(now())
+
+  // Relations
+
+  // Constraints
+
+  @@map("flipchat_iap")
 }
 `
 const schemaDatasourceURL = ""
@@ -325,6 +347,7 @@ func newClient() *PrismaClient {
 	c.Message = messageActions{client: c}
 	c.Pointer = pointerActions{client: c}
 	c.PushToken = pushTokenActions{client: c}
+	c.Iap = iapActions{client: c}
 
 	c.Prisma = &PrismaActions{
 		Raw: &raw.Raw{Engine: c},
@@ -365,6 +388,8 @@ type PrismaClient struct {
 	Pointer pointerActions
 	// PushToken provides access to CRUD methods.
 	PushToken pushTokenActions
+	// Iap provides access to CRUD methods.
+	Iap iapActions
 }
 
 // --- template enums.gotpl ---
@@ -381,10 +406,12 @@ const (
 type UserScalarFieldEnum string
 
 const (
-	UserScalarFieldEnumID          UserScalarFieldEnum = "id"
-	UserScalarFieldEnumDisplayName UserScalarFieldEnum = "displayName"
-	UserScalarFieldEnumCreatedAt   UserScalarFieldEnum = "createdAt"
-	UserScalarFieldEnumUpdatedAt   UserScalarFieldEnum = "updatedAt"
+	UserScalarFieldEnumID           UserScalarFieldEnum = "id"
+	UserScalarFieldEnumDisplayName  UserScalarFieldEnum = "displayName"
+	UserScalarFieldEnumIsStaff      UserScalarFieldEnum = "isStaff"
+	UserScalarFieldEnumIsRegistered UserScalarFieldEnum = "isRegistered"
+	UserScalarFieldEnumCreatedAt    UserScalarFieldEnum = "createdAt"
+	UserScalarFieldEnumUpdatedAt    UserScalarFieldEnum = "updatedAt"
 )
 
 type PublicKeyScalarFieldEnum string
@@ -409,7 +436,7 @@ type ChatScalarFieldEnum string
 
 const (
 	ChatScalarFieldEnumID             ChatScalarFieldEnum = "id"
-	ChatScalarFieldEnumTitle          ChatScalarFieldEnum = "title"
+	ChatScalarFieldEnumDisplayName    ChatScalarFieldEnum = "displayName"
 	ChatScalarFieldEnumRoomNumber     ChatScalarFieldEnum = "roomNumber"
 	ChatScalarFieldEnumCoverCharge    ChatScalarFieldEnum = "coverCharge"
 	ChatScalarFieldEnumType           ChatScalarFieldEnum = "type"
@@ -437,12 +464,14 @@ const (
 type MessageScalarFieldEnum string
 
 const (
-	MessageScalarFieldEnumID        MessageScalarFieldEnum = "id"
-	MessageScalarFieldEnumChatID    MessageScalarFieldEnum = "chatId"
-	MessageScalarFieldEnumSenderID  MessageScalarFieldEnum = "senderId"
-	MessageScalarFieldEnumContent   MessageScalarFieldEnum = "content"
-	MessageScalarFieldEnumCreatedAt MessageScalarFieldEnum = "createdAt"
-	MessageScalarFieldEnumUpdatedAt MessageScalarFieldEnum = "updatedAt"
+	MessageScalarFieldEnumID          MessageScalarFieldEnum = "id"
+	MessageScalarFieldEnumChatID      MessageScalarFieldEnum = "chatId"
+	MessageScalarFieldEnumSenderID    MessageScalarFieldEnum = "senderId"
+	MessageScalarFieldEnumVersion     MessageScalarFieldEnum = "version"
+	MessageScalarFieldEnumContentType MessageScalarFieldEnum = "contentType"
+	MessageScalarFieldEnumContent     MessageScalarFieldEnum = "content"
+	MessageScalarFieldEnumCreatedAt   MessageScalarFieldEnum = "createdAt"
+	MessageScalarFieldEnumUpdatedAt   MessageScalarFieldEnum = "updatedAt"
 )
 
 type PointerScalarFieldEnum string
@@ -465,6 +494,17 @@ const (
 	PushTokenScalarFieldEnumType         PushTokenScalarFieldEnum = "type"
 	PushTokenScalarFieldEnumCreatedAt    PushTokenScalarFieldEnum = "createdAt"
 	PushTokenScalarFieldEnumUpdatedAt    PushTokenScalarFieldEnum = "updatedAt"
+)
+
+type IapScalarFieldEnum string
+
+const (
+	IapScalarFieldEnumReceiptID IapScalarFieldEnum = "receiptId"
+	IapScalarFieldEnumPlatform  IapScalarFieldEnum = "platform"
+	IapScalarFieldEnumUserID    IapScalarFieldEnum = "userId"
+	IapScalarFieldEnumProduct   IapScalarFieldEnum = "product"
+	IapScalarFieldEnumState     IapScalarFieldEnum = "state"
+	IapScalarFieldEnumCreatedAt IapScalarFieldEnum = "createdAt"
 )
 
 type SortOrder string
@@ -525,6 +565,10 @@ const userFieldID userPrismaFields = "id"
 
 const userFieldDisplayName userPrismaFields = "displayName"
 
+const userFieldIsStaff userPrismaFields = "isStaff"
+
+const userFieldIsRegistered userPrismaFields = "isRegistered"
+
 const userFieldPublicKeys userPrismaFields = "publicKeys"
 
 const userFieldCreatedAt userPrismaFields = "createdAt"
@@ -557,7 +601,7 @@ type chatPrismaFields = prismaFields
 
 const chatFieldID chatPrismaFields = "id"
 
-const chatFieldTitle chatPrismaFields = "title"
+const chatFieldDisplayName chatPrismaFields = "displayName"
 
 const chatFieldRoomNumber chatPrismaFields = "roomNumber"
 
@@ -607,6 +651,10 @@ const messageFieldChatID messagePrismaFields = "chatId"
 
 const messageFieldSenderID messagePrismaFields = "senderId"
 
+const messageFieldVersion messagePrismaFields = "version"
+
+const messageFieldContentType messagePrismaFields = "contentType"
+
 const messageFieldContent messagePrismaFields = "content"
 
 const messageFieldCreatedAt messagePrismaFields = "createdAt"
@@ -640,6 +688,20 @@ const pushTokenFieldType pushTokenPrismaFields = "type"
 const pushTokenFieldCreatedAt pushTokenPrismaFields = "createdAt"
 
 const pushTokenFieldUpdatedAt pushTokenPrismaFields = "updatedAt"
+
+type iapPrismaFields = prismaFields
+
+const iapFieldReceiptID iapPrismaFields = "receiptId"
+
+const iapFieldPlatform iapPrismaFields = "platform"
+
+const iapFieldUserID iapPrismaFields = "userId"
+
+const iapFieldProduct iapPrismaFields = "product"
+
+const iapFieldState iapPrismaFields = "state"
+
+const iapFieldCreatedAt iapPrismaFields = "createdAt"
 
 // --- template mock.gotpl ---
 func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
@@ -683,6 +745,10 @@ func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 		mock: m,
 	}
 
+	m.Iap = iapMock{
+		mock: m,
+	}
+
 	return pc, m, m.Ensure
 }
 
@@ -704,6 +770,8 @@ type Mock struct {
 	Pointer pointerMock
 
 	PushToken pushTokenMock
+
+	Iap iapMock
 }
 
 type userMock struct {
@@ -1042,6 +1110,48 @@ func (m *pushTokenMockExec) Errors(err error) {
 	})
 }
 
+type iapMock struct {
+	mock *Mock
+}
+
+type IapMockExpectParam interface {
+	ExtractQuery() builder.Query
+	iapModel()
+}
+
+func (m *iapMock) Expect(query IapMockExpectParam) *iapMockExec {
+	return &iapMockExec{
+		mock:  m.mock,
+		query: query.ExtractQuery(),
+	}
+}
+
+type iapMockExec struct {
+	mock  *Mock
+	query builder.Query
+}
+
+func (m *iapMockExec) Returns(v IapModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *iapMockExec) ReturnsMany(v []IapModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *iapMockExec) Errors(err error) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query:   m.query,
+		WantErr: err,
+	})
+}
+
 // --- template models.gotpl ---
 
 // UserModel represents the User model and is a wrapper for accessing fields and methods
@@ -1052,18 +1162,22 @@ type UserModel struct {
 
 // InnerUser holds the actual data
 type InnerUser struct {
-	ID          string   `json:"id"`
-	DisplayName *string  `json:"displayName,omitempty"`
-	CreatedAt   DateTime `json:"createdAt"`
-	UpdatedAt   DateTime `json:"updatedAt"`
+	ID           string   `json:"id"`
+	DisplayName  *string  `json:"displayName,omitempty"`
+	IsStaff      bool     `json:"isStaff"`
+	IsRegistered bool     `json:"isRegistered"`
+	CreatedAt    DateTime `json:"createdAt"`
+	UpdatedAt    DateTime `json:"updatedAt"`
 }
 
 // RawUserModel is a struct for User when used in raw queries
 type RawUserModel struct {
-	ID          RawString   `json:"id"`
-	DisplayName *RawString  `json:"displayName,omitempty"`
-	CreatedAt   RawDateTime `json:"createdAt"`
-	UpdatedAt   RawDateTime `json:"updatedAt"`
+	ID           RawString   `json:"id"`
+	DisplayName  *RawString  `json:"displayName,omitempty"`
+	IsStaff      RawBoolean  `json:"isStaff"`
+	IsRegistered RawBoolean  `json:"isRegistered"`
+	CreatedAt    RawDateTime `json:"createdAt"`
+	UpdatedAt    RawDateTime `json:"updatedAt"`
 }
 
 // RelationsUser holds the relation data separately
@@ -1154,7 +1268,7 @@ type ChatModel struct {
 // InnerChat holds the actual data
 type InnerChat struct {
 	ID             string   `json:"id"`
-	Title          string   `json:"title"`
+	DisplayName    *string  `json:"displayName,omitempty"`
 	RoomNumber     *int     `json:"roomNumber,omitempty"`
 	CoverCharge    BigInt   `json:"coverCharge"`
 	Type           int      `json:"type"`
@@ -1167,7 +1281,7 @@ type InnerChat struct {
 // RawChatModel is a struct for Chat when used in raw queries
 type RawChatModel struct {
 	ID             RawString   `json:"id"`
-	Title          RawString   `json:"title"`
+	DisplayName    *RawString  `json:"displayName,omitempty"`
 	RoomNumber     *RawInt     `json:"roomNumber,omitempty"`
 	CoverCharge    RawBigInt   `json:"coverCharge"`
 	Type           RawInt      `json:"type"`
@@ -1180,6 +1294,13 @@ type RawChatModel struct {
 // RelationsChat holds the relation data separately
 type RelationsChat struct {
 	Members []MemberModel `json:"members,omitempty"`
+}
+
+func (r ChatModel) DisplayName() (value String, ok bool) {
+	if r.InnerChat.DisplayName == nil {
+		return value, false
+	}
+	return *r.InnerChat.DisplayName, true
 }
 
 func (r ChatModel) RoomNumber() (value Int, ok bool) {
@@ -1257,22 +1378,26 @@ type MessageModel struct {
 
 // InnerMessage holds the actual data
 type InnerMessage struct {
-	ID        Bytes    `json:"id"`
-	ChatID    string   `json:"chatId"`
-	SenderID  *string  `json:"senderId,omitempty"`
-	Content   Bytes    `json:"content"`
-	CreatedAt DateTime `json:"createdAt"`
-	UpdatedAt DateTime `json:"updatedAt"`
+	ID          Bytes    `json:"id"`
+	ChatID      string   `json:"chatId"`
+	SenderID    *string  `json:"senderId,omitempty"`
+	Version     int      `json:"version"`
+	ContentType int      `json:"contentType"`
+	Content     Bytes    `json:"content"`
+	CreatedAt   DateTime `json:"createdAt"`
+	UpdatedAt   DateTime `json:"updatedAt"`
 }
 
 // RawMessageModel is a struct for Message when used in raw queries
 type RawMessageModel struct {
-	ID        RawBytes    `json:"id"`
-	ChatID    RawString   `json:"chatId"`
-	SenderID  *RawString  `json:"senderId,omitempty"`
-	Content   RawBytes    `json:"content"`
-	CreatedAt RawDateTime `json:"createdAt"`
-	UpdatedAt RawDateTime `json:"updatedAt"`
+	ID          RawBytes    `json:"id"`
+	ChatID      RawString   `json:"chatId"`
+	SenderID    *RawString  `json:"senderId,omitempty"`
+	Version     RawInt      `json:"version"`
+	ContentType RawInt      `json:"contentType"`
+	Content     RawBytes    `json:"content"`
+	CreatedAt   RawDateTime `json:"createdAt"`
+	UpdatedAt   RawDateTime `json:"updatedAt"`
 }
 
 // RelationsMessage holds the relation data separately
@@ -1346,6 +1471,36 @@ type RawPushTokenModel struct {
 type RelationsPushToken struct {
 }
 
+// IapModel represents the Iap model and is a wrapper for accessing fields and methods
+type IapModel struct {
+	InnerIap
+	RelationsIap
+}
+
+// InnerIap holds the actual data
+type InnerIap struct {
+	ReceiptID string   `json:"receiptId"`
+	Platform  int      `json:"platform"`
+	UserID    string   `json:"userId"`
+	Product   int      `json:"product"`
+	State     int      `json:"state"`
+	CreatedAt DateTime `json:"createdAt"`
+}
+
+// RawIapModel is a struct for Iap when used in raw queries
+type RawIapModel struct {
+	ReceiptID RawString   `json:"receiptId"`
+	Platform  RawInt      `json:"platform"`
+	UserID    RawString   `json:"userId"`
+	Product   RawInt      `json:"product"`
+	State     RawInt      `json:"state"`
+	CreatedAt RawDateTime `json:"createdAt"`
+}
+
+// RelationsIap holds the relation data separately
+type RelationsIap struct {
+}
+
 // --- template query.gotpl ---
 
 // User acts as a namespaces to access query methods for the User model
@@ -1363,6 +1518,16 @@ type userQuery struct {
 	//
 	// @optional
 	DisplayName userQueryDisplayNameString
+
+	// IsStaff
+	//
+	// @required
+	IsStaff userQueryIsStaffBoolean
+
+	// IsRegistered
+	//
+	// @required
+	IsRegistered userQueryIsRegisteredBoolean
 
 	PublicKeys userQueryPublicKeysRelations
 
@@ -2165,6 +2330,142 @@ func (r userQueryDisplayNameString) HasSuffixIfPresent(value *string) userDefaul
 
 func (r userQueryDisplayNameString) Field() userPrismaFields {
 	return userFieldDisplayName
+}
+
+// base struct
+type userQueryIsStaffBoolean struct{}
+
+// Set the required value of IsStaff
+func (r userQueryIsStaffBoolean) Set(value bool) userSetParam {
+
+	return userSetParam{
+		data: builder.Field{
+			Name:  "isStaff",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of IsStaff dynamically
+func (r userQueryIsStaffBoolean) SetIfPresent(value *Boolean) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r userQueryIsStaffBoolean) Equals(value bool) userWithPrismaIsStaffEqualsParam {
+
+	return userWithPrismaIsStaffEqualsParam{
+		data: builder.Field{
+			Name: "isStaff",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryIsStaffBoolean) EqualsIfPresent(value *bool) userWithPrismaIsStaffEqualsParam {
+	if value == nil {
+		return userWithPrismaIsStaffEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r userQueryIsStaffBoolean) Order(direction SortOrder) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name:  "isStaff",
+			Value: direction,
+		},
+	}
+}
+
+func (r userQueryIsStaffBoolean) Cursor(cursor bool) userCursorParam {
+	return userCursorParam{
+		data: builder.Field{
+			Name:  "isStaff",
+			Value: cursor,
+		},
+	}
+}
+
+func (r userQueryIsStaffBoolean) Field() userPrismaFields {
+	return userFieldIsStaff
+}
+
+// base struct
+type userQueryIsRegisteredBoolean struct{}
+
+// Set the required value of IsRegistered
+func (r userQueryIsRegisteredBoolean) Set(value bool) userSetParam {
+
+	return userSetParam{
+		data: builder.Field{
+			Name:  "isRegistered",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of IsRegistered dynamically
+func (r userQueryIsRegisteredBoolean) SetIfPresent(value *Boolean) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r userQueryIsRegisteredBoolean) Equals(value bool) userWithPrismaIsRegisteredEqualsParam {
+
+	return userWithPrismaIsRegisteredEqualsParam{
+		data: builder.Field{
+			Name: "isRegistered",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryIsRegisteredBoolean) EqualsIfPresent(value *bool) userWithPrismaIsRegisteredEqualsParam {
+	if value == nil {
+		return userWithPrismaIsRegisteredEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r userQueryIsRegisteredBoolean) Order(direction SortOrder) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name:  "isRegistered",
+			Value: direction,
+		},
+	}
+}
+
+func (r userQueryIsRegisteredBoolean) Cursor(cursor bool) userCursorParam {
+	return userCursorParam{
+		data: builder.Field{
+			Name:  "isRegistered",
+			Value: cursor,
+		},
+	}
+}
+
+func (r userQueryIsRegisteredBoolean) Field() userPrismaFields {
+	return userFieldIsRegistered
 }
 
 // base struct
@@ -5571,10 +5872,10 @@ type chatQuery struct {
 	// @required
 	ID chatQueryIDString
 
-	// Title
+	// DisplayName
 	//
-	// @required
-	Title chatQueryTitleString
+	// @optional
+	DisplayName chatQueryDisplayNameString
 
 	// RoomNumber
 	//
@@ -6014,34 +6315,50 @@ func (r chatQueryIDString) Field() chatPrismaFields {
 }
 
 // base struct
-type chatQueryTitleString struct{}
+type chatQueryDisplayNameString struct{}
 
-// Set the required value of Title
-func (r chatQueryTitleString) Set(value string) chatWithPrismaTitleSetParam {
+// Set the optional value of DisplayName
+func (r chatQueryDisplayNameString) Set(value string) chatSetParam {
 
-	return chatWithPrismaTitleSetParam{
+	return chatSetParam{
 		data: builder.Field{
-			Name:  "title",
+			Name:  "displayName",
 			Value: value,
 		},
 	}
 
 }
 
-// Set the optional value of Title dynamically
-func (r chatQueryTitleString) SetIfPresent(value *String) chatWithPrismaTitleSetParam {
+// Set the optional value of DisplayName dynamically
+func (r chatQueryDisplayNameString) SetIfPresent(value *String) chatSetParam {
 	if value == nil {
-		return chatWithPrismaTitleSetParam{}
+		return chatSetParam{}
 	}
 
 	return r.Set(*value)
 }
 
-func (r chatQueryTitleString) Equals(value string) chatWithPrismaTitleEqualsParam {
+// Set the optional value of DisplayName dynamically
+func (r chatQueryDisplayNameString) SetOptional(value *String) chatSetParam {
+	if value == nil {
 
-	return chatWithPrismaTitleEqualsParam{
+		var v *string
+		return chatSetParam{
+			data: builder.Field{
+				Name:  "displayName",
+				Value: v,
+			},
+		}
+	}
+
+	return r.Set(*value)
+}
+
+func (r chatQueryDisplayNameString) Equals(value string) chatWithPrismaDisplayNameEqualsParam {
+
+	return chatWithPrismaDisplayNameEqualsParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "equals",
@@ -6052,35 +6369,64 @@ func (r chatQueryTitleString) Equals(value string) chatWithPrismaTitleEqualsPara
 	}
 }
 
-func (r chatQueryTitleString) EqualsIfPresent(value *string) chatWithPrismaTitleEqualsParam {
+func (r chatQueryDisplayNameString) EqualsIfPresent(value *string) chatWithPrismaDisplayNameEqualsParam {
 	if value == nil {
-		return chatWithPrismaTitleEqualsParam{}
+		return chatWithPrismaDisplayNameEqualsParam{}
 	}
 	return r.Equals(*value)
 }
 
-func (r chatQueryTitleString) Order(direction SortOrder) chatDefaultParam {
+func (r chatQueryDisplayNameString) EqualsOptional(value *String) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name:  "title",
+			Name: "displayName",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryDisplayNameString) IsNull() chatDefaultParam {
+	var str *string = nil
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "displayName",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: str,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryDisplayNameString) Order(direction SortOrder) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name:  "displayName",
 			Value: direction,
 		},
 	}
 }
 
-func (r chatQueryTitleString) Cursor(cursor string) chatCursorParam {
+func (r chatQueryDisplayNameString) Cursor(cursor string) chatCursorParam {
 	return chatCursorParam{
 		data: builder.Field{
-			Name:  "title",
+			Name:  "displayName",
 			Value: cursor,
 		},
 	}
 }
 
-func (r chatQueryTitleString) In(value []string) chatDefaultParam {
+func (r chatQueryDisplayNameString) In(value []string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "in",
@@ -6091,17 +6437,17 @@ func (r chatQueryTitleString) In(value []string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) InIfPresent(value []string) chatDefaultParam {
+func (r chatQueryDisplayNameString) InIfPresent(value []string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.In(value)
 }
 
-func (r chatQueryTitleString) NotIn(value []string) chatDefaultParam {
+func (r chatQueryDisplayNameString) NotIn(value []string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "notIn",
@@ -6112,17 +6458,17 @@ func (r chatQueryTitleString) NotIn(value []string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) NotInIfPresent(value []string) chatDefaultParam {
+func (r chatQueryDisplayNameString) NotInIfPresent(value []string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.NotIn(value)
 }
 
-func (r chatQueryTitleString) Lt(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Lt(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "lt",
@@ -6133,17 +6479,17 @@ func (r chatQueryTitleString) Lt(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) LtIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) LtIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Lt(*value)
 }
 
-func (r chatQueryTitleString) Lte(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Lte(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "lte",
@@ -6154,17 +6500,17 @@ func (r chatQueryTitleString) Lte(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) LteIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) LteIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Lte(*value)
 }
 
-func (r chatQueryTitleString) Gt(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Gt(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "gt",
@@ -6175,17 +6521,17 @@ func (r chatQueryTitleString) Gt(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) GtIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) GtIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Gt(*value)
 }
 
-func (r chatQueryTitleString) Gte(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Gte(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "gte",
@@ -6196,17 +6542,17 @@ func (r chatQueryTitleString) Gte(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) GteIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) GteIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Gte(*value)
 }
 
-func (r chatQueryTitleString) Contains(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Contains(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "contains",
@@ -6217,17 +6563,17 @@ func (r chatQueryTitleString) Contains(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) ContainsIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) ContainsIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Contains(*value)
 }
 
-func (r chatQueryTitleString) StartsWith(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) StartsWith(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "startsWith",
@@ -6238,17 +6584,17 @@ func (r chatQueryTitleString) StartsWith(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) StartsWithIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) StartsWithIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.StartsWith(*value)
 }
 
-func (r chatQueryTitleString) EndsWith(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) EndsWith(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "endsWith",
@@ -6259,17 +6605,17 @@ func (r chatQueryTitleString) EndsWith(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) EndsWithIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) EndsWithIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.EndsWith(*value)
 }
 
-func (r chatQueryTitleString) Mode(value QueryMode) chatDefaultParam {
+func (r chatQueryDisplayNameString) Mode(value QueryMode) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "mode",
@@ -6280,17 +6626,17 @@ func (r chatQueryTitleString) Mode(value QueryMode) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) ModeIfPresent(value *QueryMode) chatDefaultParam {
+func (r chatQueryDisplayNameString) ModeIfPresent(value *QueryMode) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.Mode(*value)
 }
 
-func (r chatQueryTitleString) Not(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) Not(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "not",
@@ -6301,7 +6647,7 @@ func (r chatQueryTitleString) Not(value string) chatDefaultParam {
 	}
 }
 
-func (r chatQueryTitleString) NotIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) NotIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
@@ -6310,10 +6656,10 @@ func (r chatQueryTitleString) NotIfPresent(value *string) chatDefaultParam {
 
 // deprecated: Use StartsWith instead.
 
-func (r chatQueryTitleString) HasPrefix(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) HasPrefix(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "starts_with",
@@ -6325,7 +6671,7 @@ func (r chatQueryTitleString) HasPrefix(value string) chatDefaultParam {
 }
 
 // deprecated: Use StartsWithIfPresent instead.
-func (r chatQueryTitleString) HasPrefixIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) HasPrefixIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
@@ -6334,10 +6680,10 @@ func (r chatQueryTitleString) HasPrefixIfPresent(value *string) chatDefaultParam
 
 // deprecated: Use EndsWith instead.
 
-func (r chatQueryTitleString) HasSuffix(value string) chatDefaultParam {
+func (r chatQueryDisplayNameString) HasSuffix(value string) chatDefaultParam {
 	return chatDefaultParam{
 		data: builder.Field{
-			Name: "title",
+			Name: "displayName",
 			Fields: []builder.Field{
 				{
 					Name:  "ends_with",
@@ -6349,15 +6695,15 @@ func (r chatQueryTitleString) HasSuffix(value string) chatDefaultParam {
 }
 
 // deprecated: Use EndsWithIfPresent instead.
-func (r chatQueryTitleString) HasSuffixIfPresent(value *string) chatDefaultParam {
+func (r chatQueryDisplayNameString) HasSuffixIfPresent(value *string) chatDefaultParam {
 	if value == nil {
 		return chatDefaultParam{}
 	}
 	return r.HasSuffix(*value)
 }
 
-func (r chatQueryTitleString) Field() chatPrismaFields {
-	return chatFieldTitle
+func (r chatQueryDisplayNameString) Field() chatPrismaFields {
+	return chatFieldDisplayName
 }
 
 // base struct
@@ -11574,6 +11920,16 @@ type messageQuery struct {
 	// @optional
 	SenderID messageQuerySenderIDString
 
+	// Version
+	//
+	// @required
+	Version messageQueryVersionInt
+
+	// ContentType
+	//
+	// @required
+	ContentType messageQueryContentTypeInt
+
 	// Content
 	//
 	// @required
@@ -12509,6 +12865,804 @@ func (r messageQuerySenderIDString) HasSuffixIfPresent(value *string) messageDef
 
 func (r messageQuerySenderIDString) Field() messagePrismaFields {
 	return messageFieldSenderID
+}
+
+// base struct
+type messageQueryVersionInt struct{}
+
+// Set the required value of Version
+func (r messageQueryVersionInt) Set(value int) messageSetParam {
+
+	return messageSetParam{
+		data: builder.Field{
+			Name:  "version",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Version dynamically
+func (r messageQueryVersionInt) SetIfPresent(value *Int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of Version
+func (r messageQueryVersionInt) Increment(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) IncrementIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of Version
+func (r messageQueryVersionInt) Decrement(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) DecrementIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of Version
+func (r messageQueryVersionInt) Multiply(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) MultiplyIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of Version
+func (r messageQueryVersionInt) Divide(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) DivideIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r messageQueryVersionInt) Equals(value int) messageWithPrismaVersionEqualsParam {
+
+	return messageWithPrismaVersionEqualsParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) EqualsIfPresent(value *int) messageWithPrismaVersionEqualsParam {
+	if value == nil {
+		return messageWithPrismaVersionEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r messageQueryVersionInt) Order(direction SortOrder) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name:  "version",
+			Value: direction,
+		},
+	}
+}
+
+func (r messageQueryVersionInt) Cursor(cursor int) messageCursorParam {
+	return messageCursorParam{
+		data: builder.Field{
+			Name:  "version",
+			Value: cursor,
+		},
+	}
+}
+
+func (r messageQueryVersionInt) In(value []int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) InIfPresent(value []int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r messageQueryVersionInt) NotIn(value []int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) NotInIfPresent(value []int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r messageQueryVersionInt) Lt(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) LtIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r messageQueryVersionInt) Lte(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) LteIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r messageQueryVersionInt) Gt(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) GtIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r messageQueryVersionInt) Gte(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) GteIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r messageQueryVersionInt) Not(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryVersionInt) NotIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r messageQueryVersionInt) LT(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r messageQueryVersionInt) LTIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r messageQueryVersionInt) LTE(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r messageQueryVersionInt) LTEIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r messageQueryVersionInt) GT(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r messageQueryVersionInt) GTIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r messageQueryVersionInt) GTE(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "version",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r messageQueryVersionInt) GTEIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r messageQueryVersionInt) Field() messagePrismaFields {
+	return messageFieldVersion
+}
+
+// base struct
+type messageQueryContentTypeInt struct{}
+
+// Set the required value of ContentType
+func (r messageQueryContentTypeInt) Set(value int) messageSetParam {
+
+	return messageSetParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ContentType dynamically
+func (r messageQueryContentTypeInt) SetIfPresent(value *Int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of ContentType
+func (r messageQueryContentTypeInt) Increment(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) IncrementIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of ContentType
+func (r messageQueryContentTypeInt) Decrement(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) DecrementIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of ContentType
+func (r messageQueryContentTypeInt) Multiply(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) MultiplyIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of ContentType
+func (r messageQueryContentTypeInt) Divide(value int) messageSetParam {
+	return messageSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) DivideIfPresent(value *int) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r messageQueryContentTypeInt) Equals(value int) messageWithPrismaContentTypeEqualsParam {
+
+	return messageWithPrismaContentTypeEqualsParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) EqualsIfPresent(value *int) messageWithPrismaContentTypeEqualsParam {
+	if value == nil {
+		return messageWithPrismaContentTypeEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r messageQueryContentTypeInt) Order(direction SortOrder) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: direction,
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) Cursor(cursor int) messageCursorParam {
+	return messageCursorParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: cursor,
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) In(value []int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) InIfPresent(value []int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r messageQueryContentTypeInt) NotIn(value []int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) NotInIfPresent(value []int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r messageQueryContentTypeInt) Lt(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) LtIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r messageQueryContentTypeInt) Lte(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) LteIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r messageQueryContentTypeInt) Gt(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) GtIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r messageQueryContentTypeInt) Gte(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) GteIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r messageQueryContentTypeInt) Not(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryContentTypeInt) NotIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r messageQueryContentTypeInt) LT(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r messageQueryContentTypeInt) LTIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r messageQueryContentTypeInt) LTE(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r messageQueryContentTypeInt) LTEIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r messageQueryContentTypeInt) GT(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r messageQueryContentTypeInt) GTIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r messageQueryContentTypeInt) GTE(value int) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r messageQueryContentTypeInt) GTEIfPresent(value *int) messageDefaultParam {
+	if value == nil {
+		return messageDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r messageQueryContentTypeInt) Field() messagePrismaFields {
+	return messageFieldContentType
 }
 
 // base struct
@@ -17603,6 +18757,2296 @@ func (r pushTokenQueryUpdatedAtDateTime) Field() pushTokenPrismaFields {
 	return pushTokenFieldUpdatedAt
 }
 
+// Iap acts as a namespaces to access query methods for the Iap model
+var Iap = iapQuery{}
+
+// iapQuery exposes query functions for the iap model
+type iapQuery struct {
+
+	// ReceiptID
+	//
+	// @required
+	ReceiptID iapQueryReceiptIDString
+
+	// Platform
+	//
+	// @required
+	Platform iapQueryPlatformInt
+
+	// UserID
+	//
+	// @required
+	UserID iapQueryUserIDString
+
+	// Product
+	//
+	// @required
+	Product iapQueryProductInt
+
+	// State
+	//
+	// @required
+	State iapQueryStateInt
+
+	// CreatedAt
+	//
+	// @required
+	CreatedAt iapQueryCreatedAtDateTime
+}
+
+func (iapQuery) Not(params ...IapWhereParam) iapDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:     "NOT",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (iapQuery) Or(params ...IapWhereParam) iapDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:     "OR",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (iapQuery) And(params ...IapWhereParam) iapDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:     "AND",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+// base struct
+type iapQueryReceiptIDString struct{}
+
+// Set the required value of ReceiptID
+func (r iapQueryReceiptIDString) Set(value string) iapWithPrismaReceiptIDSetParam {
+
+	return iapWithPrismaReceiptIDSetParam{
+		data: builder.Field{
+			Name:  "receiptId",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ReceiptID dynamically
+func (r iapQueryReceiptIDString) SetIfPresent(value *String) iapWithPrismaReceiptIDSetParam {
+	if value == nil {
+		return iapWithPrismaReceiptIDSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r iapQueryReceiptIDString) Equals(value string) iapWithPrismaReceiptIDEqualsUniqueParam {
+
+	return iapWithPrismaReceiptIDEqualsUniqueParam{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) EqualsIfPresent(value *string) iapWithPrismaReceiptIDEqualsUniqueParam {
+	if value == nil {
+		return iapWithPrismaReceiptIDEqualsUniqueParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r iapQueryReceiptIDString) Order(direction SortOrder) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:  "receiptId",
+			Value: direction,
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) Cursor(cursor string) iapCursorParam {
+	return iapCursorParam{
+		data: builder.Field{
+			Name:  "receiptId",
+			Value: cursor,
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) In(value []string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) InIfPresent(value []string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.In(value)
+}
+
+func (r iapQueryReceiptIDString) NotIn(value []string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) NotInIfPresent(value []string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.NotIn(value)
+}
+
+func (r iapQueryReceiptIDString) Lt(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) LtIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.Lt(*value)
+}
+
+func (r iapQueryReceiptIDString) Lte(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) LteIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.Lte(*value)
+}
+
+func (r iapQueryReceiptIDString) Gt(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) GtIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.Gt(*value)
+}
+
+func (r iapQueryReceiptIDString) Gte(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) GteIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.Gte(*value)
+}
+
+func (r iapQueryReceiptIDString) Contains(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) ContainsIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.Contains(*value)
+}
+
+func (r iapQueryReceiptIDString) StartsWith(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) StartsWithIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r iapQueryReceiptIDString) EndsWith(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) EndsWithIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r iapQueryReceiptIDString) Mode(value QueryMode) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) ModeIfPresent(value *QueryMode) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.Mode(*value)
+}
+
+func (r iapQueryReceiptIDString) Not(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryReceiptIDString) NotIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r iapQueryReceiptIDString) HasPrefix(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r iapQueryReceiptIDString) HasPrefixIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r iapQueryReceiptIDString) HasSuffix(value string) iapParamUnique {
+	return iapParamUnique{
+		data: builder.Field{
+			Name: "receiptId",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r iapQueryReceiptIDString) HasSuffixIfPresent(value *string) iapParamUnique {
+	if value == nil {
+		return iapParamUnique{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r iapQueryReceiptIDString) Field() iapPrismaFields {
+	return iapFieldReceiptID
+}
+
+// base struct
+type iapQueryPlatformInt struct{}
+
+// Set the required value of Platform
+func (r iapQueryPlatformInt) Set(value int) iapSetParam {
+
+	return iapSetParam{
+		data: builder.Field{
+			Name:  "platform",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Platform dynamically
+func (r iapQueryPlatformInt) SetIfPresent(value *Int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of Platform
+func (r iapQueryPlatformInt) Increment(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) IncrementIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of Platform
+func (r iapQueryPlatformInt) Decrement(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) DecrementIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of Platform
+func (r iapQueryPlatformInt) Multiply(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) MultiplyIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of Platform
+func (r iapQueryPlatformInt) Divide(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) DivideIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r iapQueryPlatformInt) Equals(value int) iapWithPrismaPlatformEqualsParam {
+
+	return iapWithPrismaPlatformEqualsParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) EqualsIfPresent(value *int) iapWithPrismaPlatformEqualsParam {
+	if value == nil {
+		return iapWithPrismaPlatformEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r iapQueryPlatformInt) Order(direction SortOrder) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:  "platform",
+			Value: direction,
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) Cursor(cursor int) iapCursorParam {
+	return iapCursorParam{
+		data: builder.Field{
+			Name:  "platform",
+			Value: cursor,
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) In(value []int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) InIfPresent(value []int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r iapQueryPlatformInt) NotIn(value []int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) NotInIfPresent(value []int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r iapQueryPlatformInt) Lt(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) LtIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r iapQueryPlatformInt) Lte(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) LteIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r iapQueryPlatformInt) Gt(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) GtIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r iapQueryPlatformInt) Gte(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) GteIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r iapQueryPlatformInt) Not(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryPlatformInt) NotIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r iapQueryPlatformInt) LT(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r iapQueryPlatformInt) LTIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r iapQueryPlatformInt) LTE(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r iapQueryPlatformInt) LTEIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r iapQueryPlatformInt) GT(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r iapQueryPlatformInt) GTIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r iapQueryPlatformInt) GTE(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "platform",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r iapQueryPlatformInt) GTEIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r iapQueryPlatformInt) Field() iapPrismaFields {
+	return iapFieldPlatform
+}
+
+// base struct
+type iapQueryUserIDString struct{}
+
+// Set the required value of UserID
+func (r iapQueryUserIDString) Set(value string) iapWithPrismaUserIDSetParam {
+
+	return iapWithPrismaUserIDSetParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of UserID dynamically
+func (r iapQueryUserIDString) SetIfPresent(value *String) iapWithPrismaUserIDSetParam {
+	if value == nil {
+		return iapWithPrismaUserIDSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r iapQueryUserIDString) Equals(value string) iapWithPrismaUserIDEqualsParam {
+
+	return iapWithPrismaUserIDEqualsParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) EqualsIfPresent(value *string) iapWithPrismaUserIDEqualsParam {
+	if value == nil {
+		return iapWithPrismaUserIDEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r iapQueryUserIDString) Order(direction SortOrder) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: direction,
+		},
+	}
+}
+
+func (r iapQueryUserIDString) Cursor(cursor string) iapCursorParam {
+	return iapCursorParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: cursor,
+		},
+	}
+}
+
+func (r iapQueryUserIDString) In(value []string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) InIfPresent(value []string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r iapQueryUserIDString) NotIn(value []string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) NotInIfPresent(value []string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r iapQueryUserIDString) Lt(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) LtIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r iapQueryUserIDString) Lte(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) LteIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r iapQueryUserIDString) Gt(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) GtIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r iapQueryUserIDString) Gte(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) GteIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r iapQueryUserIDString) Contains(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) ContainsIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r iapQueryUserIDString) StartsWith(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) StartsWithIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r iapQueryUserIDString) EndsWith(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) EndsWithIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r iapQueryUserIDString) Mode(value QueryMode) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) ModeIfPresent(value *QueryMode) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r iapQueryUserIDString) Not(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryUserIDString) NotIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r iapQueryUserIDString) HasPrefix(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r iapQueryUserIDString) HasPrefixIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r iapQueryUserIDString) HasSuffix(value string) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r iapQueryUserIDString) HasSuffixIfPresent(value *string) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r iapQueryUserIDString) Field() iapPrismaFields {
+	return iapFieldUserID
+}
+
+// base struct
+type iapQueryProductInt struct{}
+
+// Set the required value of Product
+func (r iapQueryProductInt) Set(value int) iapSetParam {
+
+	return iapSetParam{
+		data: builder.Field{
+			Name:  "product",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Product dynamically
+func (r iapQueryProductInt) SetIfPresent(value *Int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of Product
+func (r iapQueryProductInt) Increment(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) IncrementIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of Product
+func (r iapQueryProductInt) Decrement(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) DecrementIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of Product
+func (r iapQueryProductInt) Multiply(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) MultiplyIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of Product
+func (r iapQueryProductInt) Divide(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) DivideIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r iapQueryProductInt) Equals(value int) iapWithPrismaProductEqualsParam {
+
+	return iapWithPrismaProductEqualsParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) EqualsIfPresent(value *int) iapWithPrismaProductEqualsParam {
+	if value == nil {
+		return iapWithPrismaProductEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r iapQueryProductInt) Order(direction SortOrder) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:  "product",
+			Value: direction,
+		},
+	}
+}
+
+func (r iapQueryProductInt) Cursor(cursor int) iapCursorParam {
+	return iapCursorParam{
+		data: builder.Field{
+			Name:  "product",
+			Value: cursor,
+		},
+	}
+}
+
+func (r iapQueryProductInt) In(value []int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) InIfPresent(value []int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r iapQueryProductInt) NotIn(value []int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) NotInIfPresent(value []int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r iapQueryProductInt) Lt(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) LtIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r iapQueryProductInt) Lte(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) LteIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r iapQueryProductInt) Gt(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) GtIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r iapQueryProductInt) Gte(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) GteIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r iapQueryProductInt) Not(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryProductInt) NotIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r iapQueryProductInt) LT(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r iapQueryProductInt) LTIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r iapQueryProductInt) LTE(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r iapQueryProductInt) LTEIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r iapQueryProductInt) GT(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r iapQueryProductInt) GTIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r iapQueryProductInt) GTE(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "product",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r iapQueryProductInt) GTEIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r iapQueryProductInt) Field() iapPrismaFields {
+	return iapFieldProduct
+}
+
+// base struct
+type iapQueryStateInt struct{}
+
+// Set the required value of State
+func (r iapQueryStateInt) Set(value int) iapSetParam {
+
+	return iapSetParam{
+		data: builder.Field{
+			Name:  "state",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of State dynamically
+func (r iapQueryStateInt) SetIfPresent(value *Int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of State
+func (r iapQueryStateInt) Increment(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) IncrementIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of State
+func (r iapQueryStateInt) Decrement(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) DecrementIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of State
+func (r iapQueryStateInt) Multiply(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) MultiplyIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of State
+func (r iapQueryStateInt) Divide(value int) iapSetParam {
+	return iapSetParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) DivideIfPresent(value *int) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r iapQueryStateInt) Equals(value int) iapWithPrismaStateEqualsParam {
+
+	return iapWithPrismaStateEqualsParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) EqualsIfPresent(value *int) iapWithPrismaStateEqualsParam {
+	if value == nil {
+		return iapWithPrismaStateEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r iapQueryStateInt) Order(direction SortOrder) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:  "state",
+			Value: direction,
+		},
+	}
+}
+
+func (r iapQueryStateInt) Cursor(cursor int) iapCursorParam {
+	return iapCursorParam{
+		data: builder.Field{
+			Name:  "state",
+			Value: cursor,
+		},
+	}
+}
+
+func (r iapQueryStateInt) In(value []int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) InIfPresent(value []int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r iapQueryStateInt) NotIn(value []int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) NotInIfPresent(value []int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r iapQueryStateInt) Lt(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) LtIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r iapQueryStateInt) Lte(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) LteIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r iapQueryStateInt) Gt(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) GtIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r iapQueryStateInt) Gte(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) GteIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r iapQueryStateInt) Not(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryStateInt) NotIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r iapQueryStateInt) LT(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r iapQueryStateInt) LTIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r iapQueryStateInt) LTE(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r iapQueryStateInt) LTEIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r iapQueryStateInt) GT(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r iapQueryStateInt) GTIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r iapQueryStateInt) GTE(value int) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "state",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r iapQueryStateInt) GTEIfPresent(value *int) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r iapQueryStateInt) Field() iapPrismaFields {
+	return iapFieldState
+}
+
+// base struct
+type iapQueryCreatedAtDateTime struct{}
+
+// Set the required value of CreatedAt
+func (r iapQueryCreatedAtDateTime) Set(value DateTime) iapSetParam {
+
+	return iapSetParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of CreatedAt dynamically
+func (r iapQueryCreatedAtDateTime) SetIfPresent(value *DateTime) iapSetParam {
+	if value == nil {
+		return iapSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r iapQueryCreatedAtDateTime) Equals(value DateTime) iapWithPrismaCreatedAtEqualsParam {
+
+	return iapWithPrismaCreatedAtEqualsParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) EqualsIfPresent(value *DateTime) iapWithPrismaCreatedAtEqualsParam {
+	if value == nil {
+		return iapWithPrismaCreatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r iapQueryCreatedAtDateTime) Order(direction SortOrder) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) Cursor(cursor DateTime) iapCursorParam {
+	return iapCursorParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) In(value []DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) InIfPresent(value []DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r iapQueryCreatedAtDateTime) NotIn(value []DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) NotInIfPresent(value []DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r iapQueryCreatedAtDateTime) Lt(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) LtIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r iapQueryCreatedAtDateTime) Lte(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) LteIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r iapQueryCreatedAtDateTime) Gt(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) GtIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r iapQueryCreatedAtDateTime) Gte(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) GteIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r iapQueryCreatedAtDateTime) Not(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r iapQueryCreatedAtDateTime) NotIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r iapQueryCreatedAtDateTime) Before(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r iapQueryCreatedAtDateTime) BeforeIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r iapQueryCreatedAtDateTime) After(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r iapQueryCreatedAtDateTime) AfterIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r iapQueryCreatedAtDateTime) BeforeEquals(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r iapQueryCreatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r iapQueryCreatedAtDateTime) AfterEquals(value DateTime) iapDefaultParam {
+	return iapDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r iapQueryCreatedAtDateTime) AfterEqualsIfPresent(value *DateTime) iapDefaultParam {
+	if value == nil {
+		return iapDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r iapQueryCreatedAtDateTime) Field() iapPrismaFields {
+	return iapFieldCreatedAt
+}
+
 // --- template actions.gotpl ---
 var countOutput = []builder.Output{
 	{Name: "count"},
@@ -17616,6 +21060,8 @@ type userActions struct {
 var userOutput = []builder.Output{
 	{Name: "id"},
 	{Name: "displayName"},
+	{Name: "isStaff"},
+	{Name: "isRegistered"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -17939,6 +21385,162 @@ func (p userWithPrismaDisplayNameEqualsUniqueParam) displayNameField() {}
 
 func (userWithPrismaDisplayNameEqualsUniqueParam) unique() {}
 func (userWithPrismaDisplayNameEqualsUniqueParam) equals() {}
+
+type UserWithPrismaIsStaffEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	isStaffField()
+}
+
+type UserWithPrismaIsStaffSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	isStaffField()
+}
+
+type userWithPrismaIsStaffSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsStaffSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsStaffSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsStaffSetParam) userModel() {}
+
+func (p userWithPrismaIsStaffSetParam) isStaffField() {}
+
+type UserWithPrismaIsStaffWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	isStaffField()
+}
+
+type userWithPrismaIsStaffEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsStaffEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsStaffEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsStaffEqualsParam) userModel() {}
+
+func (p userWithPrismaIsStaffEqualsParam) isStaffField() {}
+
+func (userWithPrismaIsStaffSetParam) settable()  {}
+func (userWithPrismaIsStaffEqualsParam) equals() {}
+
+type userWithPrismaIsStaffEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsStaffEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsStaffEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsStaffEqualsUniqueParam) userModel()    {}
+func (p userWithPrismaIsStaffEqualsUniqueParam) isStaffField() {}
+
+func (userWithPrismaIsStaffEqualsUniqueParam) unique() {}
+func (userWithPrismaIsStaffEqualsUniqueParam) equals() {}
+
+type UserWithPrismaIsRegisteredEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	isRegisteredField()
+}
+
+type UserWithPrismaIsRegisteredSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	isRegisteredField()
+}
+
+type userWithPrismaIsRegisteredSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsRegisteredSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsRegisteredSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsRegisteredSetParam) userModel() {}
+
+func (p userWithPrismaIsRegisteredSetParam) isRegisteredField() {}
+
+type UserWithPrismaIsRegisteredWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	isRegisteredField()
+}
+
+type userWithPrismaIsRegisteredEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsRegisteredEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsRegisteredEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsRegisteredEqualsParam) userModel() {}
+
+func (p userWithPrismaIsRegisteredEqualsParam) isRegisteredField() {}
+
+func (userWithPrismaIsRegisteredSetParam) settable()  {}
+func (userWithPrismaIsRegisteredEqualsParam) equals() {}
+
+type userWithPrismaIsRegisteredEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaIsRegisteredEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaIsRegisteredEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaIsRegisteredEqualsUniqueParam) userModel()         {}
+func (p userWithPrismaIsRegisteredEqualsUniqueParam) isRegisteredField() {}
+
+func (userWithPrismaIsRegisteredEqualsUniqueParam) unique() {}
+func (userWithPrismaIsRegisteredEqualsUniqueParam) equals() {}
 
 type UserWithPrismaPublicKeysEqualsSetParam interface {
 	field() builder.Field
@@ -19235,7 +22837,7 @@ type chatActions struct {
 
 var chatOutput = []builder.Output{
 	{Name: "id"},
-	{Name: "title"},
+	{Name: "displayName"},
 	{Name: "roomNumber"},
 	{Name: "coverCharge"},
 	{Name: "type"},
@@ -19487,83 +23089,83 @@ func (p chatWithPrismaIDEqualsUniqueParam) idField()   {}
 func (chatWithPrismaIDEqualsUniqueParam) unique() {}
 func (chatWithPrismaIDEqualsUniqueParam) equals() {}
 
-type ChatWithPrismaTitleEqualsSetParam interface {
+type ChatWithPrismaDisplayNameEqualsSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	equals()
 	chatModel()
-	titleField()
+	displayNameField()
 }
 
-type ChatWithPrismaTitleSetParam interface {
+type ChatWithPrismaDisplayNameSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	chatModel()
-	titleField()
+	displayNameField()
 }
 
-type chatWithPrismaTitleSetParam struct {
+type chatWithPrismaDisplayNameSetParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p chatWithPrismaTitleSetParam) field() builder.Field {
+func (p chatWithPrismaDisplayNameSetParam) field() builder.Field {
 	return p.data
 }
 
-func (p chatWithPrismaTitleSetParam) getQuery() builder.Query {
+func (p chatWithPrismaDisplayNameSetParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p chatWithPrismaTitleSetParam) chatModel() {}
+func (p chatWithPrismaDisplayNameSetParam) chatModel() {}
 
-func (p chatWithPrismaTitleSetParam) titleField() {}
+func (p chatWithPrismaDisplayNameSetParam) displayNameField() {}
 
-type ChatWithPrismaTitleWhereParam interface {
+type ChatWithPrismaDisplayNameWhereParam interface {
 	field() builder.Field
 	getQuery() builder.Query
 	chatModel()
-	titleField()
+	displayNameField()
 }
 
-type chatWithPrismaTitleEqualsParam struct {
+type chatWithPrismaDisplayNameEqualsParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p chatWithPrismaTitleEqualsParam) field() builder.Field {
+func (p chatWithPrismaDisplayNameEqualsParam) field() builder.Field {
 	return p.data
 }
 
-func (p chatWithPrismaTitleEqualsParam) getQuery() builder.Query {
+func (p chatWithPrismaDisplayNameEqualsParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p chatWithPrismaTitleEqualsParam) chatModel() {}
+func (p chatWithPrismaDisplayNameEqualsParam) chatModel() {}
 
-func (p chatWithPrismaTitleEqualsParam) titleField() {}
+func (p chatWithPrismaDisplayNameEqualsParam) displayNameField() {}
 
-func (chatWithPrismaTitleSetParam) settable()  {}
-func (chatWithPrismaTitleEqualsParam) equals() {}
+func (chatWithPrismaDisplayNameSetParam) settable()  {}
+func (chatWithPrismaDisplayNameEqualsParam) equals() {}
 
-type chatWithPrismaTitleEqualsUniqueParam struct {
+type chatWithPrismaDisplayNameEqualsUniqueParam struct {
 	data  builder.Field
 	query builder.Query
 }
 
-func (p chatWithPrismaTitleEqualsUniqueParam) field() builder.Field {
+func (p chatWithPrismaDisplayNameEqualsUniqueParam) field() builder.Field {
 	return p.data
 }
 
-func (p chatWithPrismaTitleEqualsUniqueParam) getQuery() builder.Query {
+func (p chatWithPrismaDisplayNameEqualsUniqueParam) getQuery() builder.Query {
 	return p.query
 }
 
-func (p chatWithPrismaTitleEqualsUniqueParam) chatModel()  {}
-func (p chatWithPrismaTitleEqualsUniqueParam) titleField() {}
+func (p chatWithPrismaDisplayNameEqualsUniqueParam) chatModel()        {}
+func (p chatWithPrismaDisplayNameEqualsUniqueParam) displayNameField() {}
 
-func (chatWithPrismaTitleEqualsUniqueParam) unique() {}
-func (chatWithPrismaTitleEqualsUniqueParam) equals() {}
+func (chatWithPrismaDisplayNameEqualsUniqueParam) unique() {}
+func (chatWithPrismaDisplayNameEqualsUniqueParam) equals() {}
 
 type ChatWithPrismaRoomNumberEqualsSetParam interface {
 	field() builder.Field
@@ -21238,6 +24840,8 @@ var messageOutput = []builder.Output{
 	{Name: "id"},
 	{Name: "chatId"},
 	{Name: "senderId"},
+	{Name: "version"},
+	{Name: "contentType"},
 	{Name: "content"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
@@ -21640,6 +25244,162 @@ func (p messageWithPrismaSenderIDEqualsUniqueParam) senderIDField() {}
 
 func (messageWithPrismaSenderIDEqualsUniqueParam) unique() {}
 func (messageWithPrismaSenderIDEqualsUniqueParam) equals() {}
+
+type MessageWithPrismaVersionEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	messageModel()
+	versionField()
+}
+
+type MessageWithPrismaVersionSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	versionField()
+}
+
+type messageWithPrismaVersionSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaVersionSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaVersionSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaVersionSetParam) messageModel() {}
+
+func (p messageWithPrismaVersionSetParam) versionField() {}
+
+type MessageWithPrismaVersionWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	versionField()
+}
+
+type messageWithPrismaVersionEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaVersionEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaVersionEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaVersionEqualsParam) messageModel() {}
+
+func (p messageWithPrismaVersionEqualsParam) versionField() {}
+
+func (messageWithPrismaVersionSetParam) settable()  {}
+func (messageWithPrismaVersionEqualsParam) equals() {}
+
+type messageWithPrismaVersionEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaVersionEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaVersionEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaVersionEqualsUniqueParam) messageModel() {}
+func (p messageWithPrismaVersionEqualsUniqueParam) versionField() {}
+
+func (messageWithPrismaVersionEqualsUniqueParam) unique() {}
+func (messageWithPrismaVersionEqualsUniqueParam) equals() {}
+
+type MessageWithPrismaContentTypeEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	messageModel()
+	contentTypeField()
+}
+
+type MessageWithPrismaContentTypeSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	contentTypeField()
+}
+
+type messageWithPrismaContentTypeSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaContentTypeSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaContentTypeSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaContentTypeSetParam) messageModel() {}
+
+func (p messageWithPrismaContentTypeSetParam) contentTypeField() {}
+
+type MessageWithPrismaContentTypeWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	contentTypeField()
+}
+
+type messageWithPrismaContentTypeEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaContentTypeEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaContentTypeEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaContentTypeEqualsParam) messageModel() {}
+
+func (p messageWithPrismaContentTypeEqualsParam) contentTypeField() {}
+
+func (messageWithPrismaContentTypeSetParam) settable()  {}
+func (messageWithPrismaContentTypeEqualsParam) equals() {}
+
+type messageWithPrismaContentTypeEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaContentTypeEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaContentTypeEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaContentTypeEqualsUniqueParam) messageModel()     {}
+func (p messageWithPrismaContentTypeEqualsUniqueParam) contentTypeField() {}
+
+func (messageWithPrismaContentTypeEqualsUniqueParam) unique() {}
+func (messageWithPrismaContentTypeEqualsUniqueParam) equals() {}
 
 type MessageWithPrismaContentEqualsSetParam interface {
 	field() builder.Field
@@ -23167,6 +26927,652 @@ func (p pushTokenWithPrismaUpdatedAtEqualsUniqueParam) updatedAtField() {}
 func (pushTokenWithPrismaUpdatedAtEqualsUniqueParam) unique() {}
 func (pushTokenWithPrismaUpdatedAtEqualsUniqueParam) equals() {}
 
+type iapActions struct {
+	// client holds the prisma client
+	client *PrismaClient
+}
+
+var iapOutput = []builder.Output{
+	{Name: "receiptId"},
+	{Name: "platform"},
+	{Name: "userId"},
+	{Name: "product"},
+	{Name: "state"},
+	{Name: "createdAt"},
+}
+
+type IapRelationWith interface {
+	getQuery() builder.Query
+	with()
+	iapRelation()
+}
+
+type IapWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+}
+
+type iapDefaultParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapDefaultParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapDefaultParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapDefaultParam) iapModel() {}
+
+type IapOrderByParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+}
+
+type iapOrderByParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapOrderByParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapOrderByParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapOrderByParam) iapModel() {}
+
+type IapCursorParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	isCursor()
+}
+
+type iapCursorParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapCursorParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapCursorParam) isCursor() {}
+
+func (p iapCursorParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapCursorParam) iapModel() {}
+
+type IapParamUnique interface {
+	field() builder.Field
+	getQuery() builder.Query
+	unique()
+	iapModel()
+}
+
+type iapParamUnique struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapParamUnique) iapModel() {}
+
+func (iapParamUnique) unique() {}
+
+func (p iapParamUnique) field() builder.Field {
+	return p.data
+}
+
+func (p iapParamUnique) getQuery() builder.Query {
+	return p.query
+}
+
+type IapEqualsWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	iapModel()
+}
+
+type iapEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapEqualsParam) iapModel() {}
+
+func (iapEqualsParam) equals() {}
+
+func (p iapEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+type IapEqualsUniqueWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	unique()
+	iapModel()
+}
+
+type iapEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapEqualsUniqueParam) iapModel() {}
+
+func (iapEqualsUniqueParam) unique() {}
+func (iapEqualsUniqueParam) equals() {}
+
+func (p iapEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+type IapSetParam interface {
+	field() builder.Field
+	settable()
+	iapModel()
+}
+
+type iapSetParam struct {
+	data builder.Field
+}
+
+func (iapSetParam) settable() {}
+
+func (p iapSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapSetParam) iapModel() {}
+
+type IapWithPrismaReceiptIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	iapModel()
+	receiptIDField()
+}
+
+type IapWithPrismaReceiptIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	receiptIDField()
+}
+
+type iapWithPrismaReceiptIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaReceiptIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaReceiptIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaReceiptIDSetParam) iapModel() {}
+
+func (p iapWithPrismaReceiptIDSetParam) receiptIDField() {}
+
+type IapWithPrismaReceiptIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	receiptIDField()
+}
+
+type iapWithPrismaReceiptIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaReceiptIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaReceiptIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaReceiptIDEqualsParam) iapModel() {}
+
+func (p iapWithPrismaReceiptIDEqualsParam) receiptIDField() {}
+
+func (iapWithPrismaReceiptIDSetParam) settable()  {}
+func (iapWithPrismaReceiptIDEqualsParam) equals() {}
+
+type iapWithPrismaReceiptIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaReceiptIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaReceiptIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaReceiptIDEqualsUniqueParam) iapModel()       {}
+func (p iapWithPrismaReceiptIDEqualsUniqueParam) receiptIDField() {}
+
+func (iapWithPrismaReceiptIDEqualsUniqueParam) unique() {}
+func (iapWithPrismaReceiptIDEqualsUniqueParam) equals() {}
+
+type IapWithPrismaPlatformEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	iapModel()
+	platformField()
+}
+
+type IapWithPrismaPlatformSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	platformField()
+}
+
+type iapWithPrismaPlatformSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaPlatformSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaPlatformSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaPlatformSetParam) iapModel() {}
+
+func (p iapWithPrismaPlatformSetParam) platformField() {}
+
+type IapWithPrismaPlatformWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	platformField()
+}
+
+type iapWithPrismaPlatformEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaPlatformEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaPlatformEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaPlatformEqualsParam) iapModel() {}
+
+func (p iapWithPrismaPlatformEqualsParam) platformField() {}
+
+func (iapWithPrismaPlatformSetParam) settable()  {}
+func (iapWithPrismaPlatformEqualsParam) equals() {}
+
+type iapWithPrismaPlatformEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaPlatformEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaPlatformEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaPlatformEqualsUniqueParam) iapModel()      {}
+func (p iapWithPrismaPlatformEqualsUniqueParam) platformField() {}
+
+func (iapWithPrismaPlatformEqualsUniqueParam) unique() {}
+func (iapWithPrismaPlatformEqualsUniqueParam) equals() {}
+
+type IapWithPrismaUserIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	iapModel()
+	userIDField()
+}
+
+type IapWithPrismaUserIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	userIDField()
+}
+
+type iapWithPrismaUserIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaUserIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaUserIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaUserIDSetParam) iapModel() {}
+
+func (p iapWithPrismaUserIDSetParam) userIDField() {}
+
+type IapWithPrismaUserIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	userIDField()
+}
+
+type iapWithPrismaUserIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaUserIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaUserIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaUserIDEqualsParam) iapModel() {}
+
+func (p iapWithPrismaUserIDEqualsParam) userIDField() {}
+
+func (iapWithPrismaUserIDSetParam) settable()  {}
+func (iapWithPrismaUserIDEqualsParam) equals() {}
+
+type iapWithPrismaUserIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaUserIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaUserIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaUserIDEqualsUniqueParam) iapModel()    {}
+func (p iapWithPrismaUserIDEqualsUniqueParam) userIDField() {}
+
+func (iapWithPrismaUserIDEqualsUniqueParam) unique() {}
+func (iapWithPrismaUserIDEqualsUniqueParam) equals() {}
+
+type IapWithPrismaProductEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	iapModel()
+	productField()
+}
+
+type IapWithPrismaProductSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	productField()
+}
+
+type iapWithPrismaProductSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaProductSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaProductSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaProductSetParam) iapModel() {}
+
+func (p iapWithPrismaProductSetParam) productField() {}
+
+type IapWithPrismaProductWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	productField()
+}
+
+type iapWithPrismaProductEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaProductEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaProductEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaProductEqualsParam) iapModel() {}
+
+func (p iapWithPrismaProductEqualsParam) productField() {}
+
+func (iapWithPrismaProductSetParam) settable()  {}
+func (iapWithPrismaProductEqualsParam) equals() {}
+
+type iapWithPrismaProductEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaProductEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaProductEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaProductEqualsUniqueParam) iapModel()     {}
+func (p iapWithPrismaProductEqualsUniqueParam) productField() {}
+
+func (iapWithPrismaProductEqualsUniqueParam) unique() {}
+func (iapWithPrismaProductEqualsUniqueParam) equals() {}
+
+type IapWithPrismaStateEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	iapModel()
+	stateField()
+}
+
+type IapWithPrismaStateSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	stateField()
+}
+
+type iapWithPrismaStateSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaStateSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaStateSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaStateSetParam) iapModel() {}
+
+func (p iapWithPrismaStateSetParam) stateField() {}
+
+type IapWithPrismaStateWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	stateField()
+}
+
+type iapWithPrismaStateEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaStateEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaStateEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaStateEqualsParam) iapModel() {}
+
+func (p iapWithPrismaStateEqualsParam) stateField() {}
+
+func (iapWithPrismaStateSetParam) settable()  {}
+func (iapWithPrismaStateEqualsParam) equals() {}
+
+type iapWithPrismaStateEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaStateEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaStateEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaStateEqualsUniqueParam) iapModel()   {}
+func (p iapWithPrismaStateEqualsUniqueParam) stateField() {}
+
+func (iapWithPrismaStateEqualsUniqueParam) unique() {}
+func (iapWithPrismaStateEqualsUniqueParam) equals() {}
+
+type IapWithPrismaCreatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	iapModel()
+	createdAtField()
+}
+
+type IapWithPrismaCreatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	createdAtField()
+}
+
+type iapWithPrismaCreatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaCreatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaCreatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaCreatedAtSetParam) iapModel() {}
+
+func (p iapWithPrismaCreatedAtSetParam) createdAtField() {}
+
+type IapWithPrismaCreatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	iapModel()
+	createdAtField()
+}
+
+type iapWithPrismaCreatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaCreatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaCreatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaCreatedAtEqualsParam) iapModel() {}
+
+func (p iapWithPrismaCreatedAtEqualsParam) createdAtField() {}
+
+func (iapWithPrismaCreatedAtSetParam) settable()  {}
+func (iapWithPrismaCreatedAtEqualsParam) equals() {}
+
+type iapWithPrismaCreatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p iapWithPrismaCreatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p iapWithPrismaCreatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p iapWithPrismaCreatedAtEqualsUniqueParam) iapModel()       {}
+func (p iapWithPrismaCreatedAtEqualsUniqueParam) createdAtField() {}
+
+func (iapWithPrismaCreatedAtEqualsUniqueParam) unique() {}
+func (iapWithPrismaCreatedAtEqualsUniqueParam) equals() {}
+
 // --- template create.gotpl ---
 
 // Creates a single user.
@@ -23380,7 +27786,6 @@ func (r intentCreateOne) Tx() IntentUniqueTxResult {
 // Creates a single chat.
 func (r chatActions) CreateOne(
 	_id ChatWithPrismaIDSetParam,
-	_title ChatWithPrismaTitleSetParam,
 
 	optional ...ChatSetParam,
 ) chatCreateOne {
@@ -23396,7 +27801,6 @@ func (r chatActions) CreateOne(
 	var fields []builder.Field
 
 	fields = append(fields, _id.field())
-	fields = append(fields, _title.field())
 
 	for _, q := range optional {
 		fields = append(fields, q.field())
@@ -23728,6 +28132,76 @@ func (r pushTokenCreateOne) Exec(ctx context.Context) (*PushTokenModel, error) {
 
 func (r pushTokenCreateOne) Tx() PushTokenUniqueTxResult {
 	v := newPushTokenUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+// Creates a single iap.
+func (r iapActions) CreateOne(
+	_receiptID IapWithPrismaReceiptIDSetParam,
+	_userID IapWithPrismaUserIDSetParam,
+
+	optional ...IapSetParam,
+) iapCreateOne {
+	var v iapCreateOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "createOne"
+	v.query.Model = "Iap"
+	v.query.Outputs = iapOutput
+
+	var fields []builder.Field
+
+	fields = append(fields, _receiptID.field())
+	fields = append(fields, _userID.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+func (r iapCreateOne) With(params ...IapRelationWith) iapCreateOne {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+type iapCreateOne struct {
+	query builder.Query
+}
+
+func (p iapCreateOne) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p iapCreateOne) iapModel() {}
+
+func (r iapCreateOne) Exec(ctx context.Context) (*IapModel, error) {
+	var v IapModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r iapCreateOne) Tx() IapUniqueTxResult {
+	v := newIapUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v
@@ -31151,6 +35625,656 @@ func (r pushTokenDeleteMany) Tx() PushTokenManyTxResult {
 	return v
 }
 
+type iapFindUnique struct {
+	query builder.Query
+}
+
+func (r iapFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r iapFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r iapFindUnique) with()        {}
+func (r iapFindUnique) iapModel()    {}
+func (r iapFindUnique) iapRelation() {}
+
+func (r iapActions) FindUnique(
+	params IapEqualsUniqueWhereParam,
+) iapFindUnique {
+	var v iapFindUnique
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findUnique"
+
+	v.query.Model = "Iap"
+	v.query.Outputs = iapOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r iapFindUnique) With(params ...IapRelationWith) iapFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r iapFindUnique) Select(params ...iapPrismaFields) iapFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r iapFindUnique) Omit(params ...iapPrismaFields) iapFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range iapOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r iapFindUnique) Exec(ctx context.Context) (
+	*IapModel,
+	error,
+) {
+	var v *IapModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r iapFindUnique) ExecInner(ctx context.Context) (
+	*InnerIap,
+	error,
+) {
+	var v *InnerIap
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r iapFindUnique) Update(params ...IapSetParam) iapUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "Iap"
+
+	var v iapUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type iapUpdateUnique struct {
+	query builder.Query
+}
+
+func (r iapUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r iapUpdateUnique) iapModel() {}
+
+func (r iapUpdateUnique) Exec(ctx context.Context) (*IapModel, error) {
+	var v IapModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r iapUpdateUnique) Tx() IapUniqueTxResult {
+	v := newIapUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r iapFindUnique) Delete() iapDeleteUnique {
+	var v iapDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "Iap"
+
+	return v
+}
+
+type iapDeleteUnique struct {
+	query builder.Query
+}
+
+func (r iapDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p iapDeleteUnique) iapModel() {}
+
+func (r iapDeleteUnique) Exec(ctx context.Context) (*IapModel, error) {
+	var v IapModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r iapDeleteUnique) Tx() IapUniqueTxResult {
+	v := newIapUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type iapFindFirst struct {
+	query builder.Query
+}
+
+func (r iapFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r iapFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r iapFindFirst) with()        {}
+func (r iapFindFirst) iapModel()    {}
+func (r iapFindFirst) iapRelation() {}
+
+func (r iapActions) FindFirst(
+	params ...IapWhereParam,
+) iapFindFirst {
+	var v iapFindFirst
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findFirst"
+
+	v.query.Model = "Iap"
+	v.query.Outputs = iapOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r iapFindFirst) With(params ...IapRelationWith) iapFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r iapFindFirst) Select(params ...iapPrismaFields) iapFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r iapFindFirst) Omit(params ...iapPrismaFields) iapFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range iapOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r iapFindFirst) OrderBy(params ...IapOrderByParam) iapFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r iapFindFirst) Skip(count int) iapFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r iapFindFirst) Take(count int) iapFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r iapFindFirst) Cursor(cursor IapCursorParam) iapFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r iapFindFirst) Exec(ctx context.Context) (
+	*IapModel,
+	error,
+) {
+	var v *IapModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r iapFindFirst) ExecInner(ctx context.Context) (
+	*InnerIap,
+	error,
+) {
+	var v *InnerIap
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type iapFindMany struct {
+	query builder.Query
+}
+
+func (r iapFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r iapFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r iapFindMany) with()        {}
+func (r iapFindMany) iapModel()    {}
+func (r iapFindMany) iapRelation() {}
+
+func (r iapActions) FindMany(
+	params ...IapWhereParam,
+) iapFindMany {
+	var v iapFindMany
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findMany"
+
+	v.query.Model = "Iap"
+	v.query.Outputs = iapOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r iapFindMany) With(params ...IapRelationWith) iapFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r iapFindMany) Select(params ...iapPrismaFields) iapFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r iapFindMany) Omit(params ...iapPrismaFields) iapFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range iapOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r iapFindMany) OrderBy(params ...IapOrderByParam) iapFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r iapFindMany) Skip(count int) iapFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r iapFindMany) Take(count int) iapFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r iapFindMany) Cursor(cursor IapCursorParam) iapFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r iapFindMany) Exec(ctx context.Context) (
+	[]IapModel,
+	error,
+) {
+	var v []IapModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r iapFindMany) ExecInner(ctx context.Context) (
+	[]InnerIap,
+	error,
+) {
+	var v []InnerIap
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r iapFindMany) Update(params ...IapSetParam) iapUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "Iap"
+
+	r.query.Outputs = countOutput
+
+	var v iapUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type iapUpdateMany struct {
+	query builder.Query
+}
+
+func (r iapUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r iapUpdateMany) iapModel() {}
+
+func (r iapUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r iapUpdateMany) Tx() IapManyTxResult {
+	v := newIapManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r iapFindMany) Delete() iapDeleteMany {
+	var v iapDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "Iap"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type iapDeleteMany struct {
+	query builder.Query
+}
+
+func (r iapDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p iapDeleteMany) iapModel() {}
+
+func (r iapDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r iapDeleteMany) Tx() IapManyTxResult {
+	v := newIapManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 // --- template transaction.gotpl ---
 
 func newUserUniqueTxResult() UserUniqueTxResult {
@@ -31537,6 +36661,54 @@ func (r PushTokenManyTxResult) Result() (v *BatchResult) {
 	return v
 }
 
+func newIapUniqueTxResult() IapUniqueTxResult {
+	return IapUniqueTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type IapUniqueTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p IapUniqueTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p IapUniqueTxResult) IsTx() {}
+
+func (r IapUniqueTxResult) Result() (v *IapModel) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newIapManyTxResult() IapManyTxResult {
+	return IapManyTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type IapManyTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p IapManyTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p IapManyTxResult) IsTx() {}
+
+func (r IapManyTxResult) Result() (v *BatchResult) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
 // --- template upsert.gotpl ---
 
 type userUpsertOne struct {
@@ -31912,7 +37084,6 @@ func (r chatActions) UpsertOne(
 func (r chatUpsertOne) Create(
 
 	_id ChatWithPrismaIDSetParam,
-	_title ChatWithPrismaTitleSetParam,
 
 	optional ...ChatSetParam,
 ) chatUpsertOne {
@@ -31921,7 +37092,6 @@ func (r chatUpsertOne) Create(
 
 	var fields []builder.Field
 	fields = append(fields, _id.field())
-	fields = append(fields, _title.field())
 
 	for _, q := range optional {
 		fields = append(fields, q.field())
@@ -32434,6 +37604,118 @@ func (r pushTokenUpsertOne) Exec(ctx context.Context) (*PushTokenModel, error) {
 
 func (r pushTokenUpsertOne) Tx() PushTokenUniqueTxResult {
 	v := newPushTokenUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type iapUpsertOne struct {
+	query builder.Query
+}
+
+func (r iapUpsertOne) getQuery() builder.Query {
+	return r.query
+}
+
+func (r iapUpsertOne) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r iapUpsertOne) with()        {}
+func (r iapUpsertOne) iapModel()    {}
+func (r iapUpsertOne) iapRelation() {}
+
+func (r iapActions) UpsertOne(
+	params IapEqualsUniqueWhereParam,
+) iapUpsertOne {
+	var v iapUpsertOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "upsertOne"
+	v.query.Model = "Iap"
+	v.query.Outputs = iapOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r iapUpsertOne) Create(
+
+	_receiptID IapWithPrismaReceiptIDSetParam,
+	_userID IapWithPrismaUserIDSetParam,
+
+	optional ...IapSetParam,
+) iapUpsertOne {
+	var v iapUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	fields = append(fields, _receiptID.field())
+	fields = append(fields, _userID.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "create",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r iapUpsertOne) Update(
+	params ...IapSetParam,
+) iapUpsertOne {
+	var v iapUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "update",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r iapUpsertOne) Exec(ctx context.Context) (*IapModel, error) {
+	var v IapModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r iapUpsertOne) Tx() IapUniqueTxResult {
+	v := newIapUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v

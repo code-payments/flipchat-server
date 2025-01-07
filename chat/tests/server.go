@@ -18,6 +18,7 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
+	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 	codekin "github.com/code-payments/code-server/pkg/kin"
@@ -30,6 +31,7 @@ import (
 	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
+	moderation_memory "github.com/code-payments/flipchat-server/moderation/memory"
 	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
@@ -86,13 +88,15 @@ func testServer(
 	serv := chat.NewServer(
 		log,
 		account.NewAuthorizer(log, accounts, auth.NewKeyPairAuthenticator()),
+		accounts,
 		chats,
-		profiles,
+		intents,
 		messageDB,
 		pointerDB,
-		intents,
+		profiles,
 		codeData,
 		messaging.NewNoopMessenger(), // todo: add tests for announcements
+		moderation_memory.NewClient(false),
 		bus,
 	)
 
@@ -151,7 +155,6 @@ func testServer(
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
 					Users:         otherUsers,
-					Title:         "My Fun Group!",
 					PaymentIntent: startIntentID,
 				},
 			},
@@ -161,7 +164,6 @@ func testServer(
 		created, err := client.StartChat(context.Background(), start)
 		require.NoError(t, err)
 		require.Equal(t, chatpb.StartChatResponse_OK, created.Result)
-		require.Equal(t, "My Fun Group!", created.Chat.Title)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
 		require.Equal(t, chat.InitialCoverCharge, created.Chat.CoverCharge.Quarks)
@@ -173,6 +175,7 @@ func testServer(
 			},
 			IsSelf:                 true,
 			HasModeratorPermission: true,
+			HasSendPermission:      true,
 		}}
 
 		for i, groupUserID := range otherUsers {
@@ -231,6 +234,16 @@ func testServer(
 		require.NoError(t, err)
 		require.Equal(t, chatpb.GetChatsResponse_OK, getAllResp.Result)
 		require.NoError(t, protoutil.ProtoEqualError(created.Chat, getAllResp.Chats[0]))
+
+		getMemberDelta := &chatpb.GetMemberUpdatesRequest{
+			ChatId: created.Chat.ChatId,
+		}
+		require.NoError(t, keyPair.Auth(getMemberDelta, &getMemberDelta.Auth))
+		getMemberDeltaResp, err := client.GetMemberUpdates(context.Background(), getMemberDelta)
+		require.NoError(t, err)
+		require.Equal(t, chatpb.GetMemberUpdatesResponse_OK, getMemberDeltaResp.Result)
+		require.NoError(t, protoutil.SliceEqualError(expectedMembers, getMemberDeltaResp.Updates[0].GetFullRefresh().Members))
+		require.NotNil(t, getMemberDeltaResp.Updates[0].PagingToken)
 
 		t.Run("Join and leave", func(t *testing.T) {
 			otherUser := model.MustGenerateUserID()
@@ -339,7 +352,7 @@ func testServer(
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
 			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
 
-			// Upgrade to a non-special user
+			// Upgrade to a non-spectator user with send message permissions
 
 			for i, m := range newExpectedMembers {
 				if bytes.Equal(m.UserId.Value, otherUser.Value) {
@@ -432,6 +445,29 @@ func testServer(
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 			require.NoError(t, protoutil.ProtoEqualError(setCoverCharge.CoverCharge, get.Metadata.CoverCharge))
 		})
+
+		t.Run("Set display name", func(t *testing.T) {
+			setDisplayName := &chatpb.SetDisplayNameRequest{
+				ChatId:      created.Chat.ChatId,
+				DisplayName: "My Room",
+			}
+			require.NoError(t, keyPair.Auth(setDisplayName, &setDisplayName.Auth))
+
+			setDisplayNameResp, err := client.SetDisplayName(context.Background(), setDisplayName)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.SetDisplayNameResponse_OK, setDisplayNameResp.Result)
+
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, keyPair.Auth(getByID, &getByID.Auth))
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.Equal(t, setDisplayName.DisplayName, get.Metadata.DisplayName)
+		})
 	})
 
 	t.Run("Start Two Way", func(t *testing.T) {
@@ -482,6 +518,7 @@ func testServer(
 		require.Len(t, resp.GetChats(), 2)
 	})
 
+	// todo: add RemoveUser test when feature is enabled
 	t.Run("Stream Events", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -489,6 +526,9 @@ func testServer(
 		streamUser := model.MustGenerateUserID()
 		streamKeyPair := model.MustGenerateKeyPair()
 		_, _ = accounts.Bind(ctx, streamUser, streamKeyPair.Proto())
+
+		streamUserProfile := &profilepb.UserProfile{DisplayName: "Stream User"}
+		require.NoError(t, profiles.SetDisplayName(context.Background(), streamUser, streamUserProfile.DisplayName))
 
 		stream, err := client.StreamChatEvents(ctx)
 		require.NoError(t, err)
@@ -502,6 +542,9 @@ func testServer(
 		}
 		require.NoError(t, streamKeyPair.Auth(req.GetParams(), &req.GetParams().Auth))
 		require.NoError(t, stream.Send(req))
+
+		// To avoid races with flush
+		time.Sleep(200 * time.Millisecond)
 
 		updateCh := make(chan *chatpb.StreamChatEventsResponse_ChatUpdate, 1024)
 
@@ -528,12 +571,10 @@ func testServer(
 			}
 		}()
 
-		// TODO: There's a bit of a race for 'flush initial state', so we just wait a bit
-		time.Sleep(200 * time.Millisecond)
-
-		verifyExpectedMembers := func(update *chatpb.StreamChatEventsResponse_MemberUpdate, expected []chat.Member) {
-			refresh := update.GetRefresh()
+		verifyExpectedFullMemberRefresh := func(update *chatpb.MemberUpdate, expected []chat.Member) {
+			refresh := update.GetFullRefresh()
 			require.NotNil(t, refresh)
+			require.Len(t, refresh.Members, len(expected))
 
 			slices.SortFunc(refresh.Members, func(a, b *chatpb.Member) int {
 				return bytes.Compare(a.UserId.Value, b.UserId.Value)
@@ -541,6 +582,10 @@ func testServer(
 			slices.SortFunc(expected, func(a, b chat.Member) int {
 				return bytes.Compare(a.UserID.Value, b.UserID.Value)
 			})
+
+			for i := range expected {
+				require.NoError(t, protoutil.ProtoEqualError(expected[i].UserID, refresh.Members[i].UserId))
+			}
 		}
 
 		startPaymentMetadata := &chatpb.StartGroupChatPaymentMetadata{
@@ -550,7 +595,6 @@ func testServer(
 		start := &chatpb.StartChatRequest{
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
-					Title:         "my-title",
 					Users:         []*commonpb.UserId{userID},
 					PaymentIntent: startIntentID,
 				},
@@ -562,9 +606,11 @@ func testServer(
 
 		u := <-updateCh
 		require.NoError(t, protoutil.ProtoEqualError(started.Chat.ChatId, u.ChatId))
-		require.NoError(t, protoutil.ProtoEqualError(started.Chat, u.Metadata))
-		verifyExpectedMembers(
-			u.MemberUpdate,
+		require.Len(t, u.MetadataUpdates, 1)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(started.Chat, u.MetadataUpdates[0].GetFullRefresh().Metadata))
+		verifyExpectedFullMemberRefresh(
+			u.MemberUpdates[0],
 			[]chat.Member{
 				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, HasModPermission: true},
 				{UserID: userID, AddedBy: streamUser, IsMuted: false, HasModPermission: false},
@@ -577,14 +623,10 @@ func testServer(
 		_, _ = client.LeaveChat(context.Background(), leave)
 
 		u = <-updateCh
-		require.Nil(t, u.Metadata)
 		require.NoError(t, protoutil.ProtoEqualError(started.Chat.ChatId, u.ChatId))
-		verifyExpectedMembers(
-			u.MemberUpdate,
-			[]chat.Member{
-				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, HasModPermission: true},
-			},
-		)
+		require.Empty(t, u.MetadataUpdates)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetLeft().Member, userID))
 
 		// Other user creates a group (which we will join)
 		startPaymentMetadata = &chatpb.StartGroupChatPaymentMetadata{
@@ -610,16 +652,92 @@ func testServer(
 		require.NoError(t, err)
 
 		u = <-updateCh
-		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata, u.Metadata))
 		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
-		verifyExpectedMembers(
-			u.MemberUpdate,
-			[]chat.Member{
-				{UserID: streamUser, AddedBy: streamUser, IsMuted: false, HasModPermission: false},
-				{UserID: userID, AddedBy: streamUser, IsMuted: false, HasModPermission: true},
-			},
-		)
+		require.Empty(t, u.MetadataUpdates)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetJoined().Member.UserId, streamUser))
+		require.Equal(t, streamUserProfile.DisplayName, u.MemberUpdates[0].GetJoined().Member.Identity.DisplayName)
 
+		// Other user updates chat cover charge
+		setCoverCharge := &chatpb.SetCoverChargeRequest{
+			ChatId: startedOther.Chat.ChatId,
+			CoverCharge: &commonpb.PaymentAmount{
+				Quarks: 2 * chat.InitialCoverCharge,
+			},
+		}
+		require.NoError(t, keyPair.Auth(setCoverCharge, &setCoverCharge.Auth))
+		_, err = client.SetCoverCharge(ctx, setCoverCharge)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Len(t, u.MetadataUpdates, 1)
+		require.Empty(t, u.MemberUpdates, 0)
+		require.NoError(t, protoutil.ProtoEqualError(u.MetadataUpdates[0].GetCoverChargeChanged().NewCoverCharge, setCoverCharge.CoverCharge))
+
+		// Other user updates chat display name
+		setDisplayName := &chatpb.SetDisplayNameRequest{
+			ChatId:      startedOther.Chat.ChatId,
+			DisplayName: "My Room",
+		}
+		require.NoError(t, keyPair.Auth(setDisplayName, &setDisplayName.Auth))
+		_, err = client.SetDisplayName(ctx, setDisplayName)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Len(t, u.MetadataUpdates, 1)
+		require.Empty(t, u.MemberUpdates, 0)
+		require.Equal(t, u.MetadataUpdates[0].GetDisplayNameChanged().NewDisplayName, setDisplayName.DisplayName)
+
+		// Other user sends messages in the chat
+		//
+		// todo: proper integration test with messenger
+		for numMessagesSent := 1; numMessagesSent < 2*int(chat.MaxUnreadCount); numMessagesSent++ {
+			expectedNumUnread := uint32(numMessagesSent)
+			expectedHasMoreUnread := false
+			if numMessagesSent > int(chat.MaxUnreadCount) {
+				expectedNumUnread = chat.MaxUnreadCount
+				expectedHasMoreUnread = true
+			}
+			chatMsg := &messagingpb.Message{
+				SenderId: userID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Text{Text: &messagingpb.TextContent{Text: fmt.Sprintf("msg%d", numMessagesSent)}},
+					},
+				},
+			}
+			chatMsg, err = messageDB.PutMessage(ctx, startedOther.Chat.ChatId, chatMsg)
+			require.NoError(t, err)
+			require.NoError(t, bus.OnEvent(startedOther.Chat.ChatId, &event.ChatEvent{ChatID: startedOther.Chat.ChatId, MessageUpdate: chatMsg}))
+			u = <-updateCh
+			require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+			require.Len(t, u.MetadataUpdates, 2)
+			require.Empty(t, u.MemberUpdates)
+			require.NotNil(t, u.LastMessage)
+			require.NoError(t, protoutil.ProtoEqualError(chatMsg.Ts, u.MetadataUpdates[0].GetLastActivityChanged().NewLastActivity))
+			require.NoError(t, protoutil.ProtoEqualError(&chatpb.MetadataUpdate_UnreadCountChanged{NumUnread: expectedNumUnread, HasMoreUnread: expectedHasMoreUnread}, u.MetadataUpdates[1].GetUnreadCountChanged()))
+			require.NoError(t, protoutil.ProtoEqualError(chatMsg, u.LastMessage))
+		}
+
+		// Other user mutes us
+		mute := &chatpb.MuteUserRequest{
+			ChatId: startedOther.Chat.ChatId,
+			UserId: streamUser,
+		}
+		require.NoError(t, keyPair.Auth(mute, &mute.Auth))
+		_, err = client.MuteUser(ctx, mute)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Empty(t, u.MetadataUpdates)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetMuted().Member, streamUser))
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetMuted().MutedBy, userID))
+
+		// Leave the chat
 		leave = &chatpb.LeaveChatRequest{ChatId: started.Chat.ChatId}
 		require.NoError(t, streamKeyPair.Auth(leave, &leave.Auth))
 		_, _ = client.LeaveChat(context.Background(), leave)

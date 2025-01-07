@@ -157,13 +157,9 @@ func (p *FCMPusher) processResponse(response *messaging.BatchResponse, pushToken
 }
 
 func (p *FCMPusher) getTokenList(ctx context.Context, users []*commonpb.UserId) ([]Token, error) {
-	var allPushTokens []Token
-	for _, user := range users {
-		tokens, err := p.tokens.GetTokens(ctx, user)
-		if err != nil {
-			return nil, err
-		}
-		allPushTokens = append(allPushTokens, tokens...)
+	allPushTokens, err := p.tokens.GetTokensBatch(ctx, users...)
+	if err != nil {
+		return nil, err
 	}
 	return allPushTokens, nil
 }

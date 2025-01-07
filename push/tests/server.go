@@ -21,6 +21,7 @@ func RunServerTests(t *testing.T, s push.TokenStore, teardown func()) {
 	for _, tf := range []func(t *testing.T, s push.TokenStore){
 		testServer_AddToken,
 		testServer_DeleteToken,
+		testServer_DeleteTokens,
 	} {
 		tf(t, s)
 		teardown()
@@ -174,6 +175,89 @@ func testServer_DeleteToken(t *testing.T, store push.TokenStore) {
 				require.Empty(t, tokens)
 			} else {
 				require.Len(t, tokens, 1)
+			}
+		})
+	}
+}
+
+func testServer_DeleteTokens(t *testing.T, store push.TokenStore) {
+	ctx := context.Background()
+	log := zaptest.NewLogger(t)
+
+	authz := auth.NewStaticAuthorizer()
+	server := push.NewServer(log, authz, store)
+
+	userID := &commonpb.UserId{Value: []byte("test-user")}
+	keyPair := model.MustGenerateKeyPair()
+	authz.Add(userID, keyPair)
+
+	// Add a token that we can delete
+	appInstall1 := &commonpb.AppInstallId{Value: "test-install1"}
+	appInstall2 := &commonpb.AppInstallId{Value: "test-install2"}
+	require.NoError(t, store.AddToken(ctx, userID, appInstall1, pushpb.TokenType_FCM_ANDROID, "test-token1"))
+	require.NoError(t, store.AddToken(ctx, userID, appInstall2, pushpb.TokenType_FCM_ANDROID, "test-token2"))
+
+	tests := []struct {
+		name      string
+		setup     func() *pushpb.DeleteTokensRequest
+		wantError codes.Code
+	}{
+		{
+			name: "app install not found",
+			setup: func() *pushpb.DeleteTokensRequest {
+				req := &pushpb.DeleteTokensRequest{
+					AppInstall: &commonpb.AppInstallId{Value: "non-existant-install"},
+				}
+				require.NoError(t, keyPair.Auth(req, &req.Auth))
+				return req
+			},
+			wantError: codes.OK,
+		},
+		{
+			name: "unauthorized",
+			setup: func() *pushpb.DeleteTokensRequest {
+				req := &pushpb.DeleteTokensRequest{
+					AppInstall: &commonpb.AppInstallId{Value: "non-existant-install"},
+				}
+				require.NoError(t, model.MustGenerateKeyPair().Auth(req, &req.Auth))
+				return req
+			},
+			wantError: codes.PermissionDenied,
+		},
+		{
+			name: "success",
+			setup: func() *pushpb.DeleteTokensRequest {
+				req := &pushpb.DeleteTokensRequest{
+					AppInstall: appInstall1,
+				}
+				require.NoError(t, keyPair.Auth(req, &req.Auth))
+				return req
+			},
+			wantError: codes.OK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := tt.setup()
+
+			_, err := server.DeleteTokens(ctx, req)
+			if tt.wantError != codes.OK {
+				require.Error(t, err)
+				require.Equal(t, tt.wantError, status.Code(err))
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Verify token state
+			tokens, err := store.GetTokens(ctx, userID)
+			require.NoError(t, err)
+			if req.AppInstall.Value == appInstall1.Value {
+				require.Len(t, tokens, 1)
+				require.Equal(t, tokens[0].AppInstallID, appInstall2.Value)
+			} else {
+				require.Len(t, tokens, 2)
 			}
 		})
 	}

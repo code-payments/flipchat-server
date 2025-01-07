@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/proto"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
@@ -43,6 +43,10 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 	chatID := model.MustGenerateChatID()
 
 	t.Run("Empty", func(t *testing.T) {
+		message, err := s.GetMessage(ctx, chatID, messaging.MustGenerateMessageID())
+		require.Equal(t, messaging.ErrMessageNotFound, err)
+		require.Nil(t, message)
+
 		messages, err := s.GetMessages(ctx, chatID)
 		require.NoError(t, err)
 		require.Empty(t, messages)
@@ -62,7 +66,8 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 
 	t.Run("Append", func(t *testing.T) {
 		for i := range 10 {
-			for _, sender := range users {
+			senders := append(users, nil)
+			for _, sender := range senders {
 				msg := &messagingpb.Message{
 					SenderId: sender,
 					Content: []*messagingpb.Content{
@@ -74,19 +79,42 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 							},
 						},
 					},
-					Ts: timestamppb.Now(),
 				}
 
 				// Ensure time ordering is progressing, otherwise ms collisions is
 				// non-deterministic (well, won't be post sort, but this way we don't
 				// have to sort)
 				time.Sleep(time.Millisecond)
-				require.NoError(t, s.PutMessage(ctx, chatID, msg))
-				require.NotNil(t, msg.MessageId)
 
-				messages = append(messages, msg)
-				reversedMessages = append([]*messagingpb.Message{msg}, reversedMessages...)
+				// Randomly use PutMessage or PutMessageLegacy
+				var fn func(context.Context, *commonpb.ChatId, *messagingpb.Message) (*messagingpb.Message, error)
+				if i%2 == 0 {
+					fn = s.PutMessage
+				} else {
+					fn = s.PutMessageLegacy
+				}
+
+				beforeMsg := proto.Clone(msg).(*messagingpb.Message)
+				afterMsg, err := fn(ctx, chatID, beforeMsg)
+
+				require.NoError(t, err)
+				require.NotNil(t, afterMsg.MessageId)
+				require.WithinDuration(t, time.Now(), afterMsg.Ts.AsTime(), time.Second)
+
+				// Ensure there are no side effects (old behavior had side effects)
+				require.NoError(t, protoutil.ProtoEqualError(beforeMsg, msg))
+
+				messages = append(messages, afterMsg)
+				reversedMessages = append([]*messagingpb.Message{afterMsg}, reversedMessages...)
 			}
+		}
+	})
+
+	t.Run("GetMessage", func(t *testing.T) {
+		for _, message := range messages {
+			actual, err := s.GetMessage(ctx, chatID, message.MessageId)
+			require.NoError(t, err)
+			require.NoError(t, protoutil.ProtoEqualError(message, actual))
 		}
 	})
 
@@ -114,10 +142,10 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		actual, err = s.GetMessages(
 			ctx,
 			chatID,
-			query.WithToken(&commonpb.PagingToken{Value: messages[3].MessageId.Value}),
+			query.WithToken(&commonpb.PagingToken{Value: messages[12].MessageId.Value}),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(messages[4:], actual))
+		require.NoError(t, protoutil.SliceEqualError(messages[13:], actual))
 
 		actual, err = s.GetMessages(
 			ctx,
@@ -126,7 +154,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 			query.WithOrder(commonpb.QueryOptions_DESC),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(reversedMessages[17:], actual))
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages[27:], actual))
 
 		actual, err = s.GetMessages(
 			ctx,
@@ -136,23 +164,24 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 			query.WithLimit(10),
 		)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.SliceEqualError(reversedMessages[5:15], actual))
+		require.NoError(t, protoutil.SliceEqualError(reversedMessages[15:25], actual))
 	})
 
+	// todo: tests for filtering reactions
 	t.Run("Unread", func(t *testing.T) {
 		unread, err := s.CountUnread(ctx, chatID, users[0], nil, -1)
 		require.NoError(t, err)
-		require.EqualValues(t, 10, unread)
+		require.EqualValues(t, 20, unread)
 
 		unread, err = s.CountUnread(ctx, chatID, users[0], nil, 3)
 		require.NoError(t, err)
 		require.EqualValues(t, 3, unread)
 
-		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId, -1)
+		unread, err = s.CountUnread(ctx, chatID, users[0], messages[7].MessageId, -1)
 		require.NoError(t, err)
-		require.EqualValues(t, 5, unread)
+		require.EqualValues(t, 15, unread)
 
-		unread, err = s.CountUnread(ctx, chatID, users[0], messages[10].MessageId, 2)
+		unread, err = s.CountUnread(ctx, chatID, users[0], messages[7].MessageId, 2)
 		require.NoError(t, err)
 		require.EqualValues(t, 2, unread)
 	})

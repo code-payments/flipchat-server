@@ -68,9 +68,39 @@ func (s *Server) DeleteToken(ctx context.Context, req *pushpb.DeleteTokenRequest
 	}
 
 	if err = s.tokens.DeleteToken(ctx, req.TokenType, req.PushToken); err != nil {
-		log.Warn("Failed to get push tokens", zap.Error(err))
+		log.Warn("Failed to get delete push token", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to delete push token")
 	}
 
 	return &pushpb.DeleteTokenResponse{}, nil
+}
+
+func (s *Server) DeleteTokens(ctx context.Context, req *pushpb.DeleteTokensRequest) (*pushpb.DeleteTokensResponse, error) {
+	userID, err := s.auth.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(zap.String("user_id", model.UserIDString(userID)), zap.String("app_install", req.AppInstall.Value))
+
+	pushTokens, err := s.tokens.GetTokens(ctx, userID)
+	if err != nil {
+		log.Warn("Failed to get push tokens", zap.Error(err))
+		return nil, status.Error(codes.Internal, "")
+	}
+
+	for _, pushToken := range pushTokens {
+		log = log.With(zap.String("push_token", pushToken.Token))
+
+		if pushToken.AppInstallID != req.AppInstall.Value {
+			continue
+		}
+
+		if err = s.tokens.DeleteToken(ctx, pushToken.Type, pushToken.Token); err != nil {
+			log.Warn("Failed to get delete push token", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to delete push token")
+		}
+	}
+
+	return &pushpb.DeleteTokensResponse{}, nil
 }

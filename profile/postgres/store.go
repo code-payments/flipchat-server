@@ -25,7 +25,7 @@ func NewInPostgres(client *db.PrismaClient) profile.Store {
 func (s *store) reset() {
 	ctx := context.Background()
 
-	users := s.client.User.FindMany().Delete().Tx()
+	users := s.client.User.FindMany().Update(db.User.DisplayName.SetOptional(nil)).Tx()
 
 	err := s.client.Prisma.Transaction(users).Exec(ctx)
 	if err != nil {

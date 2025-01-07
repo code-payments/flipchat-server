@@ -28,4 +28,13 @@ type Store interface {
 
 	// IsAuthorized returns whether or not a pubKey is authorized to perform actions on behalf of the user.
 	IsAuthorized(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (bool, error)
+
+	// IsStaff returns whether or not a userID is a staff user
+	IsStaff(ctx context.Context, userID *commonpb.UserId) (bool, error)
+
+	// IsRegistered returns whether or not a userID is a registered account
+	IsRegistered(ctx context.Context, userID *commonpb.UserId) (bool, error)
+
+	// SetRegistrationFlag sets wether a userID is a registered account
+	SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId, isRegistered bool) error
 }
