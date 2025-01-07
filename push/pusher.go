@@ -112,6 +112,13 @@ func (p *FCMPusher) buildMessage(chatID *commonpb.ChatId, tokens []string, title
 		// This is a regular notification (user-visible), so include
 		// the title and body in the notification payload.
 
+		// For iOS
+		aps.Alert = &messaging.ApsAlert{
+			Title: title,
+			Body:  body,
+		}
+
+		// For Android
 		data["title"] = title
 		data["body"] = body
 	}
