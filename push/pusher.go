@@ -3,6 +3,7 @@ package push
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 
 	"firebase.google.com/go/v4/messaging"
 	"go.uber.org/zap"
@@ -48,7 +49,8 @@ func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, use
 }
 
 func (p *FCMPusher) SendSilentPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, data map[string]string) error {
-	return p.sendMessage(ctx, chatID, users, "", "", data, true)
+	// return p.sendMessage(ctx, chatID, users, "", "", data, true)
+	return errors.New("not tested")
 }
 
 func (p *FCMPusher) sendMessage(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, data map[string]string, silent bool) error {
