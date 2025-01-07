@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 
 	"firebase.google.com/go/v4/messaging"
 	"go.uber.org/zap"
@@ -12,7 +13,7 @@ import (
 )
 
 type Pusher interface {
-	SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, data map[string]string) error
+	SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, sender *string, data map[string]string) error
 	SendSilentPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, data map[string]string) error
 }
 
@@ -44,16 +45,16 @@ func NewFCMPusher(log *zap.Logger, tokens TokenStore, client FCMClient) *FCMPush
 	}
 }
 
-func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, data map[string]string) error {
-	return p.sendMessage(ctx, chatID, users, title, body, data, false)
+func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, sender *string, data map[string]string) error {
+	return p.sendMessage(ctx, chatID, users, title, body, sender, data, false)
 }
 
 func (p *FCMPusher) SendSilentPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, data map[string]string) error {
-	// return p.sendMessage(ctx, chatID, users, "", "", data, true)
+	// return p.sendMessage(ctx, chatID, users, "", "", nil, data, true)
 	return errors.New("not tested")
 }
 
-func (p *FCMPusher) sendMessage(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, data map[string]string, silent bool) error {
+func (p *FCMPusher) sendMessage(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, sender *string, data map[string]string, silent bool) error {
 	pushTokens, err := p.getTokenList(ctx, users)
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func (p *FCMPusher) sendMessage(ctx context.Context, chatID *commonpb.ChatId, us
 	}
 
 	tokens := extractTokens(pushTokens)
-	message := p.buildMessage(chatID, tokens, title, body, data, silent)
+	message := p.buildMessage(chatID, tokens, title, body, sender, data, silent)
 
 	response, err := p.client.SendEachForMulticast(ctx, message)
 	if err != nil {
@@ -93,7 +94,7 @@ func (p *FCMPusher) sendMessage(ctx context.Context, chatID *commonpb.ChatId, us
 	return nil
 }
 
-func (p *FCMPusher) buildMessage(chatID *commonpb.ChatId, tokens []string, title, body string, data map[string]string, silent bool) *messaging.MulticastMessage {
+func (p *FCMPusher) buildMessage(chatID *commonpb.ChatId, tokens []string, title, body string, sender *string, data map[string]string, silent bool) *messaging.MulticastMessage {
 	encodedChatId := base64.StdEncoding.EncodeToString(chatID.Value)
 
 	// Apple specific payload
@@ -119,10 +120,16 @@ func (p *FCMPusher) buildMessage(chatID *commonpb.ChatId, tokens []string, title
 			Title: title,
 			Body:  body,
 		}
+		if sender != nil {
+			aps.Alert.Body = fmt.Sprintf("%s: %s", *sender, body)
+		}
 
 		// For Android
 		data["title"] = title
 		data["body"] = body
+		if sender != nil {
+			data["sender"] = *sender
+		}
 	}
 
 	return &messaging.MulticastMessage{

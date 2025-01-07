@@ -65,7 +65,8 @@ func testFCMPusher_SendPush(t *testing.T, store push.TokenStore) {
 	chatID := model.MustGenerateChatID()
 	targetUsers := users[:3]
 	data := map[string]string{"my-data": "data is gold"}
-	err := pusher.SendPushes(ctx, chatID, targetUsers, "Test Title", "Test Body", data)
+	sender := "Test Sender"
+	err := pusher.SendPushes(ctx, chatID, targetUsers, "Test Title", "Test Body", &sender, data)
 	require.NoError(t, err)
 
 	// Verify the message was sent with all 6 tokens (2 tokens * 3 users)
@@ -78,13 +79,14 @@ func testFCMPusher_SendPush(t *testing.T, store push.TokenStore) {
 		"my-data": "data is gold",
 		"title":   "Test Title",
 		"body":    "Test Body",
+		"sender":  "Test Sender",
 	}
 	assert.Equal(t, expectedData, fcmClient.sentMessage.Data)
 
 	// Verify APS content for a visible push
 	assert.False(t, fcmClient.sentMessage.APNS.Payload.Aps.ContentAvailable)
 	assert.Equal(t, expectedData["title"], fcmClient.sentMessage.APNS.Payload.Aps.Alert.Title)
-	assert.Equal(t, expectedData["body"], fcmClient.sentMessage.APNS.Payload.Aps.Alert.Body)
+	assert.Equal(t, fmt.Sprintf("%s: %s", expectedData["sender"], expectedData["body"]), fcmClient.sentMessage.APNS.Payload.Aps.Alert.Body)
 
 	// Verify the correct tokens were included
 	expectedTokens := []string{

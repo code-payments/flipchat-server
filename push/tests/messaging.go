@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,14 +25,16 @@ type mockPusher struct {
 	lastPushMembers []*commonpb.UserId
 	lastTitle       string
 	lastBody        string
+	lastSender      *string
 	lastData        map[string]string
 }
 
-func (m *mockPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, data map[string]string) error {
+func (m *mockPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, sender *string, data map[string]string) error {
 	m.lastChatID = chatID
 	m.lastPushMembers = members
 	m.lastTitle = title
 	m.lastBody = body
+	m.lastSender = sender
 	m.lastData = data
 	return nil
 }
@@ -43,6 +44,7 @@ func (m *mockPusher) SendSilentPushes(ctx context.Context, chatID *commonpb.Chat
 	m.lastPushMembers = members
 	m.lastTitle = ""
 	m.lastBody = ""
+	m.lastSender = nil
 	m.lastData = data
 	return nil
 }
@@ -87,6 +89,7 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 	recipient := &commonpb.UserId{Value: []byte("recipient")}
 
 	// Create profiles
+	senderName := "Sender Name"
 	require.NoError(t, profileStore.SetDisplayName(ctx, sender, "Sender Name"))
 
 	tests := []struct {
@@ -95,6 +98,7 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 		message        *messagingpb.Message
 		expectedTitle  string
 		expectedBody   string
+		expectedSender *string
 		expectedPushes []*commonpb.UserId
 	}{
 		{
@@ -131,8 +135,9 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 					},
 				},
 			},
-			expectedTitle:  "Sender Name",
+			expectedTitle:  senderName,
 			expectedBody:   "Hello World",
+			expectedSender: &senderName,
 			expectedPushes: []*commonpb.UserId{recipient},
 		},
 		{
@@ -169,7 +174,8 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 				},
 			},
 			expectedTitle:  "#2",
-			expectedBody:   "Sender Name: Hello Group",
+			expectedBody:   "Hello Group",
+			expectedSender: &senderName,
 			expectedPushes: []*commonpb.UserId{recipient},
 		},
 		{
@@ -211,7 +217,8 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 				},
 			},
 			expectedTitle:  "#3: Room Name",
-			expectedBody:   "Sender Name: Hello Group",
+			expectedBody:   "Hello Group",
+			expectedSender: &senderName,
 			expectedPushes: []*commonpb.UserId{recipient},
 		},
 		{
@@ -267,7 +274,7 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 			if tt.expectedPushes != nil {
 				assert.Equal(t, tt.expectedTitle, pusher.lastTitle)
 				assert.Equal(t, tt.expectedBody, pusher.lastBody)
-				assert.Equal(t, base64.StdEncoding.EncodeToString(md.ChatId.Value), pusher.lastData["chat_id"])
+				assert.Equal(t, tt.expectedSender, pusher.lastSender)
 			}
 
 			pusher.reset()
