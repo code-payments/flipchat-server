@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
@@ -205,9 +206,9 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 						// Assumes the full metadata update is only sent on chat creation.
 						update.MetadataUpdates = append(
 							update.MetadataUpdates,
-							&chatpb.StreamChatEventsResponse_MetadataUpdate{
-								Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_UnreadCountChanged_{
-									UnreadCountChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_UnreadCountChanged{
+							&chatpb.MetadataUpdate{
+								Kind: &chatpb.MetadataUpdate_UnreadCountChanged_{
+									UnreadCountChanged: &chatpb.MetadataUpdate_UnreadCountChanged{
 										NumUnread:     numUnread,
 										HasMoreUnread: hasMoreUnread,
 									},
@@ -222,13 +223,13 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				// Update all instances of IsSelf for relevant member updates
 				for _, memberUpdate := range update.MemberUpdates {
 					switch typed := memberUpdate.Kind.(type) {
-					case *chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_:
+					case *chatpb.MemberUpdate_FullRefresh_:
 						for _, m := range typed.FullRefresh.Members {
 							m.IsSelf = bytes.Equal(m.UserId.Value, userID.Value)
 						}
-					case *chatpb.StreamChatEventsResponse_MemberUpdate_IndividualRefresh_:
+					case *chatpb.MemberUpdate_IndividualRefresh_:
 						typed.IndividualRefresh.Member.IsSelf = bytes.Equal(typed.IndividualRefresh.Member.UserId.Value, userID.Value)
-					case *chatpb.StreamChatEventsResponse_MemberUpdate_Joined_:
+					case *chatpb.MemberUpdate_Joined_:
 						typed.Joined.Member.IsSelf = bytes.Equal(typed.Joined.Member.UserId.Value, userID.Value)
 					}
 				}
@@ -521,19 +522,19 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 
 		if err = s.eventBus.OnEvent(md.ChatId, &event.ChatEvent{
 			ChatID: md.ChatId,
-			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+			MetadataUpdates: []*chatpb.MetadataUpdate{
 				{
-					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
-						FullRefresh: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh{
+					Kind: &chatpb.MetadataUpdate_FullRefresh_{
+						FullRefresh: &chatpb.MetadataUpdate_FullRefresh{
 							Metadata: md,
 						},
 					},
 				},
 			},
-			MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+			MemberUpdates: []*chatpb.MemberUpdate{
 				{
-					Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh_{
-						FullRefresh: &chatpb.StreamChatEventsResponse_MemberUpdate_FullRefresh{
+					Kind: &chatpb.MemberUpdate_FullRefresh_{
+						FullRefresh: &chatpb.MemberUpdate_FullRefresh{
 							Members: memberProtos,
 						},
 					},
@@ -698,10 +699,10 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			log.Warn("failed to populate additional member data", zap.Error(err))
 		}
 
-		err = s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+		err = s.eventBus.OnEvent(chatID, &event.ChatEvent{ChatID: chatID, MemberUpdates: []*chatpb.MemberUpdate{
 			{
-				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined_{
-					Joined: &chatpb.StreamChatEventsResponse_MemberUpdate_Joined{
+				Kind: &chatpb.MemberUpdate_Joined_{
+					Joined: &chatpb.MemberUpdate_Joined{
 						Member: protoMember,
 					},
 				},
@@ -731,10 +732,10 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 		return nil, status.Errorf(codes.Internal, "failed to remove chat member")
 	}
 
-	err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+	err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.MemberUpdate{
 		{
-			Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Left_{
-				Left: &chatpb.StreamChatEventsResponse_MemberUpdate_Left{
+			Kind: &chatpb.MemberUpdate_Left_{
+				Left: &chatpb.MemberUpdate_Left{
 					Member: userID,
 				},
 			},
@@ -804,10 +805,10 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
-		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
 			{
-				Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged_{
-					DisplayNameChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_DisplayNameChanged{
+				Kind: &chatpb.MetadataUpdate_DisplayNameChanged_{
+					DisplayNameChanged: &chatpb.MetadataUpdate_DisplayNameChanged{
 						NewDisplayName: req.DisplayName,
 					},
 				},
@@ -869,10 +870,10 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
-		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
 			{
-				Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged_{
-					CoverChargeChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_CoverChargeChanged{
+				Kind: &chatpb.MetadataUpdate_CoverChargeChanged_{
+					CoverChargeChanged: &chatpb.MetadataUpdate_CoverChargeChanged{
 						NewCoverCharge: req.CoverCharge,
 					},
 				},
@@ -884,6 +885,55 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 	}()
 
 	return &chatpb.SetCoverChargeResponse{}, nil
+}
+
+// todo: use a proper changelog system, but for now use a full refresh
+func (s *Server) GetMemberUpdates(ctx context.Context, req *chatpb.GetMemberUpdatesRequest) (*chatpb.GetMemberUpdatesResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	if req.PagingToken != nil {
+		if len(req.PagingToken.Value) != 8 {
+			return nil, status.Error(codes.InvalidArgument, "paging token length must be 8")
+		}
+
+		// Will result in eventual consistency issues between client and server
+		unixTs := binary.LittleEndian.Uint64(req.PagingToken.Value)
+		if time.Since(time.Unix(int64(unixTs), 0)) < time.Minute {
+			return &chatpb.GetMemberUpdatesResponse{Result: chatpb.GetMemberUpdatesResponse_NOT_FOUND}, nil
+		}
+	}
+
+	_, members, err := s.getMetadataWithMembers(ctx, req.ChatId, userID)
+	if err == ErrChatNotFound {
+		return &chatpb.GetMemberUpdatesResponse{Result: chatpb.GetMemberUpdatesResponse_NOT_FOUND}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat members", zap.Error(err))
+		return nil, status.Error(codes.InvalidArgument, "failed to get chat members")
+	}
+
+	pagingToken := make([]byte, 8)
+	binary.LittleEndian.PutUint64(pagingToken, uint64(time.Now().Unix()))
+
+	return &chatpb.GetMemberUpdatesResponse{Updates: []*chatpb.MemberUpdate{
+		{
+			Kind: &chatpb.MemberUpdate_FullRefresh_{
+				FullRefresh: &chatpb.MemberUpdate_FullRefresh{
+					Members: members,
+				},
+			},
+			PagingToken: &commonpb.PagingToken{
+				Value: pagingToken,
+			},
+		},
+	}}, nil
 }
 
 func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) (*chatpb.RemoveUserResponse, error) {
@@ -943,10 +993,10 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 				log.Warn("Failed to send announcement", zap.Error(err))
 			}
 
-			err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+			err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MemberUpdates: []*chatpb.MemberUpdate{
 				{
-					Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Removed_{
-						Removed: &chatpb.StreamChatEventsResponse_MemberUpdate_Removed{
+					Kind: &chatpb.MemberUpdate_Removed_{
+						Removed: &chatpb.MemberUpdate_Removed{
 							Member:    req.UserId,
 							RemovedBy: ownerID,
 						},
@@ -1019,10 +1069,10 @@ func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*ch
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
 
-		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.StreamChatEventsResponse_MemberUpdate{
+		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.MemberUpdate{
 			{
-				Kind: &chatpb.StreamChatEventsResponse_MemberUpdate_Muted_{
-					Muted: &chatpb.StreamChatEventsResponse_MemberUpdate_Muted{
+				Kind: &chatpb.MemberUpdate_Muted_{
+					Muted: &chatpb.MemberUpdate_Muted{
 						Member:  req.UserId,
 						MutedBy: ownerID,
 					},
@@ -1109,9 +1159,9 @@ func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 			s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
 		}
 
-		clonedEvent.MetadataUpdates = append(clonedEvent.MetadataUpdates, &chatpb.StreamChatEventsResponse_MetadataUpdate{
-			Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_LastActivityChanged_{
-				LastActivityChanged: &chatpb.StreamChatEventsResponse_MetadataUpdate_LastActivityChanged{
+		clonedEvent.MetadataUpdates = append(clonedEvent.MetadataUpdates, &chatpb.MetadataUpdate{
+			Kind: &chatpb.MetadataUpdate_LastActivityChanged_{
+				LastActivityChanged: &chatpb.MetadataUpdate_LastActivityChanged{
 					NewLastActivity: clonedEvent.MessageUpdate.Ts,
 				},
 			},
@@ -1323,10 +1373,10 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 
 		e := &event.ChatEvent{
 			ChatID: md.ChatId,
-			MetadataUpdates: []*chatpb.StreamChatEventsResponse_MetadataUpdate{
+			MetadataUpdates: []*chatpb.MetadataUpdate{
 				{
-					Kind: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh_{
-						FullRefresh: &chatpb.StreamChatEventsResponse_MetadataUpdate_FullRefresh{
+					Kind: &chatpb.MetadataUpdate_FullRefresh_{
+						FullRefresh: &chatpb.MetadataUpdate_FullRefresh{
 							Metadata: md,
 						},
 					},

@@ -235,6 +235,16 @@ func testServer(
 		require.Equal(t, chatpb.GetChatsResponse_OK, getAllResp.Result)
 		require.NoError(t, protoutil.ProtoEqualError(created.Chat, getAllResp.Chats[0]))
 
+		getMemberDelta := &chatpb.GetMemberUpdatesRequest{
+			ChatId: created.Chat.ChatId,
+		}
+		require.NoError(t, keyPair.Auth(getMemberDelta, &getMemberDelta.Auth))
+		getMemberDeltaResp, err := client.GetMemberUpdates(context.Background(), getMemberDelta)
+		require.NoError(t, err)
+		require.Equal(t, chatpb.GetMemberUpdatesResponse_OK, getMemberDeltaResp.Result)
+		require.NoError(t, protoutil.SliceEqualError(expectedMembers, getMemberDeltaResp.Updates[0].GetFullRefresh().Members))
+		require.NotNil(t, getMemberDeltaResp.Updates[0].PagingToken)
+
 		t.Run("Join and leave", func(t *testing.T) {
 			otherUser := model.MustGenerateUserID()
 			otherKeyPair := model.MustGenerateKeyPair()
@@ -561,7 +571,7 @@ func testServer(
 			}
 		}()
 
-		verifyExpectedFullMemberRefresh := func(update *chatpb.StreamChatEventsResponse_MemberUpdate, expected []chat.Member) {
+		verifyExpectedFullMemberRefresh := func(update *chatpb.MemberUpdate, expected []chat.Member) {
 			refresh := update.GetFullRefresh()
 			require.NotNil(t, refresh)
 			require.Len(t, refresh.Members, len(expected))
@@ -707,7 +717,7 @@ func testServer(
 			require.Empty(t, u.MemberUpdates)
 			require.NotNil(t, u.LastMessage)
 			require.NoError(t, protoutil.ProtoEqualError(chatMsg.Ts, u.MetadataUpdates[0].GetLastActivityChanged().NewLastActivity))
-			require.NoError(t, protoutil.ProtoEqualError(&chatpb.StreamChatEventsResponse_MetadataUpdate_UnreadCountChanged{NumUnread: expectedNumUnread, HasMoreUnread: expectedHasMoreUnread}, u.MetadataUpdates[1].GetUnreadCountChanged()))
+			require.NoError(t, protoutil.ProtoEqualError(&chatpb.MetadataUpdate_UnreadCountChanged{NumUnread: expectedNumUnread, HasMoreUnread: expectedHasMoreUnread}, u.MetadataUpdates[1].GetUnreadCountChanged()))
 			require.NoError(t, protoutil.ProtoEqualError(chatMsg, u.LastMessage))
 		}
 

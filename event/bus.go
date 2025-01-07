@@ -16,8 +16,8 @@ type ChatEvent struct {
 	ChatID    *commonpb.ChatId
 	Timestamp time.Time
 
-	MetadataUpdates []*chatpb.StreamChatEventsResponse_MetadataUpdate
-	MemberUpdates   []*chatpb.StreamChatEventsResponse_MemberUpdate
+	MetadataUpdates []*chatpb.MetadataUpdate
+	MemberUpdates   []*chatpb.MemberUpdate
 	MessageUpdate   *messagingpb.Message
 	FlushedMessages []*messagingpb.Message
 	PointerUpdate   *chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate
