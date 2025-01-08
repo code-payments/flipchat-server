@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/code-payments/flipchat-server/moderation"
@@ -50,14 +50,17 @@ func (c *Client) sendRequest(input map[string]interface{}) (*moderation.Moderati
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Create a new HTTP POST request
 	req, err := http.NewRequest("POST", c.BaseURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	// Set necessary headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
 
+	// Initialize HTTP client and send the request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -65,34 +68,57 @@ func (c *Client) sendRequest(input map[string]interface{}) (*moderation.Moderati
 	}
 	defer resp.Body.Close()
 
+	// Check for non-200 HTTP status codes
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("non-200 status code: %d, response: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	responseBody, err := ioutil.ReadAll(resp.Body)
+	// Read the response body
+	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// fmt.Println(string(responseBody))
-
-	// Parse OpenAI-specific response
+	// Define the structure to parse OpenAI's response, including category_scores
 	var openaiResponse struct {
 		Results []struct {
-			Flagged bool `json:"flagged"`
+			Flagged                   bool                `json:"flagged"`
+			Categories                map[string]bool     `json:"categories"`
+			CategoryScores            map[string]float64  `json:"category_scores"`
+			CategoryAppliedInputTypes map[string][]string `json:"category_applied_input_types"`
 		} `json:"results"`
 	}
+
+	// Unmarshal the response into the struct
 	if err := json.Unmarshal(responseBody, &openaiResponse); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Map to ModerationResult
+	// Ensure there are results in the response
 	if len(openaiResponse.Results) == 0 {
 		return nil, fmt.Errorf("no results in response")
 	}
+
+	// Extract the first result
+	firstResult := openaiResponse.Results[0]
+
+	// Initialize ModerationResult with OpenAI's flagged value and category_scores
 	result := &moderation.ModerationResult{
-		Flagged: openaiResponse.Results[0].Flagged,
+		Flagged:        firstResult.Flagged,
+		CategoryScores: firstResult.CategoryScores,
+	}
+
+	// If OpenAI did not flag the content, check if any category_score exceeds 0.8
+
+	// TODO: Adjust the threshold for flagging content
+	if !firstResult.Flagged {
+		for _, score := range firstResult.CategoryScores {
+			if score > 0.1 {
+				result.Flagged = true
+				break
+			}
+		}
 	}
 
 	return result, nil

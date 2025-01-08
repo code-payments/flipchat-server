@@ -8,5 +8,6 @@ type ModerationClient interface {
 
 // Shared moderation result structure
 type ModerationResult struct {
-	Flagged bool `json:"flagged"`
+	Flagged        bool `json:"flagged"`
+	CategoryScores map[string]float64
 }
