@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/code-payments/flipchat-server/moderation"
 )
@@ -29,6 +30,11 @@ func NewClient(apiKey string, baseURL ...string) *Client {
 }
 
 func (c *Client) ClassifyText(text string) (*moderation.ModerationResult, error) {
+	// OpenAI's moderation API is case-insensitive, Titlecase is more likely to
+	// be "safe"
+
+	// Lowercase the text to ensure consistent results
+	text = strings.ToLower(text)
 	input := map[string]interface{}{
 		"model": model,
 		"input": []map[string]string{{"type": "text", "text": text}},
@@ -109,12 +115,25 @@ func (c *Client) sendRequest(input map[string]interface{}) (*moderation.Moderati
 		CategoryScores: firstResult.CategoryScores,
 	}
 
-	// If OpenAI did not flag the content, check if any category_score exceeds 0.8
-
-	// TODO: Adjust the threshold for flagging content
+	// Manually flag content if any category score is above our threshold
 	if !firstResult.Flagged {
-		for _, score := range firstResult.CategoryScores {
-			if score > 0.1 {
+		for category, score := range firstResult.CategoryScores {
+			if score > 0.05 {
+				result.Flagged = true
+				break
+			}
+
+			if category == "harassment" && score > 0.02 {
+				result.Flagged = true
+				break
+			}
+
+			if category == "hate" && score > 0.007 {
+				result.Flagged = true
+				break
+			}
+
+			if category == "sexual" && score > 0.005 {
 				result.Flagged = true
 				break
 			}
