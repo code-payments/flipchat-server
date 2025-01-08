@@ -19,23 +19,27 @@ var (
 	ErrNoPaymentMetadata = errors.New("no payment metdata")
 )
 
-func LoadPaymentMetadata(ctx context.Context, codeData codedata.Provider, intentID *commonpb.IntentId, dst proto.Message) error {
+func LoadPaymentMetadata(ctx context.Context, codeData codedata.Provider, intentID *commonpb.IntentId, dst proto.Message) (*codeintent.Record, error) {
 	intentRecord, err := codeData.GetIntent(ctx, model.IntentIDString(intentID))
 	if err == codeintent.ErrIntentNotFound {
-		return ErrNoPaymentMetadata
+		return nil, ErrNoPaymentMetadata
 	} else if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(intentRecord.ExtendedMetadata) == 0 {
-		return ErrNoPaymentMetadata
+		return nil, ErrNoPaymentMetadata
 	}
 
 	var extendedPaymentMetdata codetransactionpb.ExtendedPaymentMetadata
 	err = proto.Unmarshal(intentRecord.ExtendedMetadata, &extendedPaymentMetdata)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return anypb.UnmarshalTo(extendedPaymentMetdata.Value, dst, proto.UnmarshalOptions{})
+	err = anypb.UnmarshalTo(extendedPaymentMetdata.Value, dst, proto.UnmarshalOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return intentRecord, nil
 }

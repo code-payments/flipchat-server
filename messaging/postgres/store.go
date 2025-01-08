@@ -33,6 +33,7 @@ const (
 	ContentTypeLocalizedAnnouncement = 2
 	ContentTypeReaction              = 5
 	ContentTypeReply                 = 6
+	ContentTypeTip                   = 7
 )
 
 func NewInPostgresMessages(client *db.PrismaClient) messaging.MessageStore {
@@ -157,7 +158,7 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 			db.Message.SenderID.IsNull(),
 			db.Message.Not(db.Message.SenderID.Equals(encodedUserID)),
 		),
-		db.Message.ContentType.Not(ContentTypeReaction),
+		db.Message.ContentType.NotIn([]int{ContentTypeReaction, ContentTypeTip}),
 	}
 
 	if lastRead != nil {
@@ -402,6 +403,8 @@ func getContentType(content *messagingpb.Content) int {
 		return ContentTypeReaction
 	case *messagingpb.Content_Reply:
 		return ContentTypeReply
+	case *messagingpb.Content_Tip:
+		return ContentTypeTip
 	default:
 		return ContentTypeUnknown
 	}

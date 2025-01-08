@@ -140,7 +140,7 @@ func (m *Memory) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userI
 		}
 
 		switch message.Content[0].Type.(type) {
-		case *messagingpb.Content_Reaction:
+		case *messagingpb.Content_Reaction, *messagingpb.Content_Tip:
 			continue
 		}
 

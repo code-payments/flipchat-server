@@ -429,7 +429,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		}
 
 		var paymentMetadata chatpb.StartGroupChatPaymentMetadata
-		err = intent.LoadPaymentMetadata(ctx, s.codeData, t.GroupChat.PaymentIntent, &paymentMetadata)
+		_, err = intent.LoadPaymentMetadata(ctx, s.codeData, t.GroupChat.PaymentIntent, &paymentMetadata)
 		if err == intent.ErrNoPaymentMetadata {
 			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
 		} else if err != nil {
@@ -574,7 +574,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 		}
 
-		err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
+		_, err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
 		if err == intent.ErrNoPaymentMetadata {
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 		} else if err != nil {

@@ -1,6 +1,7 @@
 package messaging
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -19,9 +20,13 @@ import (
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
+
+	codedata "github.com/code-payments/code-server/pkg/code/data"
+
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/query"
@@ -42,8 +47,10 @@ type Server struct {
 	rpcAuthz auth.Messaging
 
 	accounts account.Store
+	intents  intent.Store
 	messages MessageStore
 	pointers PointerStore
+	codeData codedata.Provider
 
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent]
 
@@ -58,8 +65,10 @@ func NewServer(
 	authz auth.Authorizer,
 	rpcAuthz auth.Messaging,
 	accounts account.Store,
+	intents intent.Store,
 	messages MessageStore,
 	pointers PointerStore,
+	codeData codedata.Provider,
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent],
 ) *Server {
 	s := &Server{
@@ -68,8 +77,10 @@ func NewServer(
 		rpcAuthz: rpcAuthz,
 
 		accounts: accounts,
+		intents:  intents,
 		messages: messages,
 		pointers: pointers,
+		codeData: codeData,
 
 		eventBus: eventBus,
 
@@ -318,6 +329,7 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		return nil, err
 	}
 
+	// todo: individual handlers for different content types
 	var reference *messagingpb.MessageId
 	switch typed := req.Content[0].Type.(type) {
 	case *messagingpb.Content_Text:
@@ -325,6 +337,34 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 	//	reference = typed.Reaction.OriginalMessageId
 	case *messagingpb.Content_Reply:
 		reference = typed.Reply.OriginalMessageId
+	case *messagingpb.Content_Tip:
+		reference = typed.Tip.OriginalMessageId
+
+		if req.PaymentIntent == nil {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		}
+
+		var paymentMetadata messagingpb.SendTipMessagePaymentMetadata
+		intentRecord, err := intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
+		if err == intent.ErrNoPaymentMetadata {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to get payment metadata", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
+		}
+
+		if !bytes.Equal(req.ChatId.Value, paymentMetadata.ChatId.Value) {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		}
+		if !bytes.Equal(reference.Value, paymentMetadata.MessageId.Value) {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		}
+		if !bytes.Equal(userID.Value, paymentMetadata.TipperId.Value) {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		}
+		if intentRecord.SendPublicPaymentMetadata.Quantity != typed.Tip.TipAmount.Quarks {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		}
 	default:
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 	}
@@ -356,6 +396,17 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 	if err != nil {
 		s.log.Warn("Failed to send message", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to send message")
+	}
+
+	// todo: put this logic in a DB transaction alongside message send
+	if req.PaymentIntent != nil {
+		err = s.intents.MarkFulfilled(ctx, req.PaymentIntent)
+		if err == intent.ErrAlreadyFulfilled {
+			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
+		} else if err != nil {
+			s.log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
+		}
 	}
 
 	return &messagingpb.SendMessageResponse{

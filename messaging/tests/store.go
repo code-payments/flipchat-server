@@ -167,7 +167,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		require.NoError(t, protoutil.SliceEqualError(reversedMessages[15:25], actual))
 	})
 
-	// todo: tests for filtering reactions
+	// todo: tests for filtering message types that don't generate unreads
 	t.Run("Unread", func(t *testing.T) {
 		unread, err := s.CountUnread(ctx, chatID, users[0], nil, -1)
 		require.NoError(t, err)
