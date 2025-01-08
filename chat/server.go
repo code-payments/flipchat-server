@@ -779,12 +779,14 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 	}
 
 	// todo: this needs tests
-	moderationResult, err := s.moderationClient.ClassifyText(req.DisplayName)
-	if err != nil {
-		log.Warn("Failed to moderate display name", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to moderate display name")
-	} else if moderationResult.Flagged {
-		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_CANT_SET}, nil
+	if len(req.DisplayName) > 0 {
+		moderationResult, err := s.moderationClient.ClassifyText(req.DisplayName)
+		if err != nil {
+			log.Warn("Failed to moderate display name", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to moderate display name")
+		} else if moderationResult.Flagged {
+			return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_CANT_SET}, nil
+		}
 	}
 
 	err = s.chats.SetDisplayName(ctx, req.ChatId, req.DisplayName)
@@ -796,11 +798,17 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 	go func() {
 		ctx := context.Background()
 
+		var announcementContentBuilder messaging.AnnouncementContentBuilder
+		if len(req.DisplayName) > 0 {
+			announcementContentBuilder = messaging.NewRoomDisplayNameChangedAnnouncementContentBuilder(md.RoomNumber, req.DisplayName)
+		} else {
+			announcementContentBuilder = messaging.NewRoomDisplayNameRemovedAnnouncementContentBuilder()
+		}
 		if err = messaging.SendAnnouncement(
 			ctx,
 			s.messenger,
 			req.ChatId,
-			messaging.NewRoomDisplayNameChangedAnnouncementContentBuilder(md.RoomNumber, req.DisplayName),
+			announcementContentBuilder,
 		); err != nil {
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}

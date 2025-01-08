@@ -468,6 +468,29 @@ func testServer(
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 			require.Equal(t, setDisplayName.DisplayName, get.Metadata.DisplayName)
 		})
+
+		t.Run("Remove display name", func(t *testing.T) {
+			setDisplayName := &chatpb.SetDisplayNameRequest{
+				ChatId:      created.Chat.ChatId,
+				DisplayName: "",
+			}
+			require.NoError(t, keyPair.Auth(setDisplayName, &setDisplayName.Auth))
+
+			setDisplayNameResp, err := client.SetDisplayName(context.Background(), setDisplayName)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.SetDisplayNameResponse_OK, setDisplayNameResp.Result)
+
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, keyPair.Auth(getByID, &getByID.Auth))
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.Equal(t, setDisplayName.DisplayName, get.Metadata.DisplayName)
+		})
 	})
 
 	t.Run("Start Two Way", func(t *testing.T) {

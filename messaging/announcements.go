@@ -74,6 +74,14 @@ func NewRoomDisplayNameChangedAnnouncementContentBuilder(roomNumber uint64, disp
 	}
 }
 
+func NewRoomDisplayNameRemovedAnnouncementContentBuilder() AnnouncementContentBuilder {
+	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
+		return &messagingpb.LocalizedAnnouncementContent{
+			KeyOrText: "Room name removed",
+		}, nil
+	}
+}
+
 func NewCoverChangedAnnouncementContentBuilder(quarks uint64) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		return &messagingpb.LocalizedAnnouncementContent{

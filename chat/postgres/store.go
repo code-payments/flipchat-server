@@ -532,10 +532,16 @@ func (s *store) RemoveMember(ctx context.Context, chatID *commonpb.ChatId, membe
 func (s *store) SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, displayName string) error {
 	encodedChatID := pg.Encode(chatID.Value)
 
+	var optionalValue *db.String
+	if len(displayName) > 0 {
+		value := db.String(displayName)
+		optionalValue = &value
+	}
+
 	_, err := s.client.Chat.FindUnique(
 		db.Chat.ID.Equals(encodedChatID),
 	).Update(
-		db.Chat.DisplayName.Set(db.String(displayName)),
+		db.Chat.DisplayName.SetOptional(optionalValue),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {

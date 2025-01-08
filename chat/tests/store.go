@@ -534,6 +534,12 @@ func testChatStore_SetDisplayName(t *testing.T, store chat.Store) {
 	result, err = store.GetChatMetadata(context.Background(), chatID)
 	require.NoError(t, err)
 	require.Equal(t, "My Room", result.DisplayName)
+
+	require.NoError(t, store.SetDisplayName(context.Background(), chatID, ""))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, "", result.DisplayName)
 }
 
 func testChatStore_SetCoverCharge(t *testing.T, store chat.Store) {
