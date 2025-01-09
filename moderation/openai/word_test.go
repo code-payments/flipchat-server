@@ -56,16 +56,24 @@ func testWordFlagging(t *testing.T, client moderation.ModerationClient) {
 
 			// Check if the text was flagged as expected
 			if result.Flagged != tc.expectedFlagged {
-				t.Errorf("expected Flagged=%v for word '%s', got %v", tc.expectedFlagged, tc.phrase, result.Flagged)
 
 				highestScore := 0.0
-				for _, score := range result.CategoryScores {
+				categoryName := ""
+				for category, score := range result.CategoryScores {
 					if score > highestScore {
 						highestScore = score
+						categoryName = category
 					}
 				}
 
-				t.Errorf("expected at least one category score to be above threshold '%s', highest score: '%f'", tc.phrase, highestScore)
+				if !tc.expectedFlagged && result.Flagged {
+					t.Errorf("False positive for word '%s', got %v, highest score: '%f' for '%s'", tc.phrase, result.Flagged, highestScore, categoryName)
+				}
+				if tc.expectedFlagged && !result.Flagged {
+					t.Errorf("False negative for word '%s', got %v, highest score: '%f' for '%s'", tc.phrase, result.Flagged, highestScore, categoryName)
+				}
+
+				//t.Errorf("Category scores: %v", result.CategoryScores)
 			}
 
 		})
@@ -75,14 +83,18 @@ func testWordFlagging(t *testing.T, client moderation.ModerationClient) {
 func createTestCases(words string, expectedFlagged bool) []testCase {
 	wordList := strings.Fields(words)
 
-	// Randomize the test cases and keep only the first 10
-	rand.Seed(time.Now().UnixNano())
-	rand.Shuffle(len(wordList), func(i, j int) {
-		wordList[i], wordList[j] = wordList[j], wordList[i]
-	})
+	maxSubsetSize := 100
+	shouldRandomizeSubset := true
 
-	if len(wordList) > 10 {
-		wordList = wordList[:10]
+	if shouldRandomizeSubset {
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(len(wordList), func(i, j int) {
+			wordList[i], wordList[j] = wordList[j], wordList[i]
+		})
+	}
+
+	if len(wordList) > maxSubsetSize {
+		wordList = wordList[:maxSubsetSize]
 	}
 
 	testCases := make([]testCase, len(wordList))

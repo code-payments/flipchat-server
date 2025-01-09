@@ -161,7 +161,6 @@ func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID
 		db.Message.ContentType.In([]int{
 			ContentTypeUnknown,
 			ContentTypeText,
-			ContentTypeLocalizedAnnouncement,
 			ContentTypeReply,
 		}),
 	}
