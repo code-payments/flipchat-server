@@ -1,7 +1,6 @@
 package messaging
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -329,62 +328,12 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		return nil, err
 	}
 
-	// todo: individual handlers for different content types
-	var reference *messagingpb.MessageId
-	switch typed := req.Content[0].Type.(type) {
-	case *messagingpb.Content_Text:
-	//case *messagingpb.Content_Reaction:
-	//	reference = typed.Reaction.OriginalMessageId
-	case *messagingpb.Content_Reply:
-		reference = typed.Reply.OriginalMessageId
-	case *messagingpb.Content_Tip:
-		reference = typed.Tip.OriginalMessageId
-
-		if req.PaymentIntent == nil {
-			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-		}
-
-		var paymentMetadata messagingpb.SendTipMessagePaymentMetadata
-		intentRecord, err := intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
-		if err == intent.ErrNoPaymentMetadata {
-			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-		} else if err != nil {
-			s.log.Warn("Failed to get payment metadata", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
-		}
-
-		if !bytes.Equal(req.ChatId.Value, paymentMetadata.ChatId.Value) {
-			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-		}
-		if !bytes.Equal(reference.Value, paymentMetadata.MessageId.Value) {
-			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-		}
-		if !bytes.Equal(userID.Value, paymentMetadata.TipperId.Value) {
-			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-		}
-		if intentRecord.SendPublicPaymentMetadata.Quantity != typed.Tip.TipAmount.Quarks {
-			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-		}
-	default:
-		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-	}
-
-	allow, err := s.rpcAuthz.CanSendMessage(ctx, req.ChatId, userID)
+	allow, err := s.rpcAuthz.CanSendMessage(ctx, req.ChatId, userID, req.Content[0], req.PaymentIntent)
 	if err != nil {
 		s.log.Warn("Failed to do rpc authz checks", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-	}
-
-	if reference != nil {
-		_, err := s.messages.GetMessage(ctx, req.ChatId, reference)
-		if errors.Is(err, ErrMessageNotFound) {
-			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
-		} else if err != nil {
-			s.log.Warn("Failed to get message reference", zap.Error(err))
-			return nil, status.Error(codes.Internal, "failed to get message reference")
-		}
 	}
 
 	msg := &messagingpb.Message{

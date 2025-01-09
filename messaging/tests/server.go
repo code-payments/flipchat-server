@@ -324,43 +324,6 @@ func testServerHappy(
 		case <-time.After(500 * time.Millisecond):
 		}
 	})
-
-	t.Run("Send message with invalid reference", func(t *testing.T) {
-		contentsWithReference := [][]*messagingpb.Content{
-			{
-				{
-					Type: &messagingpb.Content_Reaction{
-						Reaction: &messagingpb.ReactionContent{
-							OriginalMessageId: messaging.MustGenerateMessageID(),
-							Emoji:             "👎",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Reply{
-						Reply: &messagingpb.ReplyContent{
-							OriginalMessageId: messaging.MustGenerateMessageID(),
-							ReplyText:         "invald-reply",
-						},
-					},
-				},
-			},
-		}
-
-		for _, content := range contentsWithReference {
-			send := &messagingpb.SendMessageRequest{
-				ChatId:  chatID,
-				Content: content,
-			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
-
-			sent, err := client.SendMessage(ctx, send)
-			require.NoError(t, err)
-			require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
-		}
-	})
 }
 
 func testServerDuplicateStreams(

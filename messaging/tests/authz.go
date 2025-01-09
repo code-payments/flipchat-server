@@ -4,6 +4,7 @@ import (
 	"context"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 )
 
 type AlwaysAllowRpcAuthz struct {
@@ -25,7 +26,7 @@ func (a *AlwaysAllowRpcAuthz) CanGetMessages(ctx context.Context, chatID *common
 	return true, nil
 }
 
-func (a *AlwaysAllowRpcAuthz) CanSendMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error) {
+func (a *AlwaysAllowRpcAuthz) CanSendMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, content *messagingpb.Content, paymentIntent *commonpb.IntentId) (bool, error) {
 	return true, nil
 }
 
