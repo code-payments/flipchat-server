@@ -140,11 +140,9 @@ func (m *Memory) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userI
 		}
 
 		switch message.Content[0].Type.(type) {
-		case *messagingpb.Content_Reaction:
-			continue
+		case *messagingpb.Content_Text, *messagingpb.Content_Reply:
+			unread++
 		}
-
-		unread++
 	}
 
 	if maxValue >= 0 && int64(unread) > maxValue {
