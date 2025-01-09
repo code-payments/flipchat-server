@@ -33,6 +33,7 @@ const (
 	ContentTypeLocalizedAnnouncement = 2
 	ContentTypeReaction              = 5
 	ContentTypeReply                 = 6
+	ContentTypeTip                   = 7
 )
 
 func NewInPostgresMessages(client *db.PrismaClient) messaging.MessageStore {
@@ -406,6 +407,8 @@ func getContentType(content *messagingpb.Content) int {
 		return ContentTypeReaction
 	case *messagingpb.Content_Reply:
 		return ContentTypeReply
+	case *messagingpb.Content_Tip:
+		return ContentTypeTip
 	default:
 		return ContentTypeUnknown
 	}

@@ -16,10 +16,14 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
+	codedata "github.com/code-payments/code-server/pkg/code/data"
+	codekin "github.com/code-payments/code-server/pkg/kin"
+
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
@@ -33,6 +37,7 @@ type testAuthn struct {
 func RunServerTests(
 	t *testing.T,
 	accounts account.Store,
+	intents intent.Store,
 	messages messaging.MessageStore,
 	pointers messaging.PointerStore,
 	chats chat.Store,
@@ -42,6 +47,7 @@ func RunServerTests(
 	for _, tf := range []func(
 		t *testing.T,
 		accounts account.Store,
+		intents intent.Store,
 		messages messaging.MessageStore,
 		pointers messaging.PointerStore,
 		chats chat.Store,
@@ -49,7 +55,7 @@ func RunServerTests(
 		testServerHappy,
 		testServerDuplicateStreams,
 	} {
-		tf(t, accounts, messages, pointers, chats)
+		tf(t, accounts, intents, messages, pointers, chats)
 		teardown()
 	}
 }
@@ -57,6 +63,7 @@ func RunServerTests(
 func testServerHappy(
 	t *testing.T,
 	accountStore account.Store,
+	intents intent.Store,
 	messageDB messaging.MessageStore,
 	pointerDB messaging.PointerStore,
 	chatsDB chat.Store,
@@ -67,13 +74,17 @@ func testServerHappy(
 		return id.Value
 	})
 
+	codeData := codedata.NewTestDataProvider()
+
 	serv := messaging.NewServer(
 		log,
 		authz,
 		NewAlwaysAllowRpcAuthz(),
 		accountStore,
+		intents,
 		messageDB,
 		pointerDB,
+		codeData,
 		bus,
 	)
 
@@ -211,6 +222,41 @@ func testServerHappy(
 			notification := <-eventCh
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 		}
+
+		for i := range 10 {
+			tipAmount := codekin.ToQuarks(uint64(i + 1))
+			tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+				ChatId:    chatID,
+				MessageId: expected[i].MessageId,
+				TipperId:  userID,
+			}
+			tipIntentID := testutil.CreatePayment(t, codeData, tipAmount, tipPaymentMetadata)
+
+			send := &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Tip{
+							Tip: &messagingpb.TipContent{
+								OriginalMessageId: expected[i].MessageId,
+								TipAmount:         &commonpb.PaymentAmount{Quarks: tipAmount},
+							},
+						},
+					},
+				},
+				PaymentIntent: tipIntentID,
+			}
+			require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+
+			expected = append(expected, sent.Message)
+
+			notification := <-eventCh
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+		}
 	})
 
 	t.Run("GetMessage", func(t *testing.T) {
@@ -320,6 +366,7 @@ func testServerHappy(
 func testServerDuplicateStreams(
 	t *testing.T,
 	accountStore account.Store,
+	intents intent.Store,
 	messageDB messaging.MessageStore,
 	pointerDB messaging.PointerStore,
 	chatsDB chat.Store,
@@ -329,14 +376,17 @@ func testServerDuplicateStreams(
 	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
 		return id.Value
 	})
+	codeData := codedata.NewTestDataProvider()
 
 	serv := messaging.NewServer(
 		log,
 		authz,
 		NewAlwaysAllowRpcAuthz(),
 		accountStore,
+		intents,
 		messageDB,
 		pointerDB,
+		codeData,
 		bus,
 	)
 
