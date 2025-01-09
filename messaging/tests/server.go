@@ -17,6 +17,7 @@ import (
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
+	codekin "github.com/code-payments/code-server/pkg/kin"
 
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
@@ -209,6 +210,41 @@ func testServerHappy(
 						},
 					},
 				},
+			}
+			require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+
+			expected = append(expected, sent.Message)
+
+			notification := <-eventCh
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+		}
+
+		for i := range 10 {
+			tipAmount := codekin.ToQuarks(uint64(i + 1))
+			tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+				ChatId:    chatID,
+				MessageId: expected[i].MessageId,
+				TipperId:  userID,
+			}
+			tipIntentID := testutil.CreatePayment(t, codeData, tipAmount, tipPaymentMetadata)
+
+			send := &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Tip{
+							Tip: &messagingpb.TipContent{
+								OriginalMessageId: expected[i].MessageId,
+								TipAmount:         &commonpb.PaymentAmount{Quarks: tipAmount},
+							},
+						},
+					},
+				},
+				PaymentIntent: tipIntentID,
 			}
 			require.NoError(t, keyPair.Auth(send, &send.Auth))
 
