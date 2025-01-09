@@ -194,7 +194,10 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 				var includeUnreadCountUpdate bool
 				var readPtr *messagingpb.MessageId
 				if update.LastMessage != nil {
-					includeUnreadCountUpdate = true
+					switch update.LastMessage.Content[0].Type.(type) {
+					case *messagingpb.Content_Text, *messagingpb.Content_Reply:
+						includeUnreadCountUpdate = true
+					}
 				}
 				if update.Pointer != nil && update.Pointer.Pointer.Type == messagingpb.Pointer_READ && bytes.Equal(update.Pointer.Member.Value, userID.Value) {
 					includeUnreadCountUpdate = true
