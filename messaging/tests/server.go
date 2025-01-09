@@ -462,6 +462,71 @@ func testServerHappy(
 		}
 	})
 
+	t.Run("Send tip message with invalid intent", func(t *testing.T) {
+		invalidIntentCtors := []func() *commonpb.IntentId{
+			func() *commonpb.IntentId {
+				return nil
+			},
+			func() *commonpb.IntentId {
+				return &commonpb.IntentId{Value: make([]byte, 32)}
+			},
+			func() *commonpb.IntentId {
+				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+					ChatId:    chatID,
+					MessageId: expectedTextMessages[0].MessageId,
+					TipperId:  userID,
+				}
+				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1)+1, tipPaymentMetadata)
+			},
+			func() *commonpb.IntentId {
+				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+					ChatId:    model.MustGenerateChatID(),
+					MessageId: expectedTextMessages[0].MessageId,
+					TipperId:  userID,
+				}
+				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
+			},
+			func() *commonpb.IntentId {
+				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+					ChatId:    chatID,
+					MessageId: expectedTextMessages[1].MessageId,
+					TipperId:  userID,
+				}
+				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
+			},
+			func() *commonpb.IntentId {
+				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+					ChatId:    chatID,
+					MessageId: expectedTextMessages[0].MessageId,
+					TipperId:  model.MustGenerateUserID(),
+				}
+				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
+			},
+		}
+
+		for _, tc := range invalidIntentCtors {
+			send := &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Tip{
+							Tip: &messagingpb.TipContent{
+								OriginalMessageId: expectedTextMessages[0].MessageId,
+								TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+							},
+						},
+					},
+				},
+				PaymentIntent: tc(),
+			}
+			require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
+		}
+	})
+
 	t.Run("GetMessage", func(t *testing.T) {
 		get := &messagingpb.GetMessageRequest{
 			ChatId:    chatID,
