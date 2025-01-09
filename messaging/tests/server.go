@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
@@ -21,6 +22,7 @@ import (
 
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
+	auth_rpc "github.com/code-payments/flipchat-server/auth/rpc"
 	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/intent"
@@ -79,7 +81,7 @@ func testServerHappy(
 	serv := messaging.NewServer(
 		log,
 		authz,
-		NewAlwaysAllowRpcAuthz(),
+		auth_rpc.NewMessagingRpcAuthorizer(chatsDB, messageDB, codeData),
 		accountStore,
 		intents,
 		messageDB,
@@ -101,6 +103,15 @@ func testServerHappy(
 	userID := model.MustGenerateUserID()
 	keyPair := model.MustGenerateKeyPair()
 	_, _ = accountStore.Bind(ctx, userID, keyPair.Proto())
+	_, err := chatsDB.CreateChat(ctx, &chatpb.Metadata{
+		ChatId: chatID,
+		Type:   chatpb.Metadata_GROUP,
+	})
+	require.NoError(t, err)
+	require.NoError(t, chatsDB.AddMember(ctx, chatID, chat.Member{
+		UserID:            userID,
+		HasSendPermission: true,
+	}))
 
 	streamParams := &messagingpb.StreamMessagesRequest_Params{ChatId: chatID}
 	require.NoError(t, keyPair.Auth(streamParams, &streamParams.Auth))
@@ -169,33 +180,31 @@ func testServerHappy(
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 		}
 
-		/*
-			for i := range 10 {
-				send := &messagingpb.SendMessageRequest{
-					ChatId: chatID,
-					Content: []*messagingpb.Content{
-						{
-							Type: &messagingpb.Content_Reaction{
-								Reaction: &messagingpb.ReactionContent{
-									OriginalMessageId: expected[i].MessageId,
-									Emoji:             "👍",
-								},
+		for i := range 10 {
+			send := &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Reaction{
+							Reaction: &messagingpb.ReactionContent{
+								OriginalMessageId: expected[i].MessageId,
+								Emoji:             "👍",
 							},
 						},
 					},
-				}
-				require.NoError(t, keyPair.Auth(send, &send.Auth))
-
-				sent, err := client.SendMessage(ctx, send)
-				require.NoError(t, err)
-				require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
-
-				expected = append(expected, sent.Message)
-
-				notification := <-eventCh
-				require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+				},
 			}
-		*/
+			require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+
+			expected = append(expected, sent.Message)
+
+			notification := <-eventCh
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+		}
 
 		for i := range 10 {
 			send := &messagingpb.SendMessageRequest{
@@ -256,6 +265,75 @@ func testServerHappy(
 
 			notification := <-eventCh
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+		}
+	})
+
+	for i := range 10 {
+		send := &messagingpb.SendMessageRequest{
+			ChatId: chatID,
+			Content: []*messagingpb.Content{
+				{
+					Type: &messagingpb.Content_Deleted{
+						Deleted: &messagingpb.DeleteMessageContent{
+							OriginalMessageId: expected[i].MessageId,
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+		sent, err := client.SendMessage(ctx, send)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+
+		expected = append(expected, sent.Message)
+
+		notification := <-eventCh
+		require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+	}
+
+	t.Run("Send message with invalid reference", func(t *testing.T) {
+		contentsWithReference := [][]*messagingpb.Content{
+			{
+				{
+					Type: &messagingpb.Content_Reaction{
+						Reaction: &messagingpb.ReactionContent{
+							OriginalMessageId: messaging.MustGenerateMessageID(),
+							Emoji:             "👎",
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Reply{
+						Reply: &messagingpb.ReplyContent{
+							OriginalMessageId: messaging.MustGenerateMessageID(),
+							ReplyText:         "invald-reply",
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Deleted{
+						Deleted: &messagingpb.DeleteMessageContent{
+							OriginalMessageId: messaging.MustGenerateMessageID(),
+						},
+					},
+				},
+			},
+		}
+		for _, content := range contentsWithReference {
+			send := &messagingpb.SendMessageRequest{
+				ChatId:  chatID,
+				Content: content,
+			}
+			require.NoError(t, keyPair.Auth(send, &send.Auth))
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
 		}
 	})
 
@@ -344,7 +422,7 @@ func testServerDuplicateStreams(
 	serv := messaging.NewServer(
 		log,
 		authz,
-		NewAlwaysAllowRpcAuthz(),
+		auth_rpc.NewMessagingRpcAuthorizer(chatsDB, messageDB, codeData),
 		accountStore,
 		intents,
 		messageDB,
@@ -366,6 +444,15 @@ func testServerDuplicateStreams(
 	userID := model.MustGenerateUserID()
 	keyPair := model.MustGenerateKeyPair()
 	_, _ = accountStore.Bind(ctx, userID, keyPair.Proto())
+	_, err := chatsDB.CreateChat(ctx, &chatpb.Metadata{
+		ChatId: chatID,
+		Type:   chatpb.Metadata_GROUP,
+	})
+	require.NoError(t, err)
+	require.NoError(t, chatsDB.AddMember(ctx, chatID, chat.Member{
+		UserID:            userID,
+		HasSendPermission: true,
+	}))
 
 	streamParams := &messagingpb.StreamMessagesRequest_Params{ChatId: chatID}
 	require.NoError(t, keyPair.Auth(streamParams, &streamParams.Auth))

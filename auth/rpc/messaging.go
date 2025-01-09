@@ -14,7 +14,7 @@ import (
 	"github.com/code-payments/flipchat-server/messaging"
 )
 
-// todo: this needs tests all around
+// todo: this needs more extensive testing
 type MessagingAuthorizer struct {
 	chats    chat.Store
 	messages messaging.MessageStore
@@ -130,7 +130,14 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 			return false, nil
 		}
 
-		if !bytes.Equal(chatMd.Owner.Value, userID.Value) && !bytes.Equal(referenceMessage.SenderId.Value, userID.Value) {
+		var hasDeletePermission bool
+		if chatMd.Owner != nil && bytes.Equal(chatMd.Owner.Value, userID.Value) {
+			hasDeletePermission = true
+		}
+		if referenceMessage.SenderId != nil && bytes.Equal(referenceMessage.SenderId.Value, userID.Value) {
+			hasDeletePermission = true
+		}
+		if !hasDeletePermission {
 			return false, nil
 		}
 	default:
