@@ -32,9 +32,6 @@ import (
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
-type testAuthn struct {
-}
-
 // todo: needs authz tests
 func RunServerTests(
 	t *testing.T,
@@ -156,6 +153,11 @@ func testServerHappy(
 	time.Sleep(500 * time.Millisecond)
 
 	var expected []*messagingpb.Message
+	var expectedTextMessages []*messagingpb.Message
+	var expectedReplyMessages []*messagingpb.Message
+	var expectedReactionMessages []*messagingpb.Message
+	var expectedTipMessages []*messagingpb.Message
+	var expectedDeletedMessages []*messagingpb.Message
 	t.Run("Send Messages", func(t *testing.T) {
 		for i := range 10 {
 			send := &messagingpb.SendMessageRequest{
@@ -175,32 +177,7 @@ func testServerHappy(
 			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
 
 			expected = append(expected, sent.Message)
-
-			notification := <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
-		}
-
-		for i := range 10 {
-			send := &messagingpb.SendMessageRequest{
-				ChatId: chatID,
-				Content: []*messagingpb.Content{
-					{
-						Type: &messagingpb.Content_Reaction{
-							Reaction: &messagingpb.ReactionContent{
-								OriginalMessageId: expected[i].MessageId,
-								Emoji:             "👍",
-							},
-						},
-					},
-				},
-			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
-
-			sent, err := client.SendMessage(ctx, send)
-			require.NoError(t, err)
-			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
-
-			expected = append(expected, sent.Message)
+			expectedTextMessages = append(expectedTextMessages, sent.Message)
 
 			notification := <-eventCh
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
@@ -227,16 +204,44 @@ func testServerHappy(
 			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
 
 			expected = append(expected, sent.Message)
+			expectedReplyMessages = append(expectedReplyMessages, sent.Message)
 
 			notification := <-eventCh
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 		}
 
-		for i := range 10 {
+		for _, reference := range append(expectedTextMessages, expectedReplyMessages...) {
+			send := &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Reaction{
+							Reaction: &messagingpb.ReactionContent{
+								OriginalMessageId: reference.MessageId,
+								Emoji:             "👍",
+							},
+						},
+					},
+				},
+			}
+			require.NoError(t, keyPair.Auth(send, &send.Auth))
+
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+
+			expected = append(expected, sent.Message)
+			expectedReactionMessages = append(expectedReactionMessages, sent.Message)
+
+			notification := <-eventCh
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+		}
+
+		for i, reference := range append(expectedTextMessages, expectedReplyMessages...) {
 			tipAmount := codekin.ToQuarks(uint64(i + 1))
 			tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
 				ChatId:    chatID,
-				MessageId: expected[i].MessageId,
+				MessageId: reference.MessageId,
 				TipperId:  userID,
 			}
 			tipIntentID := testutil.CreatePayment(t, codeData, tipAmount, tipPaymentMetadata)
@@ -262,20 +267,21 @@ func testServerHappy(
 			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
 
 			expected = append(expected, sent.Message)
+			expectedTipMessages = append(expectedTipMessages, sent.Message)
 
 			notification := <-eventCh
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 		}
 	})
 
-	for i := range 10 {
+	for _, reference := range append(expectedTextMessages, append(expectedReplyMessages, expectedReactionMessages...)...) {
 		send := &messagingpb.SendMessageRequest{
 			ChatId: chatID,
 			Content: []*messagingpb.Content{
 				{
 					Type: &messagingpb.Content_Deleted{
 						Deleted: &messagingpb.DeleteMessageContent{
-							OriginalMessageId: expected[i].MessageId,
+							OriginalMessageId: reference.MessageId,
 						},
 					},
 				},
@@ -288,6 +294,7 @@ func testServerHappy(
 		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
 
 		expected = append(expected, sent.Message)
+		expectedDeletedMessages = append(expectedDeletedMessages, sent.Message)
 
 		notification := <-eventCh
 		require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
@@ -307,6 +314,36 @@ func testServerHappy(
 			},
 			{
 				{
+					Type: &messagingpb.Content_Reaction{
+						Reaction: &messagingpb.ReactionContent{
+							OriginalMessageId: expectedReactionMessages[0].MessageId,
+							Emoji:             "👎",
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Reaction{
+						Reaction: &messagingpb.ReactionContent{
+							OriginalMessageId: expectedTipMessages[0].MessageId,
+							Emoji:             "👎",
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Reaction{
+						Reaction: &messagingpb.ReactionContent{
+							OriginalMessageId: expectedDeletedMessages[0].MessageId,
+							Emoji:             "👎",
+						},
+					},
+				},
+			},
+			{
+				{
 					Type: &messagingpb.Content_Reply{
 						Reply: &messagingpb.ReplyContent{
 							OriginalMessageId: messaging.MustGenerateMessageID(),
@@ -317,9 +354,97 @@ func testServerHappy(
 			},
 			{
 				{
+					Type: &messagingpb.Content_Reply{
+						Reply: &messagingpb.ReplyContent{
+							OriginalMessageId: expectedReactionMessages[0].MessageId,
+							ReplyText:         "invald-reply",
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Reply{
+						Reply: &messagingpb.ReplyContent{
+							OriginalMessageId: expectedTipMessages[0].MessageId,
+							ReplyText:         "invald-reply",
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Reply{
+						Reply: &messagingpb.ReplyContent{
+							OriginalMessageId: expectedDeletedMessages[0].MessageId,
+							ReplyText:         "invald-reply",
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Tip{
+						Tip: &messagingpb.TipContent{
+							OriginalMessageId: messaging.MustGenerateMessageID(),
+							TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Tip{
+						Tip: &messagingpb.TipContent{
+							OriginalMessageId: expectedReactionMessages[0].MessageId,
+							TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Tip{
+						Tip: &messagingpb.TipContent{
+							OriginalMessageId: expectedTipMessages[0].MessageId,
+							TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Tip{
+						Tip: &messagingpb.TipContent{
+							OriginalMessageId: expectedDeletedMessages[0].MessageId,
+							TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+						},
+					},
+				},
+			},
+			{
+				{
 					Type: &messagingpb.Content_Deleted{
 						Deleted: &messagingpb.DeleteMessageContent{
 							OriginalMessageId: messaging.MustGenerateMessageID(),
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Deleted{
+						Deleted: &messagingpb.DeleteMessageContent{
+							OriginalMessageId: expectedTipMessages[0].MessageId,
+						},
+					},
+				},
+			},
+			{
+				{
+					Type: &messagingpb.Content_Deleted{
+						Deleted: &messagingpb.DeleteMessageContent{
+							OriginalMessageId: expectedDeletedMessages[0].MessageId,
 						},
 					},
 				},
