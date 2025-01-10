@@ -489,7 +489,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 
 	var memberProtos []*chatpb.Member
 	for _, m := range users {
-		member := Member{UserID: m, AddedBy: userID}
+		member := Member{UserID: m, AddedBy: userID, HasSendPermission: true}
 		if req.GetGroupChat() != nil && bytes.Equal(m.Value, userID.Value) {
 			member.HasModPermission = true
 		}
@@ -602,6 +602,14 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 
 	log = log.With(zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)))
 
+	chatMetadata, err := s.getMetadata(ctx, chatID, nil)
+	if err != nil {
+		log.Warn("Failed to get chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat")
+	}
+	isOwner := chatMetadata.Owner != nil && bytes.Equal(chatMetadata.Owner.Value, userID.Value)
+	isSpectator := req.WithoutSendPermission
+
 	if hasPaymentIntent {
 		// Verify the provided payment is for this user joining the specified
 		// chat.
@@ -611,25 +619,18 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		if !bytes.Equal(paymentMetadata.ChatId.Value, chatID.Value) {
 			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 		}
-	} else {
-		chatMetadata, err := s.getMetadata(ctx, chatID, nil)
-		if err != nil {
-			log.Warn("Failed to get chat", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to get chat")
-		}
-
-		isOwner := chatMetadata.Owner != nil && bytes.Equal(chatMetadata.Owner.Value, userID.Value)
-		isSpectator := req.WithoutSendPermission
-
-		if !isOwner && !isSpectator {
-			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-		}
+	} else if !isOwner && !isSpectator {
+		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	}
 
 	// TODO: Return if no-op
 
 	newMember := Member{
 		UserID: userID,
+	}
+	if isOwner {
+		newMember.HasSendPermission = true
+		newMember.HasModPermission = true
 	}
 
 	// todo: put this logic in a DB transaction alongside member add

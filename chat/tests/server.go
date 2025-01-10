@@ -194,8 +194,9 @@ func testServer(
 				Identity: &chatpb.MemberIdentity{
 					DisplayName: fmt.Sprintf("User-%d", i),
 				},
-				Pointers: pointers,
-				IsSelf:   false,
+				Pointers:          pointers,
+				IsSelf:            false,
+				HasSendPermission: true,
 			})
 		}
 
