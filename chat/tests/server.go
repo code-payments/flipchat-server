@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sort"
 	"testing"
 	"time"
 
@@ -106,6 +107,25 @@ func testServer(
 
 	client := chatpb.NewChatClient(cc)
 
+	verifyExpectedProtoMembers := func(t *testing.T, expected, actual []*chatpb.Member) {
+		expectedClone := protoutil.SliceClone(expected)
+		actualClone := protoutil.SliceClone(actual)
+
+		sort.Slice(expectedClone, func(i, j int) bool {
+			return bytes.Compare(expectedClone[i].UserId.Value, expectedClone[j].UserId.Value) < 0
+		})
+		sort.Slice(actualClone, func(i, j int) bool {
+			return bytes.Compare(actualClone[i].UserId.Value, actualClone[j].UserId.Value) < 0
+		})
+
+		if len(expected) != len(actual) {
+			fmt.Printf("Expected: %s\nActual: %s\n", expectedClone, actualClone)
+		}
+		require.Len(t, actualClone, len(expectedClone))
+
+		require.NoError(t, protoutil.SliceEqualError(expectedClone, actualClone))
+	}
+
 	t.Run("Empty", func(t *testing.T) {
 		chatID := model.MustGenerateChatID()
 
@@ -200,10 +220,6 @@ func testServer(
 			})
 		}
 
-		slices.SortFunc(expectedMembers, func(a, b *chatpb.Member) int {
-			return bytes.Compare(a.UserId.Value, b.UserId.Value)
-		})
-
 		getByID := &chatpb.GetChatRequest{
 			Identifier: &chatpb.GetChatRequest_ChatId{
 				ChatId: created.Chat.GetChatId(),
@@ -215,7 +231,7 @@ func testServer(
 		require.NoError(t, err)
 		require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 		require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
-		require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
+		verifyExpectedProtoMembers(t, expectedMembers, get.Members)
 
 		getByRoom := &chatpb.GetChatRequest{
 			Identifier: &chatpb.GetChatRequest_RoomNumber{
@@ -227,7 +243,7 @@ func testServer(
 		require.NoError(t, err)
 		require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 		require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
-		require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
+		verifyExpectedProtoMembers(t, expectedMembers, get.Members)
 
 		getAll := &chatpb.GetChatsRequest{}
 		require.NoError(t, keyPair.Auth(getAll, &getAll.Auth))
@@ -243,28 +259,69 @@ func testServer(
 		getMemberDeltaResp, err := client.GetMemberUpdates(context.Background(), getMemberDelta)
 		require.NoError(t, err)
 		require.Equal(t, chatpb.GetMemberUpdatesResponse_OK, getMemberDeltaResp.Result)
-		require.NoError(t, protoutil.SliceEqualError(expectedMembers, getMemberDeltaResp.Updates[0].GetFullRefresh().Members))
+		verifyExpectedProtoMembers(t, expectedMembers, getMemberDeltaResp.Updates[0].GetFullRefresh().Members)
 		require.NotNil(t, getMemberDeltaResp.Updates[0].PagingToken)
+
+		t.Run("Leave and join as host", func(t *testing.T) {
+			// Leave the room
+			leave := &chatpb.LeaveChatRequest{
+				ChatId: created.Chat.GetChatId(),
+			}
+			require.NoError(t, keyPair.Auth(leave, &leave.Auth))
+
+			leaveResp, err := client.LeaveChat(context.Background(), leave)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
+
+			var hostMember *chatpb.Member
+			var newExpectedMembers []*chatpb.Member
+			for _, member := range expectedMembers {
+				if member.HasModeratorPermission {
+					hostMember = member
+				} else {
+					newExpectedMembers = append(newExpectedMembers, member)
+				}
+			}
+
+			get, err = client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
+			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+
+			// Join the room without payment but with full permissions
+			join := &chatpb.JoinChatRequest{
+				Identifier: &chatpb.JoinChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, keyPair.Auth(join, &join.Auth))
+
+			newExpectedMembers = append(newExpectedMembers, hostMember)
+
+			joinResp, err := client.JoinChat(context.Background(), join)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
+			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
+		})
 
 		t.Run("Join and leave", func(t *testing.T) {
 			otherUser := model.MustGenerateUserID()
 			otherKeyPair := model.MustGenerateKeyPair()
 			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
 
-			newExpectedMembers := protoutil.SliceClone(expectedMembers)
-			for _, m := range newExpectedMembers {
-				m.IsSelf = false
-			}
-			newExpectedMembers = append(newExpectedMembers, &chatpb.Member{
+			newExpectedMember := &chatpb.Member{
 				UserId:            otherUser,
 				Identity:          &chatpb.MemberIdentity{},
 				IsSelf:            true,
 				HasSendPermission: true,
-			})
-
-			slices.SortFunc(newExpectedMembers, func(a, b *chatpb.Member) int {
-				return bytes.Compare(a.UserId.Value, b.UserId.Value)
-			})
+			}
+			newExpectedMembers := protoutil.SliceClone(expectedMembers)
+			for _, m := range newExpectedMembers {
+				m.IsSelf = false
+			}
+			newExpectedMembers = append(newExpectedMembers, newExpectedMember)
 
 			joinPaymentMetadata := &chatpb.JoinChatPaymentMetadata{
 				UserId: otherUser,
@@ -284,7 +341,7 @@ func testServer(
 			require.NoError(t, err)
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
-			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
+			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
 
 			leave := &chatpb.LeaveChatRequest{
 				ChatId: created.Chat.GetChatId(),
@@ -295,11 +352,21 @@ func testServer(
 			require.NoError(t, err)
 			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
 
+			newExpectedMembers = newExpectedMembers[:len(newExpectedMembers)-1]
+
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, otherKeyPair.Auth(getByID, &getByID.Auth))
 			get, err = client.GetChat(context.Background(), getByID)
 			require.NoError(t, err)
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
-			require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
+			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+
+			newExpectedMembers = append(newExpectedMembers, newExpectedMember)
 
 			joinPaymentMetadata = &chatpb.JoinChatPaymentMetadata{
 				UserId: otherUser,
@@ -315,7 +382,7 @@ func testServer(
 			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
-			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
+			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
 		})
 
 		t.Run("Join without send permission and leave", func(t *testing.T) {
@@ -334,10 +401,6 @@ func testServer(
 				HasSendPermission: false,
 			})
 
-			slices.SortFunc(newExpectedMembers, func(a, b *chatpb.Member) int {
-				return bytes.Compare(a.UserId.Value, b.UserId.Value)
-			})
-
 			// Join without send permission
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
@@ -351,7 +414,7 @@ func testServer(
 			require.NoError(t, err)
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
-			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
+			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
 
 			// Upgrade to a non-spectator user with send message permissions
 
@@ -380,7 +443,7 @@ func testServer(
 			require.NoError(t, err)
 			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
-			require.NoError(t, protoutil.SliceEqualError(newExpectedMembers, joinResp.Members))
+			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
 
 			// Leave the room
 			leave := &chatpb.LeaveChatRequest{
@@ -392,11 +455,19 @@ func testServer(
 			require.NoError(t, err)
 			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
 
+			newExpectedMembers = newExpectedMembers[:len(newExpectedMembers)-1]
+
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, otherKeyPair.Auth(getByID, &getByID.Auth))
 			get, err = client.GetChat(context.Background(), getByID)
 			require.NoError(t, err)
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
-			require.NoError(t, protoutil.SliceEqualError(expectedMembers, get.Members))
+			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
 		})
 
 		t.Run("Remove user", func(t *testing.T) {
@@ -435,12 +506,6 @@ func testServer(
 			require.NoError(t, err)
 			require.Equal(t, chatpb.SetCoverChargeResponse_OK, setCoverChargeResp.Result)
 
-			getByID := &chatpb.GetChatRequest{
-				Identifier: &chatpb.GetChatRequest_ChatId{
-					ChatId: created.Chat.GetChatId(),
-				},
-			}
-			require.NoError(t, keyPair.Auth(getByID, &getByID.Auth))
 			get, err := client.GetChat(context.Background(), getByID)
 			require.NoError(t, err)
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
@@ -458,12 +523,6 @@ func testServer(
 			require.NoError(t, err)
 			require.Equal(t, chatpb.SetDisplayNameResponse_OK, setDisplayNameResp.Result)
 
-			getByID := &chatpb.GetChatRequest{
-				Identifier: &chatpb.GetChatRequest_ChatId{
-					ChatId: created.Chat.GetChatId(),
-				},
-			}
-			require.NoError(t, keyPair.Auth(getByID, &getByID.Auth))
 			get, err := client.GetChat(context.Background(), getByID)
 			require.NoError(t, err)
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
@@ -481,12 +540,6 @@ func testServer(
 			require.NoError(t, err)
 			require.Equal(t, chatpb.SetDisplayNameResponse_OK, setDisplayNameResp.Result)
 
-			getByID := &chatpb.GetChatRequest{
-				Identifier: &chatpb.GetChatRequest_ChatId{
-					ChatId: created.Chat.GetChatId(),
-				},
-			}
-			require.NoError(t, keyPair.Auth(getByID, &getByID.Auth))
 			get, err := client.GetChat(context.Background(), getByID)
 			require.NoError(t, err)
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
