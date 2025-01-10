@@ -157,10 +157,10 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		}
 	}
 
-	ss := event.NewProtoEventStream[*event.ChatEvent, *messagingpb.StreamMessagesResponse_MessageBatch](
+	ss := event.NewProtoEventStream[*event.ChatEvent, *messagingpb.MessageBatch](
 		userKey,
 		streamBufferSize,
-		func(e *event.ChatEvent) (*messagingpb.StreamMessagesResponse_MessageBatch, bool) {
+		func(e *event.ChatEvent) (*messagingpb.MessageBatch, bool) {
 			var messages []*messagingpb.Message
 
 			// Only one of these should be not nil at a time
@@ -178,7 +178,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 				log.Warn("Message batch size exceeds proto limit")
 				return nil, false
 			}
-			return &messagingpb.StreamMessagesResponse_MessageBatch{
+			return &messagingpb.MessageBatch{
 				Messages: messages,
 			}, true
 		},
@@ -311,10 +311,19 @@ func (s *Server) GetMessages(ctx context.Context, req *messagingpb.GetMessagesRe
 		return &messagingpb.GetMessagesResponse{Result: messagingpb.GetMessagesResponse_DENIED}, nil
 	}
 
-	messages, err := s.messages.GetMessages(ctx, req.ChatId, query.FromProtoOptions(req.QueryOptions)...)
-	if err != nil {
-		s.log.Error("Failed to get all messages", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to get messages")
+	var messages []*messagingpb.Message
+	if req.GetMessageIds() != nil {
+		messages, err = s.messages.GetBatchMessages(ctx, req.ChatId, req.GetMessageIds().MessageIds...)
+		if err != nil {
+			s.log.Error("Failed to get messages by message id batch", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to get messages")
+		}
+	} else {
+		messages, err = s.messages.GetPagedMessages(ctx, req.ChatId, query.FromProtoOptions(req.GetOptions())...)
+		if err != nil {
+			s.log.Error("Failed to get messages by query options", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to get messages")
+		}
 	}
 
 	return &messagingpb.GetMessagesResponse{
@@ -472,7 +481,7 @@ func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, use
 	if resumeFrom != nil {
 		queryOptions = append(queryOptions, query.WithToken(&commonpb.PagingToken{Value: resumeFrom.Value}))
 	}
-	messages, err := s.messages.GetMessages(ctx, chatID, queryOptions...)
+	messages, err := s.messages.GetPagedMessages(ctx, chatID, queryOptions...)
 	if err != nil {
 		log.Warn("Failed to get messages for flush", zap.Error(err))
 		return

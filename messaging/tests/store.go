@@ -47,7 +47,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		require.Equal(t, messaging.ErrMessageNotFound, err)
 		require.Nil(t, message)
 
-		messages, err := s.GetMessages(ctx, chatID)
+		messages, err := s.GetPagedMessages(ctx, chatID)
 		require.NoError(t, err)
 		require.Empty(t, messages)
 
@@ -118,12 +118,23 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		}
 	})
 
-	t.Run("GetMessages", func(t *testing.T) {
-		actual, err := s.GetMessages(ctx, chatID)
+	t.Run("GetBatchMessages", func(t *testing.T) {
+		actual, err := s.GetBatchMessages(ctx, chatID, messaging.MustGenerateMessageID())
+		require.NoError(t, err)
+		require.Empty(t, actual)
+
+		actual, err = s.GetBatchMessages(ctx, chatID, messages[0].MessageId, messages[1].MessageId, messaging.MustGenerateMessageID())
+		require.NoError(t, err)
+		require.Len(t, actual, 2)
+		require.NoError(t, protoutil.SliceEqualError([]*messagingpb.Message{messages[0], messages[1]}, actual))
+	})
+
+	t.Run("GetPagedMessages", func(t *testing.T) {
+		actual, err := s.GetPagedMessages(ctx, chatID)
 		require.NoError(t, err)
 		require.NoError(t, protoutil.SliceEqualError(messages, actual))
 
-		actual, err = s.GetMessages(
+		actual, err = s.GetPagedMessages(
 			ctx,
 			chatID,
 			query.WithOrder(commonpb.QueryOptions_DESC),
@@ -131,7 +142,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		require.NoError(t, err)
 		require.NoError(t, protoutil.SliceEqualError(reversedMessages, actual))
 
-		actual, err = s.GetMessages(
+		actual, err = s.GetPagedMessages(
 			ctx,
 			chatID,
 			query.WithLimit(5),
@@ -139,7 +150,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		require.NoError(t, err)
 		require.NoError(t, protoutil.SliceEqualError(messages[:5], actual))
 
-		actual, err = s.GetMessages(
+		actual, err = s.GetPagedMessages(
 			ctx,
 			chatID,
 			query.WithToken(&commonpb.PagingToken{Value: messages[12].MessageId.Value}),
@@ -147,7 +158,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		require.NoError(t, err)
 		require.NoError(t, protoutil.SliceEqualError(messages[13:], actual))
 
-		actual, err = s.GetMessages(
+		actual, err = s.GetPagedMessages(
 			ctx,
 			chatID,
 			query.WithToken(&commonpb.PagingToken{Value: messages[3].MessageId.Value}),
@@ -156,7 +167,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 		require.NoError(t, err)
 		require.NoError(t, protoutil.SliceEqualError(reversedMessages[27:], actual))
 
-		actual, err = s.GetMessages(
+		actual, err = s.GetPagedMessages(
 			ctx,
 			chatID,
 			query.WithToken(&commonpb.PagingToken{Value: messages[15].MessageId.Value}),

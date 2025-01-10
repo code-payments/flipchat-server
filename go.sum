@@ -41,10 +41,8 @@ github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84
 github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84/go.mod h1:4ZB8HDgE0YEGkjb00v7qfg9lWIQWTmhbbOYkuEOzaa8=
 github.com/code-payments/code-server v1.10.20-0.20241113221941-16bb545e1277 h1:iJY0t+RFR6FSAjijW2kAGNZpx0Vp3b89xuzvynVRPNQ=
 github.com/code-payments/code-server v1.10.20-0.20241113221941-16bb545e1277/go.mod h1:IJicFt33QIZiAIUvcD8LGIx1ocX5EIu++F+dr8YOIxo=
-github.com/code-payments/flipchat-protobuf-api v0.0.0-20250108190507-aacd6a59be5b h1:b859UbzGAbdC61ed97YvPY1z+GV5Cd12L2fMk/EaFnA=
-github.com/code-payments/flipchat-protobuf-api v0.0.0-20250108190507-aacd6a59be5b/go.mod h1:UvfwYdQalPa0FCfJVSuhMg2N+RXtmR6dUqbArayKP8U=
-github.com/code-payments/flipchat-protobuf-api v0.0.0-20250109171019-e076e3b5bede h1:WZ7IA1TE652+pFVJSwc32+zg+W7nX0UKRFEEbBaXS9w=
-github.com/code-payments/flipchat-protobuf-api v0.0.0-20250109171019-e076e3b5bede/go.mod h1:UvfwYdQalPa0FCfJVSuhMg2N+RXtmR6dUqbArayKP8U=
+github.com/code-payments/flipchat-protobuf-api v0.0.0-20250110182227-acbb8a39fe15 h1:StHZG90WW12q+R8Job0CpwdJ1FtkGIV/GBvgPWWAbrc=
+github.com/code-payments/flipchat-protobuf-api v0.0.0-20250110182227-acbb8a39fe15/go.mod h1:UvfwYdQalPa0FCfJVSuhMg2N+RXtmR6dUqbArayKP8U=
 github.com/containerd/continuity v0.4.3 h1:6HVkalIp+2u1ZLH1J/pYX2oBVXlJZvh1X1A7bEZ9Su8=
 github.com/containerd/continuity v0.4.3/go.mod h1:F6PTNCKepoxEaXLQp3wDAjygEnImnZ/7o4JzpodfroQ=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=

@@ -122,7 +122,7 @@ func testServerHappy(
 		},
 	}))
 
-	eventCh := make(chan *messagingpb.StreamMessagesResponse_MessageBatch, 1024)
+	eventCh := make(chan *messagingpb.MessageBatch, 1024)
 	go func() {
 		defer close(eventCh)
 		for {
@@ -540,7 +540,24 @@ func testServerHappy(
 		require.NoError(t, protoutil.ProtoEqualError(expected[0], message.Message))
 	})
 
-	t.Run("GetMessages", func(t *testing.T) {
+	t.Run("GetMessages Batch", func(t *testing.T) {
+		get := &messagingpb.GetMessagesRequest{
+			ChatId: chatID,
+			Query: &messagingpb.GetMessagesRequest_MessageIds{
+				MessageIds: &messagingpb.MessageIdBatch{
+					MessageIds: []*messagingpb.MessageId{expected[0].MessageId, expected[1].MessageId, messaging.MustGenerateMessageID()},
+				},
+			},
+		}
+		require.NoError(t, keyPair.Auth(get, &get.Auth))
+
+		messages, err := client.GetMessages(ctx, get)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.GetMessagesResponse_OK, messages.Result)
+		require.NoError(t, protoutil.SliceEqualError([]*messagingpb.Message{expected[0], expected[1]}, messages.Messages))
+	})
+
+	t.Run("GetMessages Paging", func(t *testing.T) {
 		get := &messagingpb.GetMessagesRequest{
 			ChatId: chatID,
 		}

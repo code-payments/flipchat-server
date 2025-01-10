@@ -81,7 +81,34 @@ func (s *store) GetMessage(ctx context.Context, chatID *commonpb.ChatId, message
 	return fromModel(message)
 }
 
-func (s *store) GetMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
+func (s *store) GetBatchMessages(ctx context.Context, chatID *commonpb.ChatId, messageIDs ...*messagingpb.MessageId) ([]*messagingpb.Message, error) {
+	encodedChatID := pg.Encode(chatID.Value)
+	rawMessageIDs := make([][]byte, len(messageIDs))
+	for i, messageID := range messageIDs {
+		rawMessageIDs[i] = messageID.Value
+	}
+
+	messages, err := s.client.Message.FindMany(
+		db.Message.ChatID.Equals(encodedChatID),
+		db.Message.ID.In(rawMessageIDs),
+	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*messagingpb.Message, 0)
+	for _, message := range messages {
+		protoMessage, err := fromModel(&message)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, protoMessage)
+	}
+	return result, nil
+}
+
+func (s *store) GetPagedMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
 	encodedChatID := pg.Encode(chatID.Value)
 
 	appliedOptions := query.ApplyOptions(options...)

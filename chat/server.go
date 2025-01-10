@@ -1397,7 +1397,7 @@ func (s *Server) flushInitialState(ctx context.Context, userID *commonpb.UserId,
 		}
 		events[i] = e
 
-		messages, err := s.messages.GetMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
+		messages, err := s.messages.GetPagedMessages(ctx, e.ChatID, query.WithDescending(), query.WithLimit(1))
 		if err != nil {
 			log.Warn("Failed to get last message for chat (stream flush)", zap.Error(err))
 		} else if len(messages) > 0 {

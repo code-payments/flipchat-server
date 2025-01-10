@@ -59,7 +59,27 @@ func (m *Memory) GetMessage(ctx context.Context, chatID *commonpb.ChatId, messag
 	return proto.Clone(found).(*messagingpb.Message), nil
 }
 
-func (m *Memory) GetMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
+func (m *Memory) GetBatchMessages(ctx context.Context, chatID *commonpb.ChatId, messageIDs ...*messagingpb.MessageId) ([]*messagingpb.Message, error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	messages := m.messages[string(chatID.Value)]
+	if len(messages) == 0 {
+		return nil, nil
+	}
+
+	cloned := make([]*messagingpb.Message, 0)
+	for _, message := range messages {
+		for _, messageID := range messageIDs {
+			if bytes.Equal(message.MessageId.Value, messageID.Value) {
+				cloned = append(cloned, proto.Clone(message).(*messagingpb.Message))
+			}
+		}
+	}
+	return cloned, nil
+}
+
+func (m *Memory) GetPagedMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
 	appliedOptions := query.ApplyOptions(options...)
 
 	m.RLock()
