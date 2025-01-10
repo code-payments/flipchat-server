@@ -127,7 +127,7 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		zap.String("stream_id", streamID.String()),
 	)
 
-	allow, err := s.rpcAuthz.CanStreamMessages(ctx, params.ChatId, userID)
+	allow, _, err := s.rpcAuthz.CanStreamMessages(ctx, params.ChatId, userID)
 	if err != nil {
 		return status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {
@@ -278,7 +278,7 @@ func (s *Server) GetMessage(ctx context.Context, req *messagingpb.GetMessageRequ
 		return nil, err
 	}
 
-	allow, err := s.rpcAuthz.CanGetMessage(ctx, req.ChatId, userID)
+	allow, _, err := s.rpcAuthz.CanGetMessage(ctx, req.ChatId, userID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {
@@ -304,7 +304,7 @@ func (s *Server) GetMessages(ctx context.Context, req *messagingpb.GetMessagesRe
 		return nil, err
 	}
 
-	allow, err := s.rpcAuthz.CanGetMessages(ctx, req.ChatId, userID)
+	allow, _, err := s.rpcAuthz.CanGetMessages(ctx, req.ChatId, userID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {
@@ -328,11 +328,17 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		return nil, err
 	}
 
-	allow, err := s.rpcAuthz.CanSendMessage(ctx, req.ChatId, userID, req.Content[0], req.PaymentIntent)
+	log := s.log.With(
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+		zap.String("user_id", model.UserIDString(userID)),
+	)
+
+	allow, reason, err := s.rpcAuthz.CanSendMessage(ctx, req.ChatId, userID, req.Content[0], req.PaymentIntent)
 	if err != nil {
-		s.log.Warn("Failed to do rpc authz checks", zap.Error(err))
+		log.Warn("Failed to do rpc authz checks", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {
+		log.Info("Not allowed", zap.String("reason", reason))
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 	}
 
@@ -343,7 +349,7 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 
 	sent, err := s.Send(ctx, req.ChatId, msg)
 	if err != nil {
-		s.log.Warn("Failed to send message", zap.Error(err))
+		log.Warn("Failed to send message", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to send message")
 	}
 
@@ -353,7 +359,7 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		if err == intent.ErrAlreadyFulfilled {
 			return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 		} else if err != nil {
-			s.log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
+			log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
 		}
 	}
@@ -383,7 +389,7 @@ func (s *Server) AdvancePointer(ctx context.Context, req *messagingpb.AdvancePoi
 		return nil, err
 	}
 
-	allow, err := s.rpcAuthz.CanAdvancePointer(ctx, req.ChatId, userID)
+	allow, _, err := s.rpcAuthz.CanAdvancePointer(ctx, req.ChatId, userID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {
@@ -418,7 +424,7 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 		return nil, err
 	}
 
-	allow, err := s.rpcAuthz.CanNotifyIsTyping(ctx, req.ChatId, userID)
+	allow, _, err := s.rpcAuthz.CanNotifyIsTyping(ctx, req.ChatId, userID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
 	} else if !allow {

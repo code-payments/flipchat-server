@@ -16,7 +16,8 @@ import (
 )
 
 var (
-	ErrNoPaymentMetadata = errors.New("no payment metdata")
+	ErrNoPaymentMetadata      = errors.New("no payment metdata")
+	ErrInvalidPaymentMetadata = errors.New("invalid payment metadata")
 )
 
 func LoadPaymentMetadata(ctx context.Context, codeData codedata.Provider, intentID *commonpb.IntentId, dst proto.Message) (*codeintent.Record, error) {
@@ -34,12 +35,12 @@ func LoadPaymentMetadata(ctx context.Context, codeData codedata.Provider, intent
 	var extendedPaymentMetdata codetransactionpb.ExtendedPaymentMetadata
 	err = proto.Unmarshal(intentRecord.ExtendedMetadata, &extendedPaymentMetdata)
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidPaymentMetadata
 	}
 
 	err = anypb.UnmarshalTo(extendedPaymentMetdata.Value, dst, proto.UnmarshalOptions{})
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidPaymentMetadata
 	}
 	return intentRecord, nil
 }
