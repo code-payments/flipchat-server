@@ -90,6 +90,11 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		CoverCharge: coverCharge,
 
 		LastActivity: timestamppb.New(m.LastActivityAt),
+
+		// todo: persist this
+		OpenStatus: &chatpb.OpenStatus{
+			IsCurrentlyOpen: true,
+		},
 	}, nil
 }
 

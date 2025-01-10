@@ -42,10 +42,22 @@ func (a *MessagingAuthorizer) CanGetMessages(ctx context.Context, chatID *common
 }
 
 func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, content *messagingpb.Content, paymentIntent *commonpb.IntentId) (bool, string, error) {
+	chatMd, err := a.chats.GetChatMetadata(ctx, chatID)
+	if err == chat.ErrChatNotFound {
+		return false, "chat not found", nil
+	} else if err != nil {
+		return false, "", err
+	}
+
+	isOwner := chatMd.Owner != nil && bytes.Equal(chatMd.Owner.Value, userID.Value)
+
 	// todo: individual handlers for different content types
+	var canSendWhenClosed bool
 	switch typed := content.Type.(type) {
 	case *messagingpb.Content_Text:
 	case *messagingpb.Content_Reaction:
+		canSendWhenClosed = true
+
 		referenceMessage, err := a.messages.GetMessage(ctx, chatID, typed.Reaction.OriginalMessageId)
 		if err == messaging.ErrMessageNotFound {
 			return false, "reference not found", nil
@@ -72,6 +84,8 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 			return false, "invalid reference content type", nil
 		}
 	case *messagingpb.Content_Tip:
+		canSendWhenClosed = true
+
 		referenceMessage, err := a.messages.GetMessage(ctx, chatID, typed.Tip.OriginalMessageId)
 		if err == messaging.ErrMessageNotFound {
 			return false, "reference not found", nil
@@ -112,12 +126,7 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 			return false, "payment references a different amount", nil
 		}
 	case *messagingpb.Content_Deleted:
-		chatMd, err := a.chats.GetChatMetadata(ctx, chatID)
-		if err == chat.ErrChatNotFound {
-			return false, "chat not found", nil
-		} else if err != nil {
-			return false, "", err
-		}
+		canSendWhenClosed = true
 
 		referenceMessage, err := a.messages.GetMessage(ctx, chatID, typed.Deleted.OriginalMessageId)
 		if err == messaging.ErrMessageNotFound {
@@ -133,7 +142,7 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 		}
 
 		var hasDeletePermission bool
-		if chatMd.Owner != nil && bytes.Equal(chatMd.Owner.Value, userID.Value) {
+		if isOwner {
 			hasDeletePermission = true
 		}
 		if referenceMessage.SenderId != nil && bytes.Equal(referenceMessage.SenderId.Value, userID.Value) {
@@ -144,6 +153,10 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 		}
 	default:
 		return false, "unsupported content type", nil
+	}
+
+	if !canSendWhenClosed && !isOwner && chatMd.OpenStatus != nil && !chatMd.OpenStatus.IsCurrentlyOpen {
+		return false, "chat is closed", nil
 	}
 
 	member, err := a.chats.GetMember(ctx, chatID, userID)

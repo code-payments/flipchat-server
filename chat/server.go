@@ -459,6 +459,9 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		return nil, status.Errorf(codes.InvalidArgument, "unsupported type")
 	}
 
+	md.OpenStatus = &chatpb.OpenStatus{
+		IsCurrentlyOpen: true,
+	}
 	md.LastActivity = timestamppb.Now()
 
 	md, err = s.chats.CreateChat(ctx, md)
@@ -752,6 +755,104 @@ func (s *Server) LeaveChat(ctx context.Context, req *chatpb.LeaveChatRequest) (*
 	return &chatpb.LeaveChatResponse{}, nil
 }
 
+func (s *Server) OpenChat(ctx context.Context, req *chatpb.OpenChatRequest) (*chatpb.OpenChatResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
+	if err == ErrChatNotFound {
+		return &chatpb.OpenChatResponse{Result: chatpb.OpenChatResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat")
+	}
+
+	if md.Type != chatpb.Metadata_GROUP {
+		return &chatpb.OpenChatResponse{Result: chatpb.OpenChatResponse_DENIED}, nil
+	}
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
+		return &chatpb.OpenChatResponse{Result: chatpb.OpenChatResponse_DENIED}, nil
+	}
+
+	if md.OpenStatus.IsCurrentlyOpen {
+		return &chatpb.OpenChatResponse{}, nil
+	}
+
+	err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
+		{
+			Kind: &chatpb.MetadataUpdate_OpenStatusChanged_{
+				OpenStatusChanged: &chatpb.MetadataUpdate_OpenStatusChanged{
+					NewOpenStatus: &chatpb.OpenStatus{
+						IsCurrentlyOpen: true,
+					},
+				},
+			},
+		},
+	}})
+	if err != nil {
+		s.log.Warn("Failed to notify chat is open", zap.Error(err))
+	}
+
+	return &chatpb.OpenChatResponse{}, nil
+}
+
+func (s *Server) CloseChat(ctx context.Context, req *chatpb.CloseChatRequest) (*chatpb.CloseChatResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
+	if err == ErrChatNotFound {
+		return &chatpb.CloseChatResponse{Result: chatpb.CloseChatResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat")
+	}
+
+	if md.Type != chatpb.Metadata_GROUP {
+		return &chatpb.CloseChatResponse{Result: chatpb.CloseChatResponse_DENIED}, nil
+	}
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
+		return &chatpb.CloseChatResponse{Result: chatpb.CloseChatResponse_DENIED}, nil
+	}
+
+	if !md.OpenStatus.IsCurrentlyOpen {
+		return &chatpb.CloseChatResponse{}, nil
+	}
+
+	// todo: hook up to the db
+
+	err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
+		{
+			Kind: &chatpb.MetadataUpdate_OpenStatusChanged_{
+				OpenStatusChanged: &chatpb.MetadataUpdate_OpenStatusChanged{
+					NewOpenStatus: &chatpb.OpenStatus{
+						IsCurrentlyOpen: false,
+					},
+				},
+			},
+		},
+	}})
+	if err != nil {
+		s.log.Warn("Failed to notify chat is closed", zap.Error(err))
+	}
+
+	return &chatpb.CloseChatResponse{}, nil
+}
+
 func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameRequest) (*chatpb.SetDisplayNameResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
@@ -771,7 +872,7 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 		return nil, status.Errorf(codes.Internal, "failed to get chat")
 	}
 
-	if md.RoomNumber == 0 {
+	if md.Type != chatpb.Metadata_GROUP {
 		return &chatpb.SetDisplayNameResponse{Result: chatpb.SetDisplayNameResponse_DENIED}, nil
 	}
 	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
@@ -853,6 +954,9 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 		return nil, status.Errorf(codes.Internal, "failed to get chat")
 	}
 
+	if md.Type != chatpb.Metadata_GROUP {
+		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
+	}
 	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
 		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
 	}

@@ -187,6 +187,7 @@ func testServer(
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
 		require.Equal(t, chat.InitialCoverCharge, created.Chat.CoverCharge.Quarks)
+		require.True(t, created.Chat.OpenStatus.IsCurrentlyOpen)
 
 		expectedMembers := []*chatpb.Member{{
 			UserId: userID,
