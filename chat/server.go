@@ -785,6 +785,12 @@ func (s *Server) OpenChat(ctx context.Context, req *chatpb.OpenChatRequest) (*ch
 		return &chatpb.OpenChatResponse{}, nil
 	}
 
+	err = s.chats.SetOpenStatus(ctx, req.ChatId, true)
+	if err != nil {
+		s.log.Warn("Failed to open chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to open chat")
+	}
+
 	err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
 		{
 			Kind: &chatpb.MetadataUpdate_OpenStatusChanged_{
@@ -833,7 +839,11 @@ func (s *Server) CloseChat(ctx context.Context, req *chatpb.CloseChatRequest) (*
 		return &chatpb.CloseChatResponse{}, nil
 	}
 
-	// todo: hook up to the db
+	err = s.chats.SetOpenStatus(ctx, req.ChatId, false)
+	if err != nil {
+		s.log.Warn("Failed to close chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to close chat")
+	}
 
 	err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
 		{

@@ -64,7 +64,7 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 		RoomNumber:   2,
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
-		OpenStatus:   &chatpb.OpenStatus{IsCurrentlyOpen: true},
+		OpenStatus:   &chatpb.OpenStatus{IsCurrentlyOpen: false},
 	}
 
 	metadata1 := proto.Clone(expected1).(*chatpb.Metadata)

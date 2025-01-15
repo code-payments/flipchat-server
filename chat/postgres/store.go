@@ -91,9 +91,8 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 
 		LastActivity: timestamppb.New(m.LastActivityAt),
 
-		// todo: persist this
 		OpenStatus: &chatpb.OpenStatus{
-			IsCurrentlyOpen: true,
+			IsCurrentlyOpen: m.IsOpen,
 		},
 	}, nil
 }
@@ -419,11 +418,17 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		coverCharge = md.CoverCharge.Quarks
 	}
 
+	isOpen := true
+	if md.OpenStatus != nil {
+		isOpen = md.OpenStatus.IsCurrentlyOpen
+	}
+
 	opt := []db.ChatSetParam{
 		db.Chat.RoomNumber.Set(int(nextNumber)),
 		db.Chat.Type.Set(int(md.Type)),
 		db.Chat.CoverCharge.Set(db.BigInt(coverCharge)),
 		db.Chat.LastActivityAt.Set(md.LastActivity.AsTime()),
+		db.Chat.IsOpen.Set(isOpen),
 	}
 
 	if md.Owner != nil {
@@ -563,6 +568,22 @@ func (s *store) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, cov
 		db.Chat.ID.Equals(encodedChatID),
 	).Update(
 		db.Chat.CoverCharge.Set(db.BigInt(coverCharge.Quarks)),
+	).Exec(ctx)
+
+	if errors.Is(err, db.ErrNotFound) {
+		return chat.ErrChatNotFound
+	}
+
+	return err
+}
+
+func (s *store) SetOpenStatus(ctx context.Context, chatID *commonpb.ChatId, isOpen bool) error {
+	encodedChatID := pg.Encode(chatID.Value)
+
+	_, err := s.client.Chat.FindUnique(
+		db.Chat.ID.Equals(encodedChatID),
+	).Update(
+		db.Chat.IsOpen.Set(isOpen),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {

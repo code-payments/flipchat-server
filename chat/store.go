@@ -96,5 +96,7 @@ type Store interface {
 
 	SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error
 
+	SetOpenStatus(ctx context.Context, chatID *commonpb.ChatId, isOpen bool) error
+
 	AdvanceLastChatActivity(ctx context.Context, chatID *commonpb.ChatId, ts time.Time) error
 }

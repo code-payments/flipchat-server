@@ -147,6 +147,7 @@ model Chat {
   roomNumber  Int?    @unique
   coverCharge BigInt  @default(0)
   type        Int     @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
+  isOpen      Boolean @default(true)
 
   createdBy      String   @default("")
   createdAt      DateTime @default(now())
@@ -440,6 +441,7 @@ const (
 	ChatScalarFieldEnumRoomNumber     ChatScalarFieldEnum = "roomNumber"
 	ChatScalarFieldEnumCoverCharge    ChatScalarFieldEnum = "coverCharge"
 	ChatScalarFieldEnumType           ChatScalarFieldEnum = "type"
+	ChatScalarFieldEnumIsOpen         ChatScalarFieldEnum = "isOpen"
 	ChatScalarFieldEnumCreatedBy      ChatScalarFieldEnum = "createdBy"
 	ChatScalarFieldEnumCreatedAt      ChatScalarFieldEnum = "createdAt"
 	ChatScalarFieldEnumUpdatedAt      ChatScalarFieldEnum = "updatedAt"
@@ -608,6 +610,8 @@ const chatFieldRoomNumber chatPrismaFields = "roomNumber"
 const chatFieldCoverCharge chatPrismaFields = "coverCharge"
 
 const chatFieldType chatPrismaFields = "type"
+
+const chatFieldIsOpen chatPrismaFields = "isOpen"
 
 const chatFieldCreatedBy chatPrismaFields = "createdBy"
 
@@ -1272,6 +1276,7 @@ type InnerChat struct {
 	RoomNumber     *int     `json:"roomNumber,omitempty"`
 	CoverCharge    BigInt   `json:"coverCharge"`
 	Type           int      `json:"type"`
+	IsOpen         bool     `json:"isOpen"`
 	CreatedBy      string   `json:"createdBy"`
 	CreatedAt      DateTime `json:"createdAt"`
 	UpdatedAt      DateTime `json:"updatedAt"`
@@ -1285,6 +1290,7 @@ type RawChatModel struct {
 	RoomNumber     *RawInt     `json:"roomNumber,omitempty"`
 	CoverCharge    RawBigInt   `json:"coverCharge"`
 	Type           RawInt      `json:"type"`
+	IsOpen         RawBoolean  `json:"isOpen"`
 	CreatedBy      RawString   `json:"createdBy"`
 	CreatedAt      RawDateTime `json:"createdAt"`
 	UpdatedAt      RawDateTime `json:"updatedAt"`
@@ -5893,6 +5899,11 @@ type chatQuery struct {
 	// @required
 	Type chatQueryTypeInt
 
+	// IsOpen
+	//
+	// @required
+	IsOpen chatQueryIsOpenBoolean
+
 	// CreatedBy
 	//
 	// @required
@@ -7850,6 +7861,74 @@ func (r chatQueryTypeInt) GTEIfPresent(value *int) chatDefaultParam {
 
 func (r chatQueryTypeInt) Field() chatPrismaFields {
 	return chatFieldType
+}
+
+// base struct
+type chatQueryIsOpenBoolean struct{}
+
+// Set the required value of IsOpen
+func (r chatQueryIsOpenBoolean) Set(value bool) chatSetParam {
+
+	return chatSetParam{
+		data: builder.Field{
+			Name:  "isOpen",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of IsOpen dynamically
+func (r chatQueryIsOpenBoolean) SetIfPresent(value *Boolean) chatSetParam {
+	if value == nil {
+		return chatSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r chatQueryIsOpenBoolean) Equals(value bool) chatWithPrismaIsOpenEqualsParam {
+
+	return chatWithPrismaIsOpenEqualsParam{
+		data: builder.Field{
+			Name: "isOpen",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryIsOpenBoolean) EqualsIfPresent(value *bool) chatWithPrismaIsOpenEqualsParam {
+	if value == nil {
+		return chatWithPrismaIsOpenEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r chatQueryIsOpenBoolean) Order(direction SortOrder) chatDefaultParam {
+	return chatDefaultParam{
+		data: builder.Field{
+			Name:  "isOpen",
+			Value: direction,
+		},
+	}
+}
+
+func (r chatQueryIsOpenBoolean) Cursor(cursor bool) chatCursorParam {
+	return chatCursorParam{
+		data: builder.Field{
+			Name:  "isOpen",
+			Value: cursor,
+		},
+	}
+}
+
+func (r chatQueryIsOpenBoolean) Field() chatPrismaFields {
+	return chatFieldIsOpen
 }
 
 // base struct
@@ -22841,6 +22920,7 @@ var chatOutput = []builder.Output{
 	{Name: "roomNumber"},
 	{Name: "coverCharge"},
 	{Name: "type"},
+	{Name: "isOpen"},
 	{Name: "createdBy"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
@@ -23400,6 +23480,84 @@ func (p chatWithPrismaTypeEqualsUniqueParam) typeField() {}
 
 func (chatWithPrismaTypeEqualsUniqueParam) unique() {}
 func (chatWithPrismaTypeEqualsUniqueParam) equals() {}
+
+type ChatWithPrismaIsOpenEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	chatModel()
+	isOpenField()
+}
+
+type ChatWithPrismaIsOpenSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	chatModel()
+	isOpenField()
+}
+
+type chatWithPrismaIsOpenSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaIsOpenSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaIsOpenSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaIsOpenSetParam) chatModel() {}
+
+func (p chatWithPrismaIsOpenSetParam) isOpenField() {}
+
+type ChatWithPrismaIsOpenWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	chatModel()
+	isOpenField()
+}
+
+type chatWithPrismaIsOpenEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaIsOpenEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaIsOpenEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaIsOpenEqualsParam) chatModel() {}
+
+func (p chatWithPrismaIsOpenEqualsParam) isOpenField() {}
+
+func (chatWithPrismaIsOpenSetParam) settable()  {}
+func (chatWithPrismaIsOpenEqualsParam) equals() {}
+
+type chatWithPrismaIsOpenEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaIsOpenEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaIsOpenEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaIsOpenEqualsUniqueParam) chatModel()   {}
+func (p chatWithPrismaIsOpenEqualsUniqueParam) isOpenField() {}
+
+func (chatWithPrismaIsOpenEqualsUniqueParam) unique() {}
+func (chatWithPrismaIsOpenEqualsUniqueParam) equals() {}
 
 type ChatWithPrismaCreatedByEqualsSetParam interface {
 	field() builder.Field
