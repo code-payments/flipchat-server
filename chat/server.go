@@ -1277,21 +1277,24 @@ func (s *Server) ReportUser(ctx context.Context, req *chatpb.ReportUserRequest) 
 func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
 	clonedEvent := e.Clone()
 
-	// Every new chat message advances the last activity timestamp and is injected
-	// as part of the event
+	// Every new chat message with user content advances the last activity timestamp
+	// and is injected as part of the event
 	if clonedEvent.MessageUpdate != nil {
-		err := s.chats.AdvanceLastChatActivity(context.Background(), chatID, clonedEvent.MessageUpdate.Ts.AsTime())
-		if err != nil {
-			s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
-		}
+		switch clonedEvent.MessageUpdate.Content[0].Type.(type) {
+		case *messagingpb.Content_Text, *messagingpb.Content_Reply:
+			err := s.chats.AdvanceLastChatActivity(context.Background(), chatID, clonedEvent.MessageUpdate.Ts.AsTime())
+			if err != nil {
+				s.log.Warn("Failed to advance chat activity timestamp", zap.Error(err))
+			}
 
-		clonedEvent.MetadataUpdates = append(clonedEvent.MetadataUpdates, &chatpb.MetadataUpdate{
-			Kind: &chatpb.MetadataUpdate_LastActivityChanged_{
-				LastActivityChanged: &chatpb.MetadataUpdate_LastActivityChanged{
-					NewLastActivity: clonedEvent.MessageUpdate.Ts,
+			clonedEvent.MetadataUpdates = append(clonedEvent.MetadataUpdates, &chatpb.MetadataUpdate{
+				Kind: &chatpb.MetadataUpdate_LastActivityChanged_{
+					LastActivityChanged: &chatpb.MetadataUpdate_LastActivityChanged{
+						NewLastActivity: clonedEvent.MessageUpdate.Ts,
+					},
 				},
-			},
-		})
+			})
+		}
 	}
 
 	members, err := s.chats.GetMembers(context.Background(), chatID)
