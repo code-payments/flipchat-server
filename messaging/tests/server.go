@@ -97,21 +97,29 @@ func testServerHappy(
 	client := messagingpb.NewMessagingClient(cc)
 
 	chatID := model.MustGenerateChatID()
-	userID := model.MustGenerateUserID()
-	keyPair := model.MustGenerateKeyPair()
-	_, _ = accountStore.Bind(ctx, userID, keyPair.Proto())
+	ownerUserID := model.MustGenerateUserID()
+	otherUserID := model.MustGenerateUserID()
+	ownerKeyPair := model.MustGenerateKeyPair()
+	otherKeyPair := model.MustGenerateKeyPair()
+	_, _ = accountStore.Bind(ctx, ownerUserID, ownerKeyPair.Proto())
+	_, _ = accountStore.Bind(ctx, otherUserID, otherKeyPair.Proto())
 	_, err := chatsDB.CreateChat(ctx, &chatpb.Metadata{
 		ChatId: chatID,
 		Type:   chatpb.Metadata_GROUP,
+		Owner:  ownerUserID,
 	})
 	require.NoError(t, err)
 	require.NoError(t, chatsDB.AddMember(ctx, chatID, chat.Member{
-		UserID:            userID,
+		UserID:            ownerUserID,
+		HasSendPermission: true,
+	}))
+	require.NoError(t, chatsDB.AddMember(ctx, chatID, chat.Member{
+		UserID:            otherUserID,
 		HasSendPermission: true,
 	}))
 
 	streamParams := &messagingpb.StreamMessagesRequest_Params{ChatId: chatID}
-	require.NoError(t, keyPair.Auth(streamParams, &streamParams.Auth))
+	require.NoError(t, ownerKeyPair.Auth(streamParams, &streamParams.Auth))
 
 	stream, err := client.StreamMessages(ctx)
 	require.NoError(t, err)
@@ -170,7 +178,7 @@ func testServerHappy(
 					},
 				},
 			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
+			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
 
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
@@ -197,7 +205,7 @@ func testServerHappy(
 					},
 				},
 			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
+			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
 
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
@@ -224,7 +232,7 @@ func testServerHappy(
 					},
 				},
 			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
+			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
 
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
@@ -242,7 +250,7 @@ func testServerHappy(
 			tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
 				ChatId:    chatID,
 				MessageId: reference.MessageId,
-				TipperId:  userID,
+				TipperId:  ownerUserID,
 			}
 			tipIntentID := testutil.CreatePayment(t, codeData, tipAmount, tipPaymentMetadata)
 
@@ -260,7 +268,7 @@ func testServerHappy(
 				},
 				PaymentIntent: tipIntentID,
 			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
+			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
 
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
@@ -287,7 +295,7 @@ func testServerHappy(
 				},
 			},
 		}
-		require.NoError(t, keyPair.Auth(send, &send.Auth))
+		require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
 
 		sent, err := client.SendMessage(ctx, send)
 		require.NoError(t, err)
@@ -455,7 +463,7 @@ func testServerHappy(
 				ChatId:  chatID,
 				Content: content,
 			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
+			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
 			require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
@@ -474,7 +482,7 @@ func testServerHappy(
 				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
 					ChatId:    chatID,
 					MessageId: expectedTextMessages[0].MessageId,
-					TipperId:  userID,
+					TipperId:  ownerUserID,
 				}
 				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1)+1, tipPaymentMetadata)
 			},
@@ -482,7 +490,7 @@ func testServerHappy(
 				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
 					ChatId:    model.MustGenerateChatID(),
 					MessageId: expectedTextMessages[0].MessageId,
-					TipperId:  userID,
+					TipperId:  ownerUserID,
 				}
 				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
 			},
@@ -490,7 +498,7 @@ func testServerHappy(
 				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
 					ChatId:    chatID,
 					MessageId: expectedTextMessages[1].MessageId,
-					TipperId:  userID,
+					TipperId:  ownerUserID,
 				}
 				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
 			},
@@ -519,7 +527,7 @@ func testServerHappy(
 				},
 				PaymentIntent: tc(),
 			}
-			require.NoError(t, keyPair.Auth(send, &send.Auth))
+			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
 
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
@@ -527,12 +535,63 @@ func testServerHappy(
 		}
 	})
 
+	t.Run("Send message to closed room", func(t *testing.T) {
+		require.NoError(t, chatsDB.SetOpenStatus(ctx, chatID, false))
+
+		send := &messagingpb.SendMessageRequest{
+			ChatId: chatID,
+			Content: []*messagingpb.Content{
+				{
+					Type: &messagingpb.Content_Text{
+						Text: &messagingpb.TextContent{Text: "msg"},
+					},
+				},
+			},
+		}
+
+		// Test other user cannot send certain types of messages (eg. text)
+		require.NoError(t, otherKeyPair.Auth(send, &send.Auth))
+		sent, err := client.SendMessage(ctx, send)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
+
+		// However, owner is always allowed
+		require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
+		sent, err = client.SendMessage(ctx, send)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+		<-eventCh
+
+		require.NoError(t, chatsDB.SetOpenStatus(ctx, chatID, true))
+
+		send = &messagingpb.SendMessageRequest{
+			ChatId: chatID,
+			Content: []*messagingpb.Content{
+				{
+					Type: &messagingpb.Content_Reaction{
+						Reaction: &messagingpb.ReactionContent{
+							OriginalMessageId: sent.Message.MessageId,
+							Emoji:             "👍",
+						},
+					},
+				},
+			},
+		}
+
+		// Test other user can send certain types of messages (eg. reaction)
+		require.NoError(t, otherKeyPair.Auth(send, &send.Auth))
+		sent, err = client.SendMessage(ctx, send)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+		<-eventCh
+	})
+
 	t.Run("GetMessage", func(t *testing.T) {
 		get := &messagingpb.GetMessageRequest{
 			ChatId:    chatID,
 			MessageId: expected[0].MessageId,
 		}
-		require.NoError(t, keyPair.Auth(get, &get.Auth))
+		require.NoError(t, ownerKeyPair.Auth(get, &get.Auth))
 
 		message, err := client.GetMessage(ctx, get)
 		require.NoError(t, err)
@@ -549,7 +608,7 @@ func testServerHappy(
 				},
 			},
 		}
-		require.NoError(t, keyPair.Auth(get, &get.Auth))
+		require.NoError(t, ownerKeyPair.Auth(get, &get.Auth))
 
 		messages, err := client.GetMessages(ctx, get)
 		require.NoError(t, err)
@@ -561,7 +620,7 @@ func testServerHappy(
 		get := &messagingpb.GetMessagesRequest{
 			ChatId: chatID,
 		}
-		require.NoError(t, keyPair.Auth(get, &get.Auth))
+		require.NoError(t, ownerKeyPair.Auth(get, &get.Auth))
 
 		messages, err := client.GetMessages(ctx, get)
 		require.NoError(t, err)
@@ -577,7 +636,7 @@ func testServerHappy(
 				ChatId:   chatID,
 				IsTyping: isTyping,
 			}
-			require.NoError(t, keyPair.Auth(notify, &notify.Auth))
+			require.NoError(t, ownerKeyPair.Auth(notify, &notify.Auth))
 
 			resp, err := client.NotifyIsTyping(ctx, notify)
 			require.NoError(t, err)
@@ -594,7 +653,7 @@ func testServerHappy(
 					Value: expected[4].MessageId,
 				},
 			}
-			require.NoError(t, keyPair.Auth(advance, &advance.Auth))
+			require.NoError(t, ownerKeyPair.Auth(advance, &advance.Auth))
 
 			resp, err := client.AdvancePointer(ctx, advance)
 			require.NoError(t, err)
