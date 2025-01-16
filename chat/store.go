@@ -30,6 +30,8 @@ type Member struct {
 
 	HasModPermission  bool
 	HasSendPermission bool
+
+	IsSoftDeleted bool
 }
 
 func (m *Member) Validate() error {
@@ -49,6 +51,8 @@ func (m *Member) Clone() *Member {
 
 		HasModPermission:  m.HasModPermission,
 		HasSendPermission: m.HasSendPermission,
+
+		IsSoftDeleted: m.IsSoftDeleted,
 	}
 }
 

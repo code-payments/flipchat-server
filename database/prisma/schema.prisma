@@ -101,6 +101,8 @@ model Member {
   hasModPermission  Boolean @default(false) // Is this member a moderator (aka host)?
   hasSendPermission Boolean @default(false) // Can this member send messages?
 
+  isSoftDeleted Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
