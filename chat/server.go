@@ -685,21 +685,6 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	go func() {
 		ctx := context.Background()
 
-		var announcementContentBuilder messaging.AnnouncementContentBuilder
-		if newMember.HasSendPermission {
-			announcementContentBuilder = messaging.NewUserJoinedChatAnnouncementContentBuilder(ctx, s.profiles, userID)
-		} else {
-			announcementContentBuilder = messaging.NewUserWatchingChatAnnouncementContentBuilder(ctx)
-		}
-		if err := messaging.SendAnnouncement(
-			ctx,
-			s.messenger,
-			chatID,
-			announcementContentBuilder,
-		); err != nil {
-			log.Warn("Failed to send announcement", zap.Error(err))
-		}
-
 		protoMember := newMember.ToProto(nil)
 		err = s.populateMemberData(ctx, []*chatpb.Member{protoMember}, nil)
 		if err != nil {

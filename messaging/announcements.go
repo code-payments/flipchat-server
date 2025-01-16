@@ -45,27 +45,6 @@ func NewRoomIsLiveAnnouncementContentBuilder(roomNumber uint64) AnnouncementCont
 	}
 }
 
-func NewUserWatchingChatAnnouncementContentBuilder(ctx context.Context) AnnouncementContentBuilder {
-	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
-		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: "New spectator",
-		}, nil
-	}
-}
-
-func NewUserJoinedChatAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId) AnnouncementContentBuilder {
-	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
-		profile, err := profiles.GetProfile(ctx, userID)
-		if err != nil {
-			return nil, err
-		}
-
-		return &messagingpb.LocalizedAnnouncementContent{
-			KeyOrText: fmt.Sprintf("%s joined", profile.DisplayName),
-		}, nil
-	}
-}
-
 func NewRoomDisplayNameChangedAnnouncementContentBuilder(roomNumber uint64, displayName string) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		return &messagingpb.LocalizedAnnouncementContent{
