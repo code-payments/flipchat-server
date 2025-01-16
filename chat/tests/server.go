@@ -187,6 +187,7 @@ func testServer(
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
 		require.Equal(t, chat.InitialCoverCharge, created.Chat.CoverCharge.Quarks)
+		require.True(t, created.Chat.OpenStatus.IsCurrentlyOpen)
 
 		expectedMembers := []*chatpb.Member{{
 			UserId: userID,
@@ -545,6 +546,36 @@ func testServer(
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 			require.Equal(t, setDisplayName.DisplayName, get.Metadata.DisplayName)
 		})
+
+		t.Run("Close and open room", func(t *testing.T) {
+			close := &chatpb.CloseChatRequest{
+				ChatId: created.Chat.ChatId,
+			}
+			require.NoError(t, keyPair.Auth(close, &close.Auth))
+
+			closeResp, err := client.CloseChat(context.Background(), close)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.CloseChatResponse_OK, closeResp.Result)
+
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.False(t, get.Metadata.OpenStatus.IsCurrentlyOpen)
+
+			open := &chatpb.OpenChatRequest{
+				ChatId: created.Chat.ChatId,
+			}
+			require.NoError(t, keyPair.Auth(open, &open.Auth))
+
+			openResp, err := client.OpenChat(context.Background(), open)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.OpenChatResponse_OK, openResp.Result)
+
+			get, err = client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.True(t, get.Metadata.OpenStatus.IsCurrentlyOpen)
+		})
 	})
 
 	t.Run("Start Two Way", func(t *testing.T) {
@@ -734,6 +765,34 @@ func testServer(
 		require.Len(t, u.MemberUpdates, 1)
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetJoined().Member.UserId, streamUser))
 		require.Equal(t, streamUserProfile.DisplayName, u.MemberUpdates[0].GetJoined().Member.Identity.DisplayName)
+
+		// Other user closes the chat
+		close := &chatpb.CloseChatRequest{
+			ChatId: startedOther.Chat.ChatId,
+		}
+		require.NoError(t, keyPair.Auth(close, &close.Auth))
+		_, err = client.CloseChat(context.Background(), close)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Len(t, u.MetadataUpdates, 1)
+		require.Empty(t, u.MemberUpdates)
+		require.False(t, u.MetadataUpdates[0].GetOpenStatusChanged().NewOpenStatus.IsCurrentlyOpen)
+
+		// Other user opens the chat
+		open := &chatpb.OpenChatRequest{
+			ChatId: startedOther.Chat.ChatId,
+		}
+		require.NoError(t, keyPair.Auth(open, &open.Auth))
+		_, err = client.OpenChat(context.Background(), open)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Len(t, u.MetadataUpdates, 1)
+		require.Empty(t, u.MemberUpdates)
+		require.True(t, u.MetadataUpdates[0].GetOpenStatusChanged().NewOpenStatus.IsCurrentlyOpen)
 
 		// Other user updates chat cover charge
 		setCoverCharge := &chatpb.SetCoverChargeRequest{

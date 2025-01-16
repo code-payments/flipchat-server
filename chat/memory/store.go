@@ -187,6 +187,10 @@ func (s *InMemoryStore) CreateChat(_ context.Context, md *chatpb.Metadata) (*cha
 	md.IsPushEnabled = false
 	md.CanDisablePush = false
 
+	if md.OpenStatus == nil {
+		md.OpenStatus = &chatpb.OpenStatus{IsCurrentlyOpen: true}
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -283,6 +287,20 @@ func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.Cha
 	}
 
 	md.CoverCharge = proto.Clone(coverCharge).(*commonpb.PaymentAmount)
+
+	return nil
+}
+
+func (s *InMemoryStore) SetOpenStatus(ctx context.Context, chatID *commonpb.ChatId, isOpen bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	md, ok := s.chats[string(chatID.Value)]
+	if !ok {
+		return chat.ErrChatNotFound
+	}
+
+	md.OpenStatus = &chatpb.OpenStatus{IsCurrentlyOpen: isOpen}
 
 	return nil
 }

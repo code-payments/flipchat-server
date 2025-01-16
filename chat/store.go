@@ -68,6 +68,7 @@ func (m *Member) ToProto(self *commonpb.UserId) *chatpb.Member {
 	return member
 }
 
+// todo: APIs for opening/closing a room
 type Store interface {
 	GetChatID(ctx context.Context, roomID uint64) (*commonpb.ChatId, error)
 
@@ -94,6 +95,8 @@ type Store interface {
 	SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, displayName string) error
 
 	SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error
+
+	SetOpenStatus(ctx context.Context, chatID *commonpb.ChatId, isOpen bool) error
 
 	AdvanceLastChatActivity(ctx context.Context, chatID *commonpb.ChatId, ts time.Time) error
 }
