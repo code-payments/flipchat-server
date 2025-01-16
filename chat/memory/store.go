@@ -136,6 +136,10 @@ func (s *InMemoryStore) GetMembers(_ context.Context, chatID *commonpb.ChatId) (
 
 	result := make([]*chat.Member, 0, len(members))
 	for _, member := range members {
+		if member.IsSoftDeleted {
+			continue
+		}
+
 		result = append(result, member.Clone())
 	}
 
@@ -148,7 +152,7 @@ func (s *InMemoryStore) GetMember(_ context.Context, chatID *commonpb.ChatId, us
 
 	members := s.members[string(chatID.Value)]
 	for _, member := range members {
-		if bytes.Equal(member.UserID.Value, userID.Value) {
+		if bytes.Equal(member.UserID.Value, userID.Value) && !member.IsSoftDeleted {
 			return member.Clone(), nil
 		}
 	}
@@ -162,7 +166,7 @@ func (s *InMemoryStore) IsMember(_ context.Context, chatID *commonpb.ChatId, use
 
 	members := s.members[string(chatID.Value)]
 	for _, member := range members {
-		if bytes.Equal(member.UserID.Value, userID.Value) {
+		if bytes.Equal(member.UserID.Value, userID.Value) && !member.IsSoftDeleted {
 			return true, nil
 		}
 	}
@@ -208,6 +212,10 @@ func (s *InMemoryStore) CreateChat(_ context.Context, md *chatpb.Metadata) (*cha
 }
 
 func (s *InMemoryStore) AddMember(_ context.Context, chatID *commonpb.ChatId, member chat.Member) error {
+	if member.IsSoftDeleted {
+		return errors.New("cannot add soft deleted member")
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -218,6 +226,17 @@ func (s *InMemoryStore) AddMember(_ context.Context, chatID *commonpb.ChatId, me
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
 		if bytes.Equal(m.UserID.Value, member.UserID.Value) {
+			m.IsSoftDeleted = false
+			m.AddedBy = member.AddedBy
+			m.IsPushEnabled = true
+			m.IsMuted = m.IsMuted || member.IsMuted
+			m.HasModPermission = member.HasModPermission
+			m.HasSendPermission = member.HasSendPermission
+
+			if !slices.Contains(s.chatsByMember[string(member.UserID.Value)], string(chatID.Value)) {
+				s.chatsByMember[string(member.UserID.Value)] = append(s.chatsByMember[string(member.UserID.Value)], string(chatID.Value))
+			}
+
 			return nil
 		}
 	}
@@ -243,9 +262,13 @@ func (s *InMemoryStore) RemoveMember(_ context.Context, chatID *commonpb.ChatId,
 
 	// Remove from member set.
 	members := s.members[string(chatID.Value)]
-	for i, m := range members {
+	for _, m := range members {
 		if bytes.Equal(m.UserID.Value, member.Value) {
-			s.members[string(chatID.Value)] = slices.Delete(members, i, i+1)
+			m.IsSoftDeleted = true
+			m.AddedBy = nil
+			m.IsPushEnabled = true
+			m.HasModPermission = false
+			m.HasSendPermission = false
 			break
 		}
 	}
@@ -312,6 +335,10 @@ func (s *InMemoryStore) SetMuteState(_ context.Context, chatID *commonpb.ChatId,
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
 		if bytes.Equal(m.UserID.Value, member.Value) {
+			if m.IsSoftDeleted {
+				return chat.ErrMemberNotFound
+			}
+
 			m.IsMuted = isMuted
 			return nil
 		}
@@ -326,6 +353,10 @@ func (s *InMemoryStore) IsUserMuted(_ context.Context, chatID *commonpb.ChatId, 
 
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
+		if m.IsSoftDeleted {
+			return false, chat.ErrMemberNotFound
+		}
+
 		if bytes.Equal(m.UserID.Value, member.Value) {
 			return m.IsMuted, nil
 		}
@@ -341,6 +372,10 @@ func (s *InMemoryStore) SetSendPermission(_ context.Context, chatID *commonpb.Ch
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
 		if bytes.Equal(m.UserID.Value, member.Value) {
+			if m.IsSoftDeleted {
+				return nil
+			}
+
 			m.HasSendPermission = hasSendPermission
 			return nil
 		}
@@ -355,6 +390,10 @@ func (s *InMemoryStore) HasSendPermission(_ context.Context, chatID *commonpb.Ch
 
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
+		if m.IsSoftDeleted {
+			return false, chat.ErrMemberNotFound
+		}
+
 		if bytes.Equal(m.UserID.Value, member.Value) {
 			return m.HasSendPermission, nil
 		}
@@ -370,6 +409,10 @@ func (s *InMemoryStore) SetPushState(ctx context.Context, chatID *commonpb.ChatI
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
 		if bytes.Equal(m.UserID.Value, member.Value) {
+			if m.IsSoftDeleted {
+				return chat.ErrMemberNotFound
+			}
+
 			m.IsPushEnabled = isPushEnabled
 			return nil
 		}
@@ -385,6 +428,10 @@ func (s *InMemoryStore) IsPushEnabled(ctx context.Context, chatID *commonpb.Chat
 	members := s.members[string(chatID.Value)]
 	for _, m := range members {
 		if bytes.Equal(m.UserID.Value, member.Value) {
+			if m.IsSoftDeleted {
+				return false, chat.ErrMemberNotFound
+			}
+
 			return m.IsPushEnabled, nil
 		}
 	}
