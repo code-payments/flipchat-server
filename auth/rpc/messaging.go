@@ -17,13 +17,15 @@ import (
 // todo: this needs more extensive testing
 type MessagingAuthorizer struct {
 	chats    chat.Store
+	intents  intent.Store
 	messages messaging.MessageStore
 	codeData codedata.Provider
 }
 
-func NewMessagingRpcAuthorizer(chats chat.Store, messages messaging.MessageStore, codeData codedata.Provider) *MessagingAuthorizer {
+func NewMessagingRpcAuthorizer(chats chat.Store, intents intent.Store, messages messaging.MessageStore, codeData codedata.Provider) *MessagingAuthorizer {
 	return &MessagingAuthorizer{
 		chats:    chats,
+		intents:  intents,
 		messages: messages,
 		codeData: codeData,
 	}
@@ -111,6 +113,13 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 			return false, "invalid payment metadata", nil
 		} else if err != nil {
 			return false, "", err
+		}
+
+		isFulfilled, err := a.intents.IsFulfilled(ctx, paymentIntent)
+		if err != nil {
+			return false, "", err
+		} else if isFulfilled {
+			return false, "intent already fulifilled", nil
 		}
 
 		if !bytes.Equal(chatID.Value, paymentMetadata.ChatId.Value) {
