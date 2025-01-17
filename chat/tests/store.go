@@ -298,6 +298,10 @@ func testChatStore_SetChatMuteState(t *testing.T, store chat.Store) {
 	})
 	require.NoError(t, err)
 
+	require.Equal(t, chat.ErrMemberNotFound, store.SetMuteState(context.Background(), chatID, memberID, true))
+	_, err = store.IsUserMuted(context.Background(), chatID, memberID)
+	require.Equal(t, chat.ErrMemberNotFound, err)
+
 	require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
 		UserID: memberID,
 	}))
@@ -319,6 +323,15 @@ func testChatStore_SetChatMuteState(t *testing.T, store chat.Store) {
 	isMuted, err = store.IsUserMuted(context.Background(), chatID, memberID)
 	require.NoError(t, err)
 	require.True(t, isMuted)
+
+	require.NoError(t, store.RemoveMember(context.Background(), chatID, memberID))
+	require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
+		UserID: memberID,
+	}))
+
+	isMuted, err = store.IsUserMuted(context.Background(), chatID, memberID)
+	require.NoError(t, err)
+	require.True(t, isMuted)
 }
 
 func testChatStore_SetSendPermission(t *testing.T, store chat.Store) {
@@ -331,6 +344,10 @@ func testChatStore_SetSendPermission(t *testing.T, store chat.Store) {
 		Type:   chatpb.Metadata_GROUP,
 	})
 	require.NoError(t, err)
+
+	require.Equal(t, chat.ErrMemberNotFound, store.SetSendPermission(context.Background(), chatID, memberID, true))
+	_, err = store.HasSendPermission(context.Background(), chatID, memberID)
+	require.Equal(t, chat.ErrMemberNotFound, err)
 
 	require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
 		UserID: memberID,
@@ -364,6 +381,10 @@ func testChatStore_SetChatPushState(t *testing.T, store chat.Store) {
 		Type:   chatpb.Metadata_GROUP,
 	})
 	require.NoError(t, err)
+
+	require.Equal(t, chat.ErrMemberNotFound, store.SetPushState(context.Background(), chatID, memberID, true))
+	_, err = store.IsPushEnabled(context.Background(), chatID, memberID)
+	require.Equal(t, chat.ErrMemberNotFound, err)
 
 	require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
 		UserID: memberID,
