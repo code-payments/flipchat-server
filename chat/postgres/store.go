@@ -492,10 +492,14 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 			db.Member.UserID.Equals(encodedUserID),
 		),
 	).Exec(ctx)
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return err
+	}
 	if err == nil && !existing.IsSoftDeleted {
 		return nil
 	}
 
+	// Maintain previous mute state within soft deleted record
 	isMuted := member.IsMuted
 	if existing != nil {
 		isMuted = isMuted || existing.IsMuted
