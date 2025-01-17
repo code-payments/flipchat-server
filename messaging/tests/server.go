@@ -78,7 +78,7 @@ func testServerHappy(
 	serv := messaging.NewServer(
 		log,
 		authz,
-		auth_rpc.NewMessagingRpcAuthorizer(chatsDB, messageDB, codeData),
+		auth_rpc.NewMessagingRpcAuthorizer(chatsDB, intents, messageDB, codeData),
 		accountStore,
 		intents,
 		messageDB,
@@ -688,7 +688,7 @@ func testServerDuplicateStreams(
 	serv := messaging.NewServer(
 		log,
 		authz,
-		auth_rpc.NewMessagingRpcAuthorizer(chatsDB, messageDB, codeData),
+		auth_rpc.NewMessagingRpcAuthorizer(chatsDB, intents, messageDB, codeData),
 		accountStore,
 		intents,
 		messageDB,

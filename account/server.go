@@ -19,7 +19,7 @@ import (
 	"github.com/code-payments/flipchat-server/model"
 )
 
-const loginWindow = 5 * time.Minute
+const loginWindow = 2 * time.Minute
 
 type Server struct {
 	log      *zap.Logger
@@ -75,7 +75,7 @@ func (s *Server) Register(ctx context.Context, req *accountpb.RegisterRequest) (
 
 func (s *Server) Login(ctx context.Context, req *accountpb.LoginRequest) (*accountpb.LoginResponse, error) {
 	t := req.Timestamp.AsTime()
-	if t.After(time.Now()) {
+	if t.After(time.Now().Add(loginWindow)) {
 		return &accountpb.LoginResponse{Result: accountpb.LoginResponse_INVALID_TIMESTAMP}, nil
 	} else if t.Before(time.Now().Add(-loginWindow)) {
 		return &accountpb.LoginResponse{Result: accountpb.LoginResponse_INVALID_TIMESTAMP}, nil
