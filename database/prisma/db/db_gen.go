@@ -168,7 +168,6 @@ model Member {
   userId    String
   addedById String?
 
-  numUnread     Int     @default(0)
   isMuted       Boolean @default(false) // Has the host muted this member?
   isPushEnabled Boolean @default(true) // Are push notifications enabled for this member?
 
@@ -456,7 +455,6 @@ const (
 	MemberScalarFieldEnumChatID            MemberScalarFieldEnum = "chatId"
 	MemberScalarFieldEnumUserID            MemberScalarFieldEnum = "userId"
 	MemberScalarFieldEnumAddedByID         MemberScalarFieldEnum = "addedById"
-	MemberScalarFieldEnumNumUnread         MemberScalarFieldEnum = "numUnread"
 	MemberScalarFieldEnumIsMuted           MemberScalarFieldEnum = "isMuted"
 	MemberScalarFieldEnumIsPushEnabled     MemberScalarFieldEnum = "isPushEnabled"
 	MemberScalarFieldEnumHasModPermission  MemberScalarFieldEnum = "hasModPermission"
@@ -633,8 +631,6 @@ const memberFieldChatID memberPrismaFields = "chatId"
 const memberFieldUserID memberPrismaFields = "userId"
 
 const memberFieldAddedByID memberPrismaFields = "addedById"
-
-const memberFieldNumUnread memberPrismaFields = "numUnread"
 
 const memberFieldIsMuted memberPrismaFields = "isMuted"
 
@@ -1339,7 +1335,6 @@ type InnerMember struct {
 	ChatID            string   `json:"chatId"`
 	UserID            string   `json:"userId"`
 	AddedByID         *string  `json:"addedById,omitempty"`
-	NumUnread         int      `json:"numUnread"`
 	IsMuted           bool     `json:"isMuted"`
 	IsPushEnabled     bool     `json:"isPushEnabled"`
 	HasModPermission  bool     `json:"hasModPermission"`
@@ -1354,7 +1349,6 @@ type RawMemberModel struct {
 	ChatID            RawString   `json:"chatId"`
 	UserID            RawString   `json:"userId"`
 	AddedByID         *RawString  `json:"addedById,omitempty"`
-	NumUnread         RawInt      `json:"numUnread"`
 	IsMuted           RawBoolean  `json:"isMuted"`
 	IsPushEnabled     RawBoolean  `json:"isPushEnabled"`
 	HasModPermission  RawBoolean  `json:"hasModPermission"`
@@ -9411,11 +9405,6 @@ type memberQuery struct {
 	// @optional
 	AddedByID memberQueryAddedByIDString
 
-	// NumUnread
-	//
-	// @required
-	NumUnread memberQueryNumUnreadInt
-
 	// IsMuted
 	//
 	// @required
@@ -10607,405 +10596,6 @@ func (r memberQueryAddedByIDString) HasSuffixIfPresent(value *string) memberDefa
 
 func (r memberQueryAddedByIDString) Field() memberPrismaFields {
 	return memberFieldAddedByID
-}
-
-// base struct
-type memberQueryNumUnreadInt struct{}
-
-// Set the required value of NumUnread
-func (r memberQueryNumUnreadInt) Set(value int) memberSetParam {
-
-	return memberSetParam{
-		data: builder.Field{
-			Name:  "numUnread",
-			Value: value,
-		},
-	}
-
-}
-
-// Set the optional value of NumUnread dynamically
-func (r memberQueryNumUnreadInt) SetIfPresent(value *Int) memberSetParam {
-	if value == nil {
-		return memberSetParam{}
-	}
-
-	return r.Set(*value)
-}
-
-// Increment the required value of NumUnread
-func (r memberQueryNumUnreadInt) Increment(value int) memberSetParam {
-	return memberSetParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				builder.Field{
-					Name:  "increment",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) IncrementIfPresent(value *int) memberSetParam {
-	if value == nil {
-		return memberSetParam{}
-	}
-	return r.Increment(*value)
-}
-
-// Decrement the required value of NumUnread
-func (r memberQueryNumUnreadInt) Decrement(value int) memberSetParam {
-	return memberSetParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				builder.Field{
-					Name:  "decrement",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) DecrementIfPresent(value *int) memberSetParam {
-	if value == nil {
-		return memberSetParam{}
-	}
-	return r.Decrement(*value)
-}
-
-// Multiply the required value of NumUnread
-func (r memberQueryNumUnreadInt) Multiply(value int) memberSetParam {
-	return memberSetParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				builder.Field{
-					Name:  "multiply",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) MultiplyIfPresent(value *int) memberSetParam {
-	if value == nil {
-		return memberSetParam{}
-	}
-	return r.Multiply(*value)
-}
-
-// Divide the required value of NumUnread
-func (r memberQueryNumUnreadInt) Divide(value int) memberSetParam {
-	return memberSetParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				builder.Field{
-					Name:  "divide",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) DivideIfPresent(value *int) memberSetParam {
-	if value == nil {
-		return memberSetParam{}
-	}
-	return r.Divide(*value)
-}
-
-func (r memberQueryNumUnreadInt) Equals(value int) memberWithPrismaNumUnreadEqualsParam {
-
-	return memberWithPrismaNumUnreadEqualsParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "equals",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) EqualsIfPresent(value *int) memberWithPrismaNumUnreadEqualsParam {
-	if value == nil {
-		return memberWithPrismaNumUnreadEqualsParam{}
-	}
-	return r.Equals(*value)
-}
-
-func (r memberQueryNumUnreadInt) Order(direction SortOrder) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name:  "numUnread",
-			Value: direction,
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) Cursor(cursor int) memberCursorParam {
-	return memberCursorParam{
-		data: builder.Field{
-			Name:  "numUnread",
-			Value: cursor,
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) In(value []int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "in",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) InIfPresent(value []int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.In(value)
-}
-
-func (r memberQueryNumUnreadInt) NotIn(value []int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "notIn",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) NotInIfPresent(value []int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.NotIn(value)
-}
-
-func (r memberQueryNumUnreadInt) Lt(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "lt",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) LtIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.Lt(*value)
-}
-
-func (r memberQueryNumUnreadInt) Lte(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "lte",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) LteIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.Lte(*value)
-}
-
-func (r memberQueryNumUnreadInt) Gt(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "gt",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) GtIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.Gt(*value)
-}
-
-func (r memberQueryNumUnreadInt) Gte(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "gte",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) GteIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.Gte(*value)
-}
-
-func (r memberQueryNumUnreadInt) Not(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "not",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-func (r memberQueryNumUnreadInt) NotIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.Not(*value)
-}
-
-// deprecated: Use Lt instead.
-
-func (r memberQueryNumUnreadInt) LT(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "lt",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use LtIfPresent instead.
-func (r memberQueryNumUnreadInt) LTIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.LT(*value)
-}
-
-// deprecated: Use Lte instead.
-
-func (r memberQueryNumUnreadInt) LTE(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "lte",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use LteIfPresent instead.
-func (r memberQueryNumUnreadInt) LTEIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.LTE(*value)
-}
-
-// deprecated: Use Gt instead.
-
-func (r memberQueryNumUnreadInt) GT(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "gt",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use GtIfPresent instead.
-func (r memberQueryNumUnreadInt) GTIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.GT(*value)
-}
-
-// deprecated: Use Gte instead.
-
-func (r memberQueryNumUnreadInt) GTE(value int) memberDefaultParam {
-	return memberDefaultParam{
-		data: builder.Field{
-			Name: "numUnread",
-			Fields: []builder.Field{
-				{
-					Name:  "gte",
-					Value: value,
-				},
-			},
-		},
-	}
-}
-
-// deprecated: Use GteIfPresent instead.
-func (r memberQueryNumUnreadInt) GTEIfPresent(value *int) memberDefaultParam {
-	if value == nil {
-		return memberDefaultParam{}
-	}
-	return r.GTE(*value)
-}
-
-func (r memberQueryNumUnreadInt) Field() memberPrismaFields {
-	return memberFieldNumUnread
 }
 
 // base struct
@@ -24038,7 +23628,6 @@ var memberOutput = []builder.Output{
 	{Name: "chatId"},
 	{Name: "userId"},
 	{Name: "addedById"},
-	{Name: "numUnread"},
 	{Name: "isMuted"},
 	{Name: "isPushEnabled"},
 	{Name: "hasModPermission"},
@@ -24445,84 +24034,6 @@ func (p memberWithPrismaAddedByIDEqualsUniqueParam) addedByIDField() {}
 
 func (memberWithPrismaAddedByIDEqualsUniqueParam) unique() {}
 func (memberWithPrismaAddedByIDEqualsUniqueParam) equals() {}
-
-type MemberWithPrismaNumUnreadEqualsSetParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	equals()
-	memberModel()
-	numUnreadField()
-}
-
-type MemberWithPrismaNumUnreadSetParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	memberModel()
-	numUnreadField()
-}
-
-type memberWithPrismaNumUnreadSetParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaNumUnreadSetParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaNumUnreadSetParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaNumUnreadSetParam) memberModel() {}
-
-func (p memberWithPrismaNumUnreadSetParam) numUnreadField() {}
-
-type MemberWithPrismaNumUnreadWhereParam interface {
-	field() builder.Field
-	getQuery() builder.Query
-	memberModel()
-	numUnreadField()
-}
-
-type memberWithPrismaNumUnreadEqualsParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaNumUnreadEqualsParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaNumUnreadEqualsParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaNumUnreadEqualsParam) memberModel() {}
-
-func (p memberWithPrismaNumUnreadEqualsParam) numUnreadField() {}
-
-func (memberWithPrismaNumUnreadSetParam) settable()  {}
-func (memberWithPrismaNumUnreadEqualsParam) equals() {}
-
-type memberWithPrismaNumUnreadEqualsUniqueParam struct {
-	data  builder.Field
-	query builder.Query
-}
-
-func (p memberWithPrismaNumUnreadEqualsUniqueParam) field() builder.Field {
-	return p.data
-}
-
-func (p memberWithPrismaNumUnreadEqualsUniqueParam) getQuery() builder.Query {
-	return p.query
-}
-
-func (p memberWithPrismaNumUnreadEqualsUniqueParam) memberModel()    {}
-func (p memberWithPrismaNumUnreadEqualsUniqueParam) numUnreadField() {}
-
-func (memberWithPrismaNumUnreadEqualsUniqueParam) unique() {}
-func (memberWithPrismaNumUnreadEqualsUniqueParam) equals() {}
 
 type MemberWithPrismaIsMutedEqualsSetParam interface {
 	field() builder.Field

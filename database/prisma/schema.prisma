@@ -94,7 +94,6 @@ model Member {
   userId    String
   addedById String?
 
-  numUnread     Int     @default(0)
   isMuted       Boolean @default(false) // Has the host muted this member?
   isPushEnabled Boolean @default(true) // Are push notifications enabled for this member?
 
