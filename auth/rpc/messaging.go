@@ -43,6 +43,7 @@ func (a *MessagingAuthorizer) CanGetMessages(ctx context.Context, chatID *common
 	return a.chatMembershipCheck(ctx, chatID, userID)
 }
 
+// todo: This needs a refactor/cleanup because it's blowing up in size/complexity
 func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, content *messagingpb.Content, paymentIntent *commonpb.IntentId) (bool, string, error) {
 	chatMd, err := a.chats.GetChatMetadata(ctx, chatID)
 	if err == chat.ErrChatNotFound {
@@ -55,8 +56,10 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 
 	// todo: individual handlers for different content types
 	var canSendWhenClosed bool
+	var requiresRegularMember bool
 	switch typed := content.Type.(type) {
 	case *messagingpb.Content_Text:
+		requiresRegularMember = true
 	case *messagingpb.Content_Reaction:
 		canSendWhenClosed = true
 
@@ -73,6 +76,8 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 			return false, "invalid reference content type", nil
 		}
 	case *messagingpb.Content_Reply:
+		requiresRegularMember = true
+
 		referenceMessage, err := a.messages.GetMessage(ctx, chatID, typed.Reply.OriginalMessageId)
 		if err == messaging.ErrMessageNotFound {
 			return false, "reference not found", nil
@@ -174,12 +179,45 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 	} else if err != nil {
 		return false, "", err
 	}
-	if !member.HasSendPermission {
-		return false, "chat member doesn't have send permission", nil
-	}
+
 	if member.IsMuted {
 		return false, "chat member is muted", nil
 	}
+
+	// todo: Is a regular member just a member that has send permissions? This
+	//       might make migration a bit easier between pre/post paid messaging
+	//       chats.
+	// todo: Need a temporary backwards compatibility check
+	if requiresRegularMember && !isOwner && !member.HasSendPermission {
+		if paymentIntent == nil {
+			return false, "payment not provided", nil
+		}
+
+		var paymentMetadata messagingpb.SendMessageAsNonRegularPaymentMetadata
+		_, err := intent.LoadPaymentMetadata(ctx, a.codeData, paymentIntent, &paymentMetadata)
+		if err == intent.ErrNoPaymentMetadata {
+			return false, "payment metadata missing", nil
+		} else if err == intent.ErrInvalidPaymentMetadata {
+			return false, "invalid payment metadata", nil
+		} else if err != nil {
+			return false, "", err
+		}
+
+		isFulfilled, err := a.intents.IsFulfilled(ctx, paymentIntent)
+		if err != nil {
+			return false, "", err
+		} else if isFulfilled {
+			return false, "intent already fulifilled", nil
+		}
+
+		if !bytes.Equal(chatID.Value, paymentMetadata.ChatId.Value) {
+			return false, "payment references a different chat", nil
+		}
+		if !bytes.Equal(userID.Value, paymentMetadata.UserId.Value) {
+			return false, "payment references a different user", nil
+		}
+	}
+
 	return true, "", nil
 }
 

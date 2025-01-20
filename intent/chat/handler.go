@@ -15,16 +15,17 @@ import (
 	codeintent "github.com/code-payments/code-server/pkg/code/data/intent"
 	codecurrency "github.com/code-payments/code-server/pkg/currency"
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/flags"
 	"github.com/code-payments/flipchat-server/intent"
 )
 
 type StartGroupChatPaymentIntentHandler struct {
 	accounts account.Store
-	chats    Store
+	chats    chat.Store
 }
 
-func NewStartGroupChatPaymentIntentHandler(accounts account.Store, chats Store) *StartGroupChatPaymentIntentHandler {
+func NewStartGroupChatPaymentIntentHandler(accounts account.Store, chats chat.Store) *StartGroupChatPaymentIntentHandler {
 	return &StartGroupChatPaymentIntentHandler{
 		accounts: accounts,
 		chats:    chats,
@@ -32,9 +33,24 @@ func NewStartGroupChatPaymentIntentHandler(accounts account.Store, chats Store) 
 }
 
 func (h *StartGroupChatPaymentIntentHandler) Validate(ctx context.Context, intentRecord *codeintent.Record, customMetadata proto.Message) (*intent.ValidationResult, error) {
-	startGroupChatMetadata, ok := customMetadata.(*chatpb.StartGroupChatPaymentMetadata)
+	typedMetadata, ok := customMetadata.(*chatpb.StartGroupChatPaymentMetadata)
 	if !ok {
 		return nil, errors.New("unexepected custom metadata")
+	}
+
+	payingOwner, err := codecommon.NewAccountFromPublicKeyString(intentRecord.InitiatorOwnerAccount)
+	if err != nil {
+		return nil, err
+	}
+
+	payingUser, err := h.accounts.GetUserId(ctx, &commonpb.PublicKey{Value: payingOwner.PublicKey().ToBytes()})
+	if err == account.ErrNotFound {
+		return &intent.ValidationResult{
+			StatusCode:       intent.INVALID,
+			ErrorDescription: "paying user not found",
+		}, nil
+	} else if err != nil {
+		return nil, err
 	}
 
 	// Payment must be public
@@ -61,23 +77,8 @@ func (h *StartGroupChatPaymentIntentHandler) Validate(ctx context.Context, inten
 		}, nil
 	}
 
-	payingOwner, err := codecommon.NewAccountFromPublicKeyString(intentRecord.InitiatorOwnerAccount)
-	if err != nil {
-		return nil, err
-	}
-
-	payingUser, err := h.accounts.GetUserId(ctx, &commonpb.PublicKey{Value: payingOwner.PublicKey().ToBytes()})
-	if err == account.ErrNotFound {
-		return &intent.ValidationResult{
-			StatusCode:       intent.INVALID,
-			ErrorDescription: "paying user not found",
-		}, nil
-	} else if err != nil {
-		return nil, err
-	}
-
 	// The paying user must pay for their own group creation
-	if !bytes.Equal(startGroupChatMetadata.UserId.Value, payingUser.Value) {
+	if !bytes.Equal(typedMetadata.UserId.Value, payingUser.Value) {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "user must pay for their own group creation",
@@ -89,10 +90,10 @@ func (h *StartGroupChatPaymentIntentHandler) Validate(ctx context.Context, inten
 
 type JoinChatPaymentIntentHandler struct {
 	accounts account.Store
-	chats    Store
+	chats    chat.Store
 }
 
-func NewJoinChatPaymentIntentHandler(accounts account.Store, chats Store) *JoinChatPaymentIntentHandler {
+func NewJoinChatPaymentIntentHandler(accounts account.Store, chats chat.Store) *JoinChatPaymentIntentHandler {
 	return &JoinChatPaymentIntentHandler{
 		accounts: accounts,
 		chats:    chats,
@@ -100,17 +101,9 @@ func NewJoinChatPaymentIntentHandler(accounts account.Store, chats Store) *JoinC
 }
 
 func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecord *codeintent.Record, customMetadata proto.Message) (*intent.ValidationResult, error) {
-	joinChatMetadata, ok := customMetadata.(*chatpb.JoinChatPaymentMetadata)
+	typedMetadata, ok := customMetadata.(*chatpb.JoinChatPaymentMetadata)
 	if !ok {
 		return nil, errors.New("unexepected custom metadata")
-	}
-
-	// Payment must be public
-	if intentRecord.IntentType != codeintent.SendPublicPayment {
-		return &intent.ValidationResult{
-			StatusCode:       intent.INVALID,
-			ErrorDescription: "payment must be public",
-		}, nil
 	}
 
 	payingOwner, err := codecommon.NewAccountFromPublicKeyString(intentRecord.InitiatorOwnerAccount)
@@ -123,8 +116,8 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		return nil, err
 	}
 
-	chat, err := h.chats.GetChatMetadata(ctx, joinChatMetadata.ChatId)
-	if err == ErrChatNotFound {
+	chatMd, err := h.chats.GetChatMetadata(ctx, typedMetadata.ChatId)
+	if err == chat.ErrChatNotFound {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "chat not found",
@@ -153,24 +146,40 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 		return nil, err
 	}
 
+	// Only group chats are allowed
+	if chatMd.Type != chatpb.Metadata_GROUP {
+		return &intent.ValidationResult{
+			StatusCode:       intent.INVALID,
+			ErrorDescription: "chat type must be group",
+		}, nil
+	}
+
 	// Chat must enforce a cover charge
-	if chat.CoverCharge == nil {
+	if chatMd.CoverCharge == nil {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "chat does not have a cover charge",
 		}, nil
 	}
 
-	// Payment amount must be exactly the cover charge
-	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != chat.CoverCharge.Quarks {
+	// Payment must be public
+	if intentRecord.IntentType != codeintent.SendPublicPayment {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
-			ErrorDescription: fmt.Sprintf("cover charge is %d quarks", chat.CoverCharge.Quarks),
+			ErrorDescription: "payment must be public",
+		}, nil
+	}
+
+	// Payment amount must be exactly the cover charge
+	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != chatMd.CoverCharge.Quarks {
+		return &intent.ValidationResult{
+			StatusCode:       intent.INVALID,
+			ErrorDescription: fmt.Sprintf("cover charge is %d quarks", chatMd.CoverCharge.Quarks),
 		}, nil
 	}
 
 	// The paying user must pay for their own join
-	if !bytes.Equal(joinChatMetadata.UserId.Value, payingUser.Value) {
+	if !bytes.Equal(typedMetadata.UserId.Value, payingUser.Value) {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "user must pay for their own join",
@@ -178,21 +187,31 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 	}
 
 	// The payment must go to the current chat owner
-	if !bytes.Equal(paidUser.Value, chat.Owner.Value) {
+	if chatMd.Owner == nil {
+		return &intent.ValidationResult{
+			StatusCode:       intent.INVALID,
+			ErrorDescription: "chat doesn't have an owner",
+		}, nil
+	} else if !bytes.Equal(paidUser.Value, chatMd.Owner.Value) {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "payment must go to chat owner",
 		}, nil
+	} else if bytes.Equal(payingUser.Value, chatMd.Owner.Value) {
+		return &intent.ValidationResult{
+			StatusCode:       intent.INVALID,
+			ErrorDescription: "chat owner cannot pay to join their own chat",
+		}, nil
 	}
 
-	isMember, err := h.chats.IsMember(ctx, chat.ChatId, payingUser)
+	isMember, err := h.chats.IsMember(ctx, typedMetadata.ChatId, payingUser)
 	if err != nil {
 		return nil, err
 	}
 
 	var hasSendPermission bool
 	if isMember {
-		hasSendPermission, err = h.chats.HasSendPermission(ctx, chat.ChatId, payingUser)
+		hasSendPermission, err = h.chats.HasSendPermission(ctx, typedMetadata.ChatId, payingUser)
 		if err != nil {
 			return nil, err
 		}
