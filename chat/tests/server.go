@@ -496,6 +496,69 @@ func testServer(
 			}
 		})
 
+		t.Run("Permanently mute user", func(t *testing.T) {
+			otherUser := model.MustGenerateUserID()
+			otherKeyPair := model.MustGenerateKeyPair()
+			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
+
+			join := &chatpb.JoinChatRequest{
+				Identifier:            &chatpb.JoinChatRequest_ChatId{ChatId: created.Chat.ChatId},
+				WithoutSendPermission: true,
+			}
+			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
+			joinResp, err := client.JoinChat(context.Background(), join)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
+
+			mute := &chatpb.MuteUserRequest{
+				ChatId: created.Chat.ChatId,
+				UserId: otherUser,
+			}
+			require.NoError(t, keyPair.Auth(mute, &mute.Auth))
+			muteResp, err := client.MuteUser(context.Background(), mute)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.MuteUserResponse_OK, muteResp.Result)
+
+			leave := &chatpb.LeaveChatRequest{
+				ChatId: created.Chat.ChatId,
+			}
+			require.NoError(t, otherKeyPair.Auth(leave, &leave.Auth))
+			leaveResp, err := client.LeaveChat(context.Background(), leave)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
+
+			joinResp, err = client.JoinChat(context.Background(), join)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
+
+			newExpectedMembers := protoutil.SliceClone(expectedMembers)
+			for _, m := range newExpectedMembers {
+				m.IsSelf = false
+			}
+			newExpectedMembers = append(newExpectedMembers, &chatpb.Member{
+				UserId:   otherUser,
+				Identity: &chatpb.MemberIdentity{},
+				IsSelf:   true,
+				IsMuted:  true,
+			})
+
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, otherKeyPair.Auth(getByID, &getByID.Auth))
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.Len(t, get.Members, len(newExpectedMembers))
+			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+
+			leaveResp, err = client.LeaveChat(context.Background(), leave)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
+		})
+
 		t.Run("Set cover charge", func(t *testing.T) {
 			setCoverCharge := &chatpb.SetCoverChargeRequest{
 				ChatId:      created.Chat.ChatId,

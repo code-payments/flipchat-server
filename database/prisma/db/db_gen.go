@@ -175,6 +175,8 @@ model Member {
   hasModPermission  Boolean @default(false) // Is this member a moderator (aka host)?
   hasSendPermission Boolean @default(false) // Can this member send messages?
 
+  isSoftDeleted Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -459,6 +461,7 @@ const (
 	MemberScalarFieldEnumIsPushEnabled     MemberScalarFieldEnum = "isPushEnabled"
 	MemberScalarFieldEnumHasModPermission  MemberScalarFieldEnum = "hasModPermission"
 	MemberScalarFieldEnumHasSendPermission MemberScalarFieldEnum = "hasSendPermission"
+	MemberScalarFieldEnumIsSoftDeleted     MemberScalarFieldEnum = "isSoftDeleted"
 	MemberScalarFieldEnumCreatedAt         MemberScalarFieldEnum = "createdAt"
 	MemberScalarFieldEnumUpdatedAt         MemberScalarFieldEnum = "updatedAt"
 )
@@ -640,6 +643,8 @@ const memberFieldIsPushEnabled memberPrismaFields = "isPushEnabled"
 const memberFieldHasModPermission memberPrismaFields = "hasModPermission"
 
 const memberFieldHasSendPermission memberPrismaFields = "hasSendPermission"
+
+const memberFieldIsSoftDeleted memberPrismaFields = "isSoftDeleted"
 
 const memberFieldCreatedAt memberPrismaFields = "createdAt"
 
@@ -1339,6 +1344,7 @@ type InnerMember struct {
 	IsPushEnabled     bool     `json:"isPushEnabled"`
 	HasModPermission  bool     `json:"hasModPermission"`
 	HasSendPermission bool     `json:"hasSendPermission"`
+	IsSoftDeleted     bool     `json:"isSoftDeleted"`
 	CreatedAt         DateTime `json:"createdAt"`
 	UpdatedAt         DateTime `json:"updatedAt"`
 }
@@ -1353,6 +1359,7 @@ type RawMemberModel struct {
 	IsPushEnabled     RawBoolean  `json:"isPushEnabled"`
 	HasModPermission  RawBoolean  `json:"hasModPermission"`
 	HasSendPermission RawBoolean  `json:"hasSendPermission"`
+	IsSoftDeleted     RawBoolean  `json:"isSoftDeleted"`
 	CreatedAt         RawDateTime `json:"createdAt"`
 	UpdatedAt         RawDateTime `json:"updatedAt"`
 }
@@ -9429,6 +9436,11 @@ type memberQuery struct {
 	// @required
 	HasSendPermission memberQueryHasSendPermissionBoolean
 
+	// IsSoftDeleted
+	//
+	// @required
+	IsSoftDeleted memberQueryIsSoftDeletedBoolean
+
 	// CreatedAt
 	//
 	// @required
@@ -11266,6 +11278,74 @@ func (r memberQueryHasSendPermissionBoolean) Cursor(cursor bool) memberCursorPar
 
 func (r memberQueryHasSendPermissionBoolean) Field() memberPrismaFields {
 	return memberFieldHasSendPermission
+}
+
+// base struct
+type memberQueryIsSoftDeletedBoolean struct{}
+
+// Set the required value of IsSoftDeleted
+func (r memberQueryIsSoftDeletedBoolean) Set(value bool) memberSetParam {
+
+	return memberSetParam{
+		data: builder.Field{
+			Name:  "isSoftDeleted",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of IsSoftDeleted dynamically
+func (r memberQueryIsSoftDeletedBoolean) SetIfPresent(value *Boolean) memberSetParam {
+	if value == nil {
+		return memberSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r memberQueryIsSoftDeletedBoolean) Equals(value bool) memberWithPrismaIsSoftDeletedEqualsParam {
+
+	return memberWithPrismaIsSoftDeletedEqualsParam{
+		data: builder.Field{
+			Name: "isSoftDeleted",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r memberQueryIsSoftDeletedBoolean) EqualsIfPresent(value *bool) memberWithPrismaIsSoftDeletedEqualsParam {
+	if value == nil {
+		return memberWithPrismaIsSoftDeletedEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r memberQueryIsSoftDeletedBoolean) Order(direction SortOrder) memberDefaultParam {
+	return memberDefaultParam{
+		data: builder.Field{
+			Name:  "isSoftDeleted",
+			Value: direction,
+		},
+	}
+}
+
+func (r memberQueryIsSoftDeletedBoolean) Cursor(cursor bool) memberCursorParam {
+	return memberCursorParam{
+		data: builder.Field{
+			Name:  "isSoftDeleted",
+			Value: cursor,
+		},
+	}
+}
+
+func (r memberQueryIsSoftDeletedBoolean) Field() memberPrismaFields {
+	return memberFieldIsSoftDeleted
 }
 
 // base struct
@@ -23963,6 +24043,7 @@ var memberOutput = []builder.Output{
 	{Name: "isPushEnabled"},
 	{Name: "hasModPermission"},
 	{Name: "hasSendPermission"},
+	{Name: "isSoftDeleted"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -24754,6 +24835,84 @@ func (p memberWithPrismaHasSendPermissionEqualsUniqueParam) hasSendPermissionFie
 
 func (memberWithPrismaHasSendPermissionEqualsUniqueParam) unique() {}
 func (memberWithPrismaHasSendPermissionEqualsUniqueParam) equals() {}
+
+type MemberWithPrismaIsSoftDeletedEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	memberModel()
+	isSoftDeletedField()
+}
+
+type MemberWithPrismaIsSoftDeletedSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	isSoftDeletedField()
+}
+
+type memberWithPrismaIsSoftDeletedSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsSoftDeletedSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsSoftDeletedSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsSoftDeletedSetParam) memberModel() {}
+
+func (p memberWithPrismaIsSoftDeletedSetParam) isSoftDeletedField() {}
+
+type MemberWithPrismaIsSoftDeletedWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	memberModel()
+	isSoftDeletedField()
+}
+
+type memberWithPrismaIsSoftDeletedEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsSoftDeletedEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsSoftDeletedEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsSoftDeletedEqualsParam) memberModel() {}
+
+func (p memberWithPrismaIsSoftDeletedEqualsParam) isSoftDeletedField() {}
+
+func (memberWithPrismaIsSoftDeletedSetParam) settable()  {}
+func (memberWithPrismaIsSoftDeletedEqualsParam) equals() {}
+
+type memberWithPrismaIsSoftDeletedEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p memberWithPrismaIsSoftDeletedEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p memberWithPrismaIsSoftDeletedEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p memberWithPrismaIsSoftDeletedEqualsUniqueParam) memberModel()        {}
+func (p memberWithPrismaIsSoftDeletedEqualsUniqueParam) isSoftDeletedField() {}
+
+func (memberWithPrismaIsSoftDeletedEqualsUniqueParam) unique() {}
+func (memberWithPrismaIsSoftDeletedEqualsUniqueParam) equals() {}
 
 type MemberWithPrismaCreatedAtEqualsSetParam interface {
 	field() builder.Field

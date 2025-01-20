@@ -629,7 +629,8 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	// TODO: Return if no-op
 
 	newMember := Member{
-		UserID: userID,
+		UserID:        userID,
+		IsPushEnabled: true,
 	}
 	if isOwner {
 		newMember.HasSendPermission = true

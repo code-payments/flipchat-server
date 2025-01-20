@@ -193,6 +193,7 @@ func (s *store) GetChatsForUser(ctx context.Context, userID *commonpb.UserId, op
 
 	res, err := s.client.Member.FindMany(
 		db.Member.UserID.Equals(encodedUserID),
+		db.Member.IsSoftDeleted.Equals(false),
 	).Select(
 		db.Member.ChatID.Field(),
 	).Exec(ctx)
@@ -254,6 +255,7 @@ func (s *store) GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*cha
 	// TODO: Add pagination
 	members, err := s.client.Member.FindMany(
 		db.Member.ChatID.Equals(encodedChatID),
+		db.Member.IsSoftDeleted.Equals(false),
 	).Exec(ctx)
 
 	if err != nil {
@@ -313,7 +315,7 @@ func (s *store) GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *
 		),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || member == nil {
+	if errors.Is(err, db.ErrNotFound) || member.IsSoftDeleted || member == nil {
 		return nil, chat.ErrMemberNotFound
 	}
 
@@ -349,7 +351,7 @@ func (s *store) IsMember(ctx context.Context, chatID *commonpb.ChatId, userID *c
 		),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || member == nil {
+	if errors.Is(err, db.ErrNotFound) || member.IsSoftDeleted || member == nil {
 		return false, nil
 	}
 
@@ -484,20 +486,30 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 	}
 
 	// Check if the user is already a member
-	_, err = s.client.Member.FindUnique(
+	existing, err := s.client.Member.FindUnique(
 		db.Member.ChatIDUserID(
 			db.Member.ChatID.Equals(encodedChatID),
 			db.Member.UserID.Equals(encodedUserID),
 		),
 	).Exec(ctx)
-	if err == nil {
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return err
+	}
+	if err == nil && !existing.IsSoftDeleted {
 		return nil
 	}
 
+	// Maintain previous mute state within soft deleted record
+	isMuted := member.IsMuted
+	if existing != nil {
+		isMuted = isMuted || existing.IsMuted
+	}
+
 	// Create the member
-	createArgs := []db.MemberSetParam{
+	args := []db.MemberSetParam{
+		db.Member.IsSoftDeleted.Set(false),
 		db.Member.IsPushEnabled.Set(true),
-		db.Member.IsMuted.Set(member.IsMuted),
+		db.Member.IsMuted.Set(isMuted),
 		db.Member.HasModPermission.Set(member.HasModPermission),
 		db.Member.HasSendPermission.Set(member.HasSendPermission),
 	}
@@ -505,16 +517,25 @@ func (s *store) AddMember(ctx context.Context, chatID *commonpb.ChatId, member c
 	// Add AddedBy parameter conditionally
 	if member.AddedBy != nil {
 		encodedAddedBy := pg.Encode(member.AddedBy.Value)
-		createArgs = append(createArgs,
+		args = append(args,
 			db.Member.AddedByID.Set(encodedAddedBy),
 		)
 	}
 
-	_, err = s.client.Member.CreateOne(
-		db.Member.UserID.Set(encodedUserID),
-		db.Member.Chat.Link(db.Chat.ID.Equals(encodedChatID)),
-		createArgs...,
-	).Exec(ctx)
+	if existing == nil {
+		_, err = s.client.Member.CreateOne(
+			db.Member.UserID.Set(encodedUserID),
+			db.Member.Chat.Link(db.Chat.ID.Equals(encodedChatID)),
+			args...,
+		).Exec(ctx)
+	} else {
+		_, err = s.client.Member.FindMany(
+			db.Member.ChatID.Equals(encodedChatID),
+			db.Member.UserID.Equals(encodedUserID),
+		).Update(
+			args...,
+		).Exec(ctx)
+	}
 
 	return err
 }
@@ -530,7 +551,13 @@ func (s *store) RemoveMember(ctx context.Context, chatID *commonpb.ChatId, membe
 	_, err := s.client.Member.FindMany(
 		db.Member.ChatID.Equals(encodedChatID),
 		db.Member.UserID.Equals(encodedUserID),
-	).Delete().Exec(ctx)
+	).Update(
+		db.Member.IsSoftDeleted.Set(true),
+		db.Member.AddedByID.SetOptional(nil),
+		db.Member.IsPushEnabled.Set(true),
+		db.Member.HasModPermission.Set(false),
+		db.Member.HasSendPermission.Set(false),
+	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
 		return chat.ErrMemberNotFound
@@ -597,20 +624,23 @@ func (s *store) SetMuteState(ctx context.Context, chatID *commonpb.ChatId, membe
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedUserID := pg.Encode(member.Value)
 
-	_, err := s.client.Member.FindUnique(
-		db.Member.ChatIDUserID(
-			db.Member.ChatID.Equals(encodedChatID),
-			db.Member.UserID.Equals(encodedUserID),
-		),
+	result, err := s.client.Member.FindMany(
+		db.Member.ChatID.Equals(encodedChatID),
+		db.Member.UserID.Equals(encodedUserID),
+		db.Member.IsSoftDeleted.Equals(false),
 	).Update(
 		db.Member.IsMuted.Set(isMuted),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
 		return chat.ErrMemberNotFound
+	} else if err != nil {
+		return err
 	}
-
-	return err
+	if result.Count == 0 {
+		return chat.ErrMemberNotFound
+	}
+	return nil
 }
 
 func (s *store) IsUserMuted(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
@@ -624,7 +654,12 @@ func (s *store) IsUserMuted(ctx context.Context, chatID *commonpb.ChatId, member
 		),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || res == nil {
+	if errors.Is(err, db.ErrNotFound) {
+		return false, chat.ErrMemberNotFound
+	} else if err != nil {
+		return false, err
+	}
+	if res.IsSoftDeleted {
 		return false, chat.ErrMemberNotFound
 	}
 
@@ -635,20 +670,23 @@ func (s *store) SetSendPermission(ctx context.Context, chatID *commonpb.ChatId, 
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedUserID := pg.Encode(member.Value)
 
-	_, err := s.client.Member.FindUnique(
-		db.Member.ChatIDUserID(
-			db.Member.ChatID.Equals(encodedChatID),
-			db.Member.UserID.Equals(encodedUserID),
-		),
+	result, err := s.client.Member.FindMany(
+		db.Member.ChatID.Equals(encodedChatID),
+		db.Member.UserID.Equals(encodedUserID),
+		db.Member.IsSoftDeleted.Equals(false),
 	).Update(
 		db.Member.HasSendPermission.Set(hasSendPermission),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
 		return chat.ErrMemberNotFound
+	} else if err != nil {
+		return err
 	}
-
-	return err
+	if result.Count == 0 {
+		return chat.ErrMemberNotFound
+	}
+	return nil
 }
 
 func (s *store) HasSendPermission(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
@@ -662,7 +700,12 @@ func (s *store) HasSendPermission(ctx context.Context, chatID *commonpb.ChatId, 
 		),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || res == nil {
+	if errors.Is(err, db.ErrNotFound) {
+		return false, chat.ErrMemberNotFound
+	} else if err != nil {
+		return false, err
+	}
+	if res.IsSoftDeleted {
 		return false, chat.ErrMemberNotFound
 	}
 
@@ -673,20 +716,23 @@ func (s *store) SetPushState(ctx context.Context, chatID *commonpb.ChatId, membe
 	encodedChatID := pg.Encode(chatID.Value)
 	encodedUserID := pg.Encode(member.Value)
 
-	_, err := s.client.Member.FindUnique(
-		db.Member.ChatIDUserID(
-			db.Member.ChatID.Equals(encodedChatID),
-			db.Member.UserID.Equals(encodedUserID),
-		),
+	result, err := s.client.Member.FindMany(
+		db.Member.ChatID.Equals(encodedChatID),
+		db.Member.UserID.Equals(encodedUserID),
+		db.Member.IsSoftDeleted.Equals(false),
 	).Update(
 		db.Member.IsPushEnabled.Set(isPushEnabled),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {
 		return chat.ErrMemberNotFound
+	} else if err != nil {
+		return err
 	}
-
-	return err
+	if result.Count == 0 {
+		return chat.ErrMemberNotFound
+	}
+	return nil
 }
 
 func (s *store) IsPushEnabled(ctx context.Context, chatID *commonpb.ChatId, member *commonpb.UserId) (bool, error) {
@@ -700,7 +746,12 @@ func (s *store) IsPushEnabled(ctx context.Context, chatID *commonpb.ChatId, memb
 		),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || res == nil {
+	if errors.Is(err, db.ErrNotFound) {
+		return false, chat.ErrMemberNotFound
+	} else if err != nil {
+		return false, err
+	}
+	if res.IsSoftDeleted {
 		return false, chat.ErrMemberNotFound
 	}
 
