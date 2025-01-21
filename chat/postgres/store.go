@@ -351,10 +351,15 @@ func (s *store) IsMember(ctx context.Context, chatID *commonpb.ChatId, userID *c
 		),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || member.IsSoftDeleted || member == nil {
+	if errors.Is(err, db.ErrNotFound) {
 		return false, nil
+	} else if err != nil {
+		return false, err
 	}
 
+	if member == nil || member.IsSoftDeleted {
+		return false, nil
+	}
 	return true, nil
 }
 
