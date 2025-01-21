@@ -559,21 +559,21 @@ func testServer(
 			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
 		})
 
-		t.Run("Set cover charge", func(t *testing.T) {
-			setCoverCharge := &chatpb.SetCoverChargeRequest{
-				ChatId:      created.Chat.ChatId,
-				CoverCharge: &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(500)},
+		t.Run("Set messaging fee", func(t *testing.T) {
+			setMessagingFee := &chatpb.SetMessagingFeeRequest{
+				ChatId:       created.Chat.ChatId,
+				MessagingFee: &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(500)},
 			}
-			require.NoError(t, keyPair.Auth(setCoverCharge, &setCoverCharge.Auth))
+			require.NoError(t, keyPair.Auth(setMessagingFee, &setMessagingFee.Auth))
 
-			setCoverChargeResp, err := client.SetCoverCharge(context.Background(), setCoverCharge)
+			setMessagingFeeResp, err := client.SetMessagingFee(context.Background(), setMessagingFee)
 			require.NoError(t, err)
-			require.Equal(t, chatpb.SetCoverChargeResponse_OK, setCoverChargeResp.Result)
+			require.Equal(t, chatpb.SetMessagingFeeResponse_OK, setMessagingFeeResp.Result)
 
 			get, err := client.GetChat(context.Background(), getByID)
 			require.NoError(t, err)
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
-			require.NoError(t, protoutil.ProtoEqualError(setCoverCharge.CoverCharge, get.Metadata.MessagingFee))
+			require.NoError(t, protoutil.ProtoEqualError(setMessagingFee.MessagingFee, get.Metadata.MessagingFee))
 		})
 
 		t.Run("Set display name", func(t *testing.T) {
@@ -857,22 +857,22 @@ func testServer(
 		require.Empty(t, u.MemberUpdates)
 		require.True(t, u.MetadataUpdates[0].GetOpenStatusChanged().NewOpenStatus.IsCurrentlyOpen)
 
-		// Other user updates chat cover charge
-		setCoverCharge := &chatpb.SetCoverChargeRequest{
+		// Other user updates messaging fee
+		setMessagingFee := &chatpb.SetMessagingFeeRequest{
 			ChatId: startedOther.Chat.ChatId,
-			CoverCharge: &commonpb.PaymentAmount{
+			MessagingFee: &commonpb.PaymentAmount{
 				Quarks: 2 * chat.InitialMessagingFee,
 			},
 		}
-		require.NoError(t, keyPair.Auth(setCoverCharge, &setCoverCharge.Auth))
-		_, err = client.SetCoverCharge(ctx, setCoverCharge)
+		require.NoError(t, keyPair.Auth(setMessagingFee, &setMessagingFee.Auth))
+		_, err = client.SetMessagingFee(ctx, setMessagingFee)
 		require.NoError(t, err)
 
 		u = <-updateCh
 		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
 		require.Len(t, u.MetadataUpdates, 1)
 		require.Empty(t, u.MemberUpdates, 0)
-		require.NoError(t, protoutil.ProtoEqualError(u.MetadataUpdates[0].GetMessagingFeeChanged().NewMessagingFee, setCoverCharge.CoverCharge))
+		require.NoError(t, protoutil.ProtoEqualError(u.MetadataUpdates[0].GetMessagingFeeChanged().NewMessagingFee, setMessagingFee.MessagingFee))
 
 		// Other user updates chat display name
 		setDisplayName := &chatpb.SetDisplayNameRequest{

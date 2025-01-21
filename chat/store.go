@@ -98,7 +98,7 @@ type Store interface {
 
 	SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, displayName string) error
 
-	SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error
+	SetMessagingFee(ctx context.Context, chatID *commonpb.ChatId, messagingFee *commonpb.PaymentAmount) error
 
 	SetOpenStatus(ctx context.Context, chatID *commonpb.ChatId, isOpen bool) error
 

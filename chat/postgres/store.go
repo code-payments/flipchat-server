@@ -588,13 +588,13 @@ func (s *store) SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, dis
 	return err
 }
 
-func (s *store) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
+func (s *store) SetMessagingFee(ctx context.Context, chatID *commonpb.ChatId, messagingFee *commonpb.PaymentAmount) error {
 	encodedChatID := pg.Encode(chatID.Value)
 
 	_, err := s.client.Chat.FindUnique(
 		db.Chat.ID.Equals(encodedChatID),
 	).Update(
-		db.Chat.CoverCharge.Set(db.BigInt(coverCharge.Quarks)),
+		db.Chat.CoverCharge.Set(db.BigInt(messagingFee.Quarks)),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {

@@ -69,6 +69,14 @@ func NewCoverChangedAnnouncementContentBuilder(quarks uint64) AnnouncementConten
 	}
 }
 
+func NewMessagingFeeChangedAnnouncementContentBuilder(quarks uint64) AnnouncementContentBuilder {
+	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
+		return &messagingpb.LocalizedAnnouncementContent{
+			KeyOrText: kinAmountPrinter.Sprintf("Messaging fee changed to ⬢ %d Kin", codekin.FromQuarks(quarks)),
+		}, nil
+	}
+}
+
 func NewUserRemovedAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId) AnnouncementContentBuilder {
 	return func() (*messagingpb.LocalizedAnnouncementContent, error) {
 		profile, err := profiles.GetProfile(ctx, userID)

@@ -965,7 +965,7 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 		return &chatpb.SetCoverChargeResponse{}, nil
 	}
 
-	err = s.chats.SetCoverCharge(ctx, req.ChatId, req.CoverCharge)
+	err = s.chats.SetMessagingFee(ctx, req.ChatId, req.CoverCharge)
 	if err != nil {
 		log.Warn("Failed to set cover charge", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to set cover charge")
@@ -998,6 +998,75 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 	}()
 
 	return &chatpb.SetCoverChargeResponse{}, nil
+}
+
+// todo: this needs tests
+func (s *Server) SetMessagingFee(ctx context.Context, req *chatpb.SetMessagingFeeRequest) (*chatpb.SetMessagingFeeResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
+	if err == ErrChatNotFound {
+		return &chatpb.SetMessagingFeeResponse{Result: chatpb.SetMessagingFeeResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat")
+	}
+
+	if md.Type != chatpb.Metadata_GROUP {
+		return &chatpb.SetMessagingFeeResponse{Result: chatpb.SetMessagingFeeResponse_DENIED}, nil
+	}
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
+		return &chatpb.SetMessagingFeeResponse{Result: chatpb.SetMessagingFeeResponse_DENIED}, nil
+	}
+	if md.MessagingFee == nil {
+		return &chatpb.SetMessagingFeeResponse{Result: chatpb.SetMessagingFeeResponse_CANT_SET}, nil
+	}
+
+	if md.MessagingFee.Quarks == req.MessagingFee.Quarks {
+		return &chatpb.SetMessagingFeeResponse{}, nil
+	}
+
+	err = s.chats.SetMessagingFee(ctx, req.ChatId, req.MessagingFee)
+	if err != nil {
+		log.Warn("Failed to set cover charge", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to set messaging fee")
+	}
+
+	go func() {
+		ctx := context.Background()
+
+		if err = messaging.SendAnnouncement(
+			ctx,
+			s.messenger,
+			req.ChatId,
+			messaging.NewMessagingFeeChangedAnnouncementContentBuilder(req.MessagingFee.Quarks),
+		); err != nil {
+			log.Warn("Failed to send announcement", zap.Error(err))
+		}
+
+		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
+			{
+				Kind: &chatpb.MetadataUpdate_MessagingFeeChanged_{
+					MessagingFeeChanged: &chatpb.MetadataUpdate_MessagingFeeChanged{
+						NewMessagingFee: req.MessagingFee,
+					},
+				},
+			},
+		}})
+		if err != nil {
+			s.log.Warn("Failed to notify messaging fee changed", zap.Error(err))
+		}
+	}()
+
+	return &chatpb.SetMessagingFeeResponse{}, nil
 }
 
 // todo: use a proper changelog system, but for now use a full refresh
