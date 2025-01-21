@@ -309,7 +309,7 @@ func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.Cha
 		return chat.ErrChatNotFound
 	}
 
-	md.CoverCharge = proto.Clone(coverCharge).(*commonpb.PaymentAmount)
+	md.MessagingFee = proto.Clone(coverCharge).(*commonpb.PaymentAmount)
 
 	return nil
 }

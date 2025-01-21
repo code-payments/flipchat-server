@@ -71,7 +71,7 @@ model Chat {
   id          String  @id
   displayName String?
   roomNumber  Int?    @unique
-  coverCharge BigInt  @default(0)
+  coverCharge BigInt  @default(0) // todo: rename to messaging fee
   type        Int     @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
   isOpen      Boolean @default(true)
 

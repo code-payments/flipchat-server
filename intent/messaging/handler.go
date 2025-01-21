@@ -89,9 +89,7 @@ func (h *SendMessageAsNonRegularIntentHandler) Validate(ctx context.Context, int
 	}
 
 	// Chat must enforce a messaging fee
-	//
-	// todo: Should we reuse the cover charge?
-	if chatMd.CoverCharge == nil {
+	if chatMd.MessagingFee == nil {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "chat does not have a messaging fee",
@@ -109,10 +107,10 @@ func (h *SendMessageAsNonRegularIntentHandler) Validate(ctx context.Context, int
 	// Payment amount must be exactly the cover charge
 	//
 	// todo: Should we reuse the cover charge?
-	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != chatMd.CoverCharge.Quarks {
+	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != chatMd.MessagingFee.Quarks {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
-			ErrorDescription: fmt.Sprintf("messaging fee is %d quarks", chatMd.CoverCharge.Quarks),
+			ErrorDescription: fmt.Sprintf("messaging fee is %d quarks", chatMd.MessagingFee.Quarks),
 		}, nil
 	}
 

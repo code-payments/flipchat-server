@@ -48,8 +48,8 @@ const (
 )
 
 var (
-	InitialCoverCharge = codekin.ToQuarks(100)
-	MaxUnreadCount     = uint32(99)
+	InitialMessagingFee = codekin.ToQuarks(100)
+	MaxUnreadCount      = uint32(99)
 )
 
 type Server struct {
@@ -447,10 +447,10 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 
 		// Need to do this transactionally...but we've lost it...so...heh :)
 		md = &chatpb.Metadata{
-			ChatId:      model.MustGenerateChatID(),
-			Type:        chatpb.Metadata_GROUP,
-			Owner:       userID,
-			CoverCharge: &commonpb.PaymentAmount{Quarks: InitialCoverCharge},
+			ChatId:       model.MustGenerateChatID(),
+			Type:         chatpb.Metadata_GROUP,
+			Owner:        userID,
+			MessagingFee: &commonpb.PaymentAmount{Quarks: InitialMessagingFee},
 		}
 
 		users = append(t.GroupChat.Users, userID)
@@ -931,6 +931,7 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 	return &chatpb.SetDisplayNameResponse{}, nil
 }
 
+// todo: Deprecate this RPC
 func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeRequest) (*chatpb.SetCoverChargeResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
@@ -956,11 +957,11 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
 		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
 	}
-	if md.CoverCharge == nil {
+	if md.MessagingFee == nil {
 		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_CANT_SET}, nil
 	}
 
-	if md.CoverCharge.Quarks == req.CoverCharge.Quarks {
+	if md.MessagingFee.Quarks == req.CoverCharge.Quarks {
 		return &chatpb.SetCoverChargeResponse{}, nil
 	}
 
@@ -984,9 +985,9 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 
 		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
 			{
-				Kind: &chatpb.MetadataUpdate_CoverChargeChanged_{
-					CoverChargeChanged: &chatpb.MetadataUpdate_CoverChargeChanged{
-						NewCoverCharge: req.CoverCharge,
+				Kind: &chatpb.MetadataUpdate_MessagingFeeChanged_{
+					MessagingFeeChanged: &chatpb.MetadataUpdate_MessagingFeeChanged{
+						NewMessagingFee: req.CoverCharge,
 					},
 				},
 			},

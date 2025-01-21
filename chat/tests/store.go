@@ -49,7 +49,7 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 		ChatId:       chatID1,
 		Type:         chatpb.Metadata_GROUP,
 		Owner:        model.MustGenerateUserID(),
-		CoverCharge:  &commonpb.PaymentAmount{Quarks: 1},
+		MessagingFee: &commonpb.PaymentAmount{Quarks: 1},
 		RoomNumber:   1,
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
@@ -61,7 +61,7 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 		ChatId:       chatID2,
 		Type:         chatpb.Metadata_GROUP,
 		Owner:        model.MustGenerateUserID(),
-		CoverCharge:  &commonpb.PaymentAmount{Quarks: 2},
+		MessagingFee: &commonpb.PaymentAmount{Quarks: 2},
 		RoomNumber:   2,
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
@@ -580,13 +580,13 @@ func testChatStore_SetCoverCharge(t *testing.T, store chat.Store) {
 
 	result, err := store.GetChatMetadata(context.Background(), chatID)
 	require.NoError(t, err)
-	require.Nil(t, result.CoverCharge)
+	require.Nil(t, result.MessagingFee)
 
 	require.NoError(t, store.SetCoverCharge(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
 
 	result, err = store.GetChatMetadata(context.Background(), chatID)
 	require.NoError(t, err)
-	require.Equal(t, kin.ToQuarks(100), result.CoverCharge.Quarks)
+	require.Equal(t, kin.ToQuarks(100), result.MessagingFee.Quarks)
 }
 
 func testChatStore_AdvanceLastChatActivity(t *testing.T, store chat.Store) {

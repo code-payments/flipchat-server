@@ -186,7 +186,7 @@ func testServer(
 		require.Equal(t, chatpb.StartChatResponse_OK, created.Result)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
-		require.Equal(t, chat.InitialCoverCharge, created.Chat.CoverCharge.Quarks)
+		require.Equal(t, chat.InitialMessagingFee, created.Chat.MessagingFee.Quarks)
 		require.True(t, created.Chat.OpenStatus.IsCurrentlyOpen)
 
 		expectedMembers := []*chatpb.Member{{
@@ -328,7 +328,7 @@ func testServer(
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
@@ -373,7 +373,7 @@ func testServer(
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			joinIntentID = testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+			joinIntentID = testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 			join = &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_RoomId{
 					RoomId: created.Chat.RoomNumber,
@@ -430,7 +430,7 @@ func testServer(
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 
 			join = &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
@@ -573,7 +573,7 @@ func testServer(
 			get, err := client.GetChat(context.Background(), getByID)
 			require.NoError(t, err)
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
-			require.NoError(t, protoutil.ProtoEqualError(setCoverCharge.CoverCharge, get.Metadata.CoverCharge))
+			require.NoError(t, protoutil.ProtoEqualError(setCoverCharge.CoverCharge, get.Metadata.MessagingFee))
 		})
 
 		t.Run("Set display name", func(t *testing.T) {
@@ -812,7 +812,7 @@ func testServer(
 			UserId: streamUser,
 			ChatId: startedOther.Chat.ChatId,
 		}
-		joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+		joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 		join := &chatpb.JoinChatRequest{
 			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
 			PaymentIntent: joinIntentID,
@@ -861,7 +861,7 @@ func testServer(
 		setCoverCharge := &chatpb.SetCoverChargeRequest{
 			ChatId: startedOther.Chat.ChatId,
 			CoverCharge: &commonpb.PaymentAmount{
-				Quarks: 2 * chat.InitialCoverCharge,
+				Quarks: 2 * chat.InitialMessagingFee,
 			},
 		}
 		require.NoError(t, keyPair.Auth(setCoverCharge, &setCoverCharge.Auth))
@@ -872,7 +872,7 @@ func testServer(
 		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
 		require.Len(t, u.MetadataUpdates, 1)
 		require.Empty(t, u.MemberUpdates, 0)
-		require.NoError(t, protoutil.ProtoEqualError(u.MetadataUpdates[0].GetCoverChargeChanged().NewCoverCharge, setCoverCharge.CoverCharge))
+		require.NoError(t, protoutil.ProtoEqualError(u.MetadataUpdates[0].GetMessagingFeeChanged().NewMessagingFee, setCoverCharge.CoverCharge))
 
 		// Other user updates chat display name
 		setDisplayName := &chatpb.SetDisplayNameRequest{

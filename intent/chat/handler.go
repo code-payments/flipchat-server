@@ -88,6 +88,7 @@ func (h *StartGroupChatPaymentIntentHandler) Validate(ctx context.Context, inten
 	return &intent.ValidationResult{StatusCode: intent.SUCCESS}, nil
 }
 
+// todo: Deprecate this flow
 type JoinChatPaymentIntentHandler struct {
 	accounts account.Store
 	chats    chat.Store
@@ -155,7 +156,7 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 	}
 
 	// Chat must enforce a cover charge
-	if chatMd.CoverCharge == nil {
+	if chatMd.MessagingFee == nil {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
 			ErrorDescription: "chat does not have a cover charge",
@@ -171,10 +172,10 @@ func (h *JoinChatPaymentIntentHandler) Validate(ctx context.Context, intentRecor
 	}
 
 	// Payment amount must be exactly the cover charge
-	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != chatMd.CoverCharge.Quarks {
+	if intentRecord.SendPublicPaymentMetadata.ExchangeCurrency != codecurrency.KIN || intentRecord.SendPublicPaymentMetadata.Quantity != chatMd.MessagingFee.Quarks {
 		return &intent.ValidationResult{
 			StatusCode:       intent.INVALID,
-			ErrorDescription: fmt.Sprintf("cover charge is %d quarks", chatMd.CoverCharge.Quarks),
+			ErrorDescription: fmt.Sprintf("cover charge is %d quarks", chatMd.MessagingFee.Quarks),
 		}, nil
 	}
 
