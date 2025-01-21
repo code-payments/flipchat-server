@@ -1000,7 +1000,6 @@ func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeR
 	return &chatpb.SetCoverChargeResponse{}, nil
 }
 
-// todo: this needs tests
 func (s *Server) SetMessagingFee(ctx context.Context, req *chatpb.SetMessagingFeeRequest) (*chatpb.SetMessagingFeeResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
@@ -1118,6 +1117,163 @@ func (s *Server) GetMemberUpdates(ctx context.Context, req *chatpb.GetMemberUpda
 	}}, nil
 }
 
+func (s *Server) PromoteUser(ctx context.Context, req *chatpb.PromoteUserRequest) (*chatpb.PromoteUserResponse, error) {
+	ownerID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("owner_id", model.UserIDString(ownerID)),
+		zap.String("user_id", model.UserIDString(req.UserId)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	if bytes.Equal(ownerID.Value, req.UserId.Value) {
+		return &chatpb.PromoteUserResponse{Result: chatpb.PromoteUserResponse_DENIED}, nil
+	}
+
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
+	if err == ErrChatNotFound {
+		return &chatpb.PromoteUserResponse{Result: chatpb.PromoteUserResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat data", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat data")
+	}
+
+	if md.Type != chatpb.Metadata_GROUP {
+		return &chatpb.PromoteUserResponse{Result: chatpb.PromoteUserResponse_DENIED}, nil
+	}
+
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, ownerID.Value) {
+		return &chatpb.PromoteUserResponse{Result: chatpb.PromoteUserResponse_DENIED}, nil
+	}
+
+	memberToPromote, err := s.chats.GetMember(ctx, req.ChatId, req.UserId)
+	if err == ErrMemberNotFound {
+		return &chatpb.PromoteUserResponse{Result: chatpb.PromoteUserResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat member", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat member")
+	}
+
+	if req.EnableSendPermission {
+		if memberToPromote.HasSendPermission {
+			return &chatpb.PromoteUserResponse{}, nil
+		}
+
+		err := s.chats.SetSendPermission(ctx, req.ChatId, req.UserId, true)
+		if err != nil {
+			log.Warn("Failed to set send permission", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to set send permission")
+		}
+
+		go func() {
+			ctx := context.Background()
+
+			if err = messaging.SendAnnouncement(
+				ctx,
+				s.messenger,
+				req.ChatId,
+				messaging.NewUserPromotedToSpeakerAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
+			); err != nil {
+				log.Warn("Failed to send announcement", zap.Error(err))
+			}
+
+			err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.MemberUpdate{
+				{
+					Kind: &chatpb.MemberUpdate_Promoted_{
+						Promoted: &chatpb.MemberUpdate_Promoted{
+							Member:                req.UserId,
+							PromotedBy:            ownerID,
+							SendPermissionEnabled: true,
+						},
+					},
+				},
+			}})
+			if err != nil {
+				s.log.Warn("Failed to notify member demoted", zap.Error(err))
+			}
+		}()
+	}
+
+	return &chatpb.PromoteUserResponse{}, nil
+}
+
+func (s *Server) DemoteUser(ctx context.Context, req *chatpb.DemoteUserRequest) (*chatpb.DemoteUserResponse, error) {
+	ownerID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("owner_id", model.UserIDString(ownerID)),
+		zap.String("user_id", model.UserIDString(req.UserId)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	if bytes.Equal(ownerID.Value, req.UserId.Value) {
+		return &chatpb.DemoteUserResponse{Result: chatpb.DemoteUserResponse_DENIED}, nil
+	}
+
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
+	if err == ErrChatNotFound {
+		return &chatpb.DemoteUserResponse{Result: chatpb.DemoteUserResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat data", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat data")
+	}
+
+	if md.Type != chatpb.Metadata_GROUP {
+		return &chatpb.DemoteUserResponse{Result: chatpb.DemoteUserResponse_DENIED}, nil
+	}
+
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, ownerID.Value) {
+		return &chatpb.DemoteUserResponse{Result: chatpb.DemoteUserResponse_DENIED}, nil
+	}
+
+	memberToDemote, err := s.chats.GetMember(ctx, req.ChatId, req.UserId)
+	if err == ErrMemberNotFound {
+		return &chatpb.DemoteUserResponse{Result: chatpb.DemoteUserResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat member", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat member")
+	}
+
+	if req.DisableSendPermission {
+		if !memberToDemote.HasSendPermission {
+			return &chatpb.DemoteUserResponse{}, nil
+		}
+
+		err := s.chats.SetSendPermission(ctx, req.ChatId, req.UserId, false)
+		if err != nil {
+			log.Warn("Failed to set send permission", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to set send permission")
+		}
+
+		go func() {
+			// todo: announcement?
+
+			err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.MemberUpdate{
+				{
+					Kind: &chatpb.MemberUpdate_Demoted_{
+						Demoted: &chatpb.MemberUpdate_Demoted{
+							Member:                 req.UserId,
+							DemotedBy:              ownerID,
+							SendPermissionDisabled: true,
+						},
+					},
+				},
+			}})
+			if err != nil {
+				s.log.Warn("Failed to notify member demoted", zap.Error(err))
+			}
+		}()
+	}
+
+	return &chatpb.DemoteUserResponse{}, nil
+}
+
 func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) (*chatpb.RemoveUserResponse, error) {
 	return &chatpb.RemoveUserResponse{Result: chatpb.RemoveUserResponse_DENIED}, nil
 
@@ -1194,7 +1350,6 @@ func (s *Server) RemoveUser(ctx context.Context, req *chatpb.RemoveUserRequest) 
 	*/
 }
 
-// todo: this RPC needs tests
 func (s *Server) MuteUser(ctx context.Context, req *chatpb.MuteUserRequest) (*chatpb.MuteUserResponse, error) {
 	ownerID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {

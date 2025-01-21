@@ -471,6 +471,84 @@ func testServer(
 			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
 		})
 
+		t.Run("Promote and demote user", func(t *testing.T) {
+			otherUser := model.MustGenerateUserID()
+			otherKeyPair := model.MustGenerateKeyPair()
+			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
+
+			newExpectedMembers := protoutil.SliceClone(expectedMembers)
+			for _, m := range newExpectedMembers {
+				m.IsSelf = false
+			}
+			newExpectedMembers = append(newExpectedMembers, &chatpb.Member{
+				UserId:            otherUser,
+				Identity:          &chatpb.MemberIdentity{},
+				IsSelf:            true,
+				HasSendPermission: false,
+			})
+
+			// Join without send permission
+			join := &chatpb.JoinChatRequest{
+				Identifier: &chatpb.JoinChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+				WithoutSendPermission: true,
+			}
+			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
+			joinResp, err := client.JoinChat(context.Background(), join)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
+			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
+
+			promote := &chatpb.PromoteUserRequest{
+				ChatId:               created.Chat.ChatId,
+				UserId:               otherUser,
+				EnableSendPermission: true,
+			}
+			require.NoError(t, keyPair.Auth(promote, &promote.Auth))
+			promoteResp, err := client.PromoteUser(context.Background(), promote)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.PromoteUserResponse_OK, promoteResp.Result)
+
+			newExpectedMembers[len(newExpectedMembers)-1].HasSendPermission = true
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, otherKeyPair.Auth(getByID, &getByID.Auth))
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+
+			demote := &chatpb.DemoteUserRequest{
+				ChatId:                created.Chat.ChatId,
+				UserId:                otherUser,
+				DisableSendPermission: true,
+			}
+			require.NoError(t, keyPair.Auth(demote, &demote.Auth))
+			demoteResp, err := client.DemoteUser(context.Background(), demote)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.DemoteUserResponse_OK, demoteResp.Result)
+
+			newExpectedMembers[len(newExpectedMembers)-1].HasSendPermission = false
+			get, err = client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
+			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+
+			leave := &chatpb.LeaveChatRequest{
+				ChatId: created.Chat.GetChatId(),
+			}
+			require.NoError(t, otherKeyPair.Auth(leave, &leave.Auth))
+			leaveResp, err := client.LeaveChat(context.Background(), leave)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
+		})
+
 		t.Run("Remove user", func(t *testing.T) {
 			t.Skip("feature disabled")
 
@@ -935,6 +1013,42 @@ func testServer(
 		require.Len(t, u.MemberUpdates, 1)
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetMuted().Member, streamUser))
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetMuted().MutedBy, userID))
+
+		// Other user demotes us
+		demote := &chatpb.DemoteUserRequest{
+			ChatId:                startedOther.Chat.ChatId,
+			UserId:                streamUser,
+			DisableSendPermission: true,
+		}
+		require.NoError(t, keyPair.Auth(demote, &demote.Auth))
+		_, err = client.DemoteUser(context.Background(), demote)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Empty(t, u.MetadataUpdates)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetDemoted().Member, streamUser))
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetDemoted().DemotedBy, userID))
+		require.True(t, u.MemberUpdates[0].GetDemoted().SendPermissionDisabled)
+
+		// Other user promotes us
+		promote := &chatpb.PromoteUserRequest{
+			ChatId:               startedOther.Chat.ChatId,
+			UserId:               streamUser,
+			EnableSendPermission: true,
+		}
+		require.NoError(t, keyPair.Auth(promote, &promote.Auth))
+		_, err = client.PromoteUser(context.Background(), promote)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Empty(t, u.MetadataUpdates)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetPromoted().Member, streamUser))
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetPromoted().PromotedBy, userID))
+		require.True(t, u.MemberUpdates[0].GetPromoted().SendPermissionEnabled)
 
 		// Leave the chat
 		leave = &chatpb.LeaveChatRequest{ChatId: started.Chat.ChatId}
