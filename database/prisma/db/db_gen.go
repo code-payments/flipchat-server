@@ -270,6 +270,26 @@ model Iap {
 
   @@map("flipchat_iap")
 }
+
+model Blob {
+  // Fields
+  id Bytes @id
+
+  userId   String
+  type     Int     @db.SmallInt
+  s3Url    String
+  size     Int
+  metadata Bytes
+  flagged  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  // Relations
+
+  // Constraints
+
+  @@map("flipchat_blob")
+}
 `
 const schemaDatasourceURL = ""
 const schemaEnvVarName = "DATABASE_URL"
@@ -350,6 +370,7 @@ func newClient() *PrismaClient {
 	c.Pointer = pointerActions{client: c}
 	c.PushToken = pushTokenActions{client: c}
 	c.Iap = iapActions{client: c}
+	c.Blob = blobActions{client: c}
 
 	c.Prisma = &PrismaActions{
 		Raw: &raw.Raw{Engine: c},
@@ -392,6 +413,8 @@ type PrismaClient struct {
 	PushToken pushTokenActions
 	// Iap provides access to CRUD methods.
 	Iap iapActions
+	// Blob provides access to CRUD methods.
+	Blob blobActions
 }
 
 // --- template enums.gotpl ---
@@ -508,6 +531,19 @@ const (
 	IapScalarFieldEnumProduct   IapScalarFieldEnum = "product"
 	IapScalarFieldEnumState     IapScalarFieldEnum = "state"
 	IapScalarFieldEnumCreatedAt IapScalarFieldEnum = "createdAt"
+)
+
+type BlobScalarFieldEnum string
+
+const (
+	BlobScalarFieldEnumID        BlobScalarFieldEnum = "id"
+	BlobScalarFieldEnumUserID    BlobScalarFieldEnum = "userId"
+	BlobScalarFieldEnumType      BlobScalarFieldEnum = "type"
+	BlobScalarFieldEnumS3URL     BlobScalarFieldEnum = "s3Url"
+	BlobScalarFieldEnumSize      BlobScalarFieldEnum = "size"
+	BlobScalarFieldEnumMetadata  BlobScalarFieldEnum = "metadata"
+	BlobScalarFieldEnumFlagged   BlobScalarFieldEnum = "flagged"
+	BlobScalarFieldEnumCreatedAt BlobScalarFieldEnum = "createdAt"
 )
 
 type SortOrder string
@@ -708,6 +744,24 @@ const iapFieldState iapPrismaFields = "state"
 
 const iapFieldCreatedAt iapPrismaFields = "createdAt"
 
+type blobPrismaFields = prismaFields
+
+const blobFieldID blobPrismaFields = "id"
+
+const blobFieldUserID blobPrismaFields = "userId"
+
+const blobFieldType blobPrismaFields = "type"
+
+const blobFieldS3URL blobPrismaFields = "s3Url"
+
+const blobFieldSize blobPrismaFields = "size"
+
+const blobFieldMetadata blobPrismaFields = "metadata"
+
+const blobFieldFlagged blobPrismaFields = "flagged"
+
+const blobFieldCreatedAt blobPrismaFields = "createdAt"
+
 // --- template mock.gotpl ---
 func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 	expectations := new([]mock.Expectation)
@@ -754,6 +808,10 @@ func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 		mock: m,
 	}
 
+	m.Blob = blobMock{
+		mock: m,
+	}
+
 	return pc, m, m.Ensure
 }
 
@@ -777,6 +835,8 @@ type Mock struct {
 	PushToken pushTokenMock
 
 	Iap iapMock
+
+	Blob blobMock
 }
 
 type userMock struct {
@@ -1157,6 +1217,48 @@ func (m *iapMockExec) Errors(err error) {
 	})
 }
 
+type blobMock struct {
+	mock *Mock
+}
+
+type BlobMockExpectParam interface {
+	ExtractQuery() builder.Query
+	blobModel()
+}
+
+func (m *blobMock) Expect(query BlobMockExpectParam) *blobMockExec {
+	return &blobMockExec{
+		mock:  m.mock,
+		query: query.ExtractQuery(),
+	}
+}
+
+type blobMockExec struct {
+	mock  *Mock
+	query builder.Query
+}
+
+func (m *blobMockExec) Returns(v BlobModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *blobMockExec) ReturnsMany(v []BlobModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *blobMockExec) Errors(err error) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query:   m.query,
+		WantErr: err,
+	})
+}
+
 // --- template models.gotpl ---
 
 // UserModel represents the User model and is a wrapper for accessing fields and methods
@@ -1506,6 +1608,40 @@ type RawIapModel struct {
 
 // RelationsIap holds the relation data separately
 type RelationsIap struct {
+}
+
+// BlobModel represents the Blob model and is a wrapper for accessing fields and methods
+type BlobModel struct {
+	InnerBlob
+	RelationsBlob
+}
+
+// InnerBlob holds the actual data
+type InnerBlob struct {
+	ID        Bytes    `json:"id"`
+	UserID    string   `json:"userId"`
+	Type      int      `json:"type"`
+	S3URL     string   `json:"s3Url"`
+	Size      int      `json:"size"`
+	Metadata  Bytes    `json:"metadata"`
+	Flagged   bool     `json:"flagged"`
+	CreatedAt DateTime `json:"createdAt"`
+}
+
+// RawBlobModel is a struct for Blob when used in raw queries
+type RawBlobModel struct {
+	ID        RawBytes    `json:"id"`
+	UserID    RawString   `json:"userId"`
+	Type      RawInt      `json:"type"`
+	S3URL     RawString   `json:"s3Url"`
+	Size      RawInt      `json:"size"`
+	Metadata  RawBytes    `json:"metadata"`
+	Flagged   RawBoolean  `json:"flagged"`
+	CreatedAt RawDateTime `json:"createdAt"`
+}
+
+// RelationsBlob holds the relation data separately
+type RelationsBlob struct {
 }
 
 // --- template query.gotpl ---
@@ -20796,6 +20932,2237 @@ func (r iapQueryCreatedAtDateTime) Field() iapPrismaFields {
 	return iapFieldCreatedAt
 }
 
+// Blob acts as a namespaces to access query methods for the Blob model
+var Blob = blobQuery{}
+
+// blobQuery exposes query functions for the blob model
+type blobQuery struct {
+
+	// ID
+	//
+	// @required
+	ID blobQueryIDBytes
+
+	// UserID
+	//
+	// @required
+	UserID blobQueryUserIDString
+
+	// Type
+	//
+	// @required
+	Type blobQueryTypeInt
+
+	// S3URL
+	//
+	// @required
+	S3URL blobQueryS3URLString
+
+	// Size
+	//
+	// @required
+	Size blobQuerySizeInt
+
+	// Metadata
+	//
+	// @required
+	Metadata blobQueryMetadataBytes
+
+	// Flagged
+	//
+	// @required
+	Flagged blobQueryFlaggedBoolean
+
+	// CreatedAt
+	//
+	// @required
+	CreatedAt blobQueryCreatedAtDateTime
+}
+
+func (blobQuery) Not(params ...BlobWhereParam) blobDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:     "NOT",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (blobQuery) Or(params ...BlobWhereParam) blobDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:     "OR",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (blobQuery) And(params ...BlobWhereParam) blobDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:     "AND",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+// base struct
+type blobQueryIDBytes struct{}
+
+// Set the required value of ID
+func (r blobQueryIDBytes) Set(value Bytes) blobWithPrismaIDSetParam {
+
+	return blobWithPrismaIDSetParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ID dynamically
+func (r blobQueryIDBytes) SetIfPresent(value *Bytes) blobWithPrismaIDSetParam {
+	if value == nil {
+		return blobWithPrismaIDSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r blobQueryIDBytes) Equals(value Bytes) blobWithPrismaIDEqualsUniqueParam {
+
+	return blobWithPrismaIDEqualsUniqueParam{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryIDBytes) EqualsIfPresent(value *Bytes) blobWithPrismaIDEqualsUniqueParam {
+	if value == nil {
+		return blobWithPrismaIDEqualsUniqueParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r blobQueryIDBytes) Order(direction SortOrder) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: direction,
+		},
+	}
+}
+
+func (r blobQueryIDBytes) Cursor(cursor Bytes) blobCursorParam {
+	return blobCursorParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: cursor,
+		},
+	}
+}
+
+func (r blobQueryIDBytes) In(value []Bytes) blobParamUnique {
+	return blobParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryIDBytes) InIfPresent(value []Bytes) blobParamUnique {
+	if value == nil {
+		return blobParamUnique{}
+	}
+	return r.In(value)
+}
+
+func (r blobQueryIDBytes) NotIn(value []Bytes) blobParamUnique {
+	return blobParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryIDBytes) NotInIfPresent(value []Bytes) blobParamUnique {
+	if value == nil {
+		return blobParamUnique{}
+	}
+	return r.NotIn(value)
+}
+
+func (r blobQueryIDBytes) Not(value Bytes) blobParamUnique {
+	return blobParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryIDBytes) NotIfPresent(value *Bytes) blobParamUnique {
+	if value == nil {
+		return blobParamUnique{}
+	}
+	return r.Not(*value)
+}
+
+func (r blobQueryIDBytes) Field() blobPrismaFields {
+	return blobFieldID
+}
+
+// base struct
+type blobQueryUserIDString struct{}
+
+// Set the required value of UserID
+func (r blobQueryUserIDString) Set(value string) blobWithPrismaUserIDSetParam {
+
+	return blobWithPrismaUserIDSetParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of UserID dynamically
+func (r blobQueryUserIDString) SetIfPresent(value *String) blobWithPrismaUserIDSetParam {
+	if value == nil {
+		return blobWithPrismaUserIDSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r blobQueryUserIDString) Equals(value string) blobWithPrismaUserIDEqualsParam {
+
+	return blobWithPrismaUserIDEqualsParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) EqualsIfPresent(value *string) blobWithPrismaUserIDEqualsParam {
+	if value == nil {
+		return blobWithPrismaUserIDEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r blobQueryUserIDString) Order(direction SortOrder) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: direction,
+		},
+	}
+}
+
+func (r blobQueryUserIDString) Cursor(cursor string) blobCursorParam {
+	return blobCursorParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: cursor,
+		},
+	}
+}
+
+func (r blobQueryUserIDString) In(value []string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) InIfPresent(value []string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r blobQueryUserIDString) NotIn(value []string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) NotInIfPresent(value []string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r blobQueryUserIDString) Lt(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) LtIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r blobQueryUserIDString) Lte(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) LteIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r blobQueryUserIDString) Gt(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) GtIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r blobQueryUserIDString) Gte(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) GteIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r blobQueryUserIDString) Contains(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) ContainsIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r blobQueryUserIDString) StartsWith(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) StartsWithIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r blobQueryUserIDString) EndsWith(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) EndsWithIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r blobQueryUserIDString) Mode(value QueryMode) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) ModeIfPresent(value *QueryMode) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r blobQueryUserIDString) Not(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryUserIDString) NotIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r blobQueryUserIDString) HasPrefix(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r blobQueryUserIDString) HasPrefixIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r blobQueryUserIDString) HasSuffix(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r blobQueryUserIDString) HasSuffixIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r blobQueryUserIDString) Field() blobPrismaFields {
+	return blobFieldUserID
+}
+
+// base struct
+type blobQueryTypeInt struct{}
+
+// Set the required value of Type
+func (r blobQueryTypeInt) Set(value int) blobWithPrismaTypeSetParam {
+
+	return blobWithPrismaTypeSetParam{
+		data: builder.Field{
+			Name:  "type",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Type dynamically
+func (r blobQueryTypeInt) SetIfPresent(value *Int) blobWithPrismaTypeSetParam {
+	if value == nil {
+		return blobWithPrismaTypeSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of Type
+func (r blobQueryTypeInt) Increment(value int) blobWithPrismaTypeSetParam {
+	return blobWithPrismaTypeSetParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) IncrementIfPresent(value *int) blobWithPrismaTypeSetParam {
+	if value == nil {
+		return blobWithPrismaTypeSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of Type
+func (r blobQueryTypeInt) Decrement(value int) blobWithPrismaTypeSetParam {
+	return blobWithPrismaTypeSetParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) DecrementIfPresent(value *int) blobWithPrismaTypeSetParam {
+	if value == nil {
+		return blobWithPrismaTypeSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of Type
+func (r blobQueryTypeInt) Multiply(value int) blobWithPrismaTypeSetParam {
+	return blobWithPrismaTypeSetParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) MultiplyIfPresent(value *int) blobWithPrismaTypeSetParam {
+	if value == nil {
+		return blobWithPrismaTypeSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of Type
+func (r blobQueryTypeInt) Divide(value int) blobWithPrismaTypeSetParam {
+	return blobWithPrismaTypeSetParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) DivideIfPresent(value *int) blobWithPrismaTypeSetParam {
+	if value == nil {
+		return blobWithPrismaTypeSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r blobQueryTypeInt) Equals(value int) blobWithPrismaTypeEqualsParam {
+
+	return blobWithPrismaTypeEqualsParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) EqualsIfPresent(value *int) blobWithPrismaTypeEqualsParam {
+	if value == nil {
+		return blobWithPrismaTypeEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r blobQueryTypeInt) Order(direction SortOrder) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:  "type",
+			Value: direction,
+		},
+	}
+}
+
+func (r blobQueryTypeInt) Cursor(cursor int) blobCursorParam {
+	return blobCursorParam{
+		data: builder.Field{
+			Name:  "type",
+			Value: cursor,
+		},
+	}
+}
+
+func (r blobQueryTypeInt) In(value []int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) InIfPresent(value []int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r blobQueryTypeInt) NotIn(value []int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) NotInIfPresent(value []int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r blobQueryTypeInt) Lt(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) LtIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r blobQueryTypeInt) Lte(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) LteIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r blobQueryTypeInt) Gt(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) GtIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r blobQueryTypeInt) Gte(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) GteIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r blobQueryTypeInt) Not(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryTypeInt) NotIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r blobQueryTypeInt) LT(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r blobQueryTypeInt) LTIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r blobQueryTypeInt) LTE(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r blobQueryTypeInt) LTEIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r blobQueryTypeInt) GT(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r blobQueryTypeInt) GTIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r blobQueryTypeInt) GTE(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "type",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r blobQueryTypeInt) GTEIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r blobQueryTypeInt) Field() blobPrismaFields {
+	return blobFieldType
+}
+
+// base struct
+type blobQueryS3URLString struct{}
+
+// Set the required value of S3URL
+func (r blobQueryS3URLString) Set(value string) blobWithPrismaS3URLSetParam {
+
+	return blobWithPrismaS3URLSetParam{
+		data: builder.Field{
+			Name:  "s3Url",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of S3URL dynamically
+func (r blobQueryS3URLString) SetIfPresent(value *String) blobWithPrismaS3URLSetParam {
+	if value == nil {
+		return blobWithPrismaS3URLSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r blobQueryS3URLString) Equals(value string) blobWithPrismaS3URLEqualsParam {
+
+	return blobWithPrismaS3URLEqualsParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) EqualsIfPresent(value *string) blobWithPrismaS3URLEqualsParam {
+	if value == nil {
+		return blobWithPrismaS3URLEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r blobQueryS3URLString) Order(direction SortOrder) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:  "s3Url",
+			Value: direction,
+		},
+	}
+}
+
+func (r blobQueryS3URLString) Cursor(cursor string) blobCursorParam {
+	return blobCursorParam{
+		data: builder.Field{
+			Name:  "s3Url",
+			Value: cursor,
+		},
+	}
+}
+
+func (r blobQueryS3URLString) In(value []string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) InIfPresent(value []string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r blobQueryS3URLString) NotIn(value []string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) NotInIfPresent(value []string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r blobQueryS3URLString) Lt(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) LtIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r blobQueryS3URLString) Lte(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) LteIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r blobQueryS3URLString) Gt(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) GtIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r blobQueryS3URLString) Gte(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) GteIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r blobQueryS3URLString) Contains(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) ContainsIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r blobQueryS3URLString) StartsWith(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) StartsWithIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r blobQueryS3URLString) EndsWith(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) EndsWithIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r blobQueryS3URLString) Mode(value QueryMode) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) ModeIfPresent(value *QueryMode) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r blobQueryS3URLString) Not(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryS3URLString) NotIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r blobQueryS3URLString) HasPrefix(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r blobQueryS3URLString) HasPrefixIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r blobQueryS3URLString) HasSuffix(value string) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "s3Url",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r blobQueryS3URLString) HasSuffixIfPresent(value *string) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r blobQueryS3URLString) Field() blobPrismaFields {
+	return blobFieldS3URL
+}
+
+// base struct
+type blobQuerySizeInt struct{}
+
+// Set the required value of Size
+func (r blobQuerySizeInt) Set(value int) blobWithPrismaSizeSetParam {
+
+	return blobWithPrismaSizeSetParam{
+		data: builder.Field{
+			Name:  "size",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Size dynamically
+func (r blobQuerySizeInt) SetIfPresent(value *Int) blobWithPrismaSizeSetParam {
+	if value == nil {
+		return blobWithPrismaSizeSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of Size
+func (r blobQuerySizeInt) Increment(value int) blobWithPrismaSizeSetParam {
+	return blobWithPrismaSizeSetParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) IncrementIfPresent(value *int) blobWithPrismaSizeSetParam {
+	if value == nil {
+		return blobWithPrismaSizeSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of Size
+func (r blobQuerySizeInt) Decrement(value int) blobWithPrismaSizeSetParam {
+	return blobWithPrismaSizeSetParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) DecrementIfPresent(value *int) blobWithPrismaSizeSetParam {
+	if value == nil {
+		return blobWithPrismaSizeSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of Size
+func (r blobQuerySizeInt) Multiply(value int) blobWithPrismaSizeSetParam {
+	return blobWithPrismaSizeSetParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) MultiplyIfPresent(value *int) blobWithPrismaSizeSetParam {
+	if value == nil {
+		return blobWithPrismaSizeSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of Size
+func (r blobQuerySizeInt) Divide(value int) blobWithPrismaSizeSetParam {
+	return blobWithPrismaSizeSetParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) DivideIfPresent(value *int) blobWithPrismaSizeSetParam {
+	if value == nil {
+		return blobWithPrismaSizeSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r blobQuerySizeInt) Equals(value int) blobWithPrismaSizeEqualsParam {
+
+	return blobWithPrismaSizeEqualsParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) EqualsIfPresent(value *int) blobWithPrismaSizeEqualsParam {
+	if value == nil {
+		return blobWithPrismaSizeEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r blobQuerySizeInt) Order(direction SortOrder) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:  "size",
+			Value: direction,
+		},
+	}
+}
+
+func (r blobQuerySizeInt) Cursor(cursor int) blobCursorParam {
+	return blobCursorParam{
+		data: builder.Field{
+			Name:  "size",
+			Value: cursor,
+		},
+	}
+}
+
+func (r blobQuerySizeInt) In(value []int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) InIfPresent(value []int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r blobQuerySizeInt) NotIn(value []int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) NotInIfPresent(value []int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r blobQuerySizeInt) Lt(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) LtIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r blobQuerySizeInt) Lte(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) LteIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r blobQuerySizeInt) Gt(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) GtIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r blobQuerySizeInt) Gte(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) GteIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r blobQuerySizeInt) Not(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQuerySizeInt) NotIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r blobQuerySizeInt) LT(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r blobQuerySizeInt) LTIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r blobQuerySizeInt) LTE(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r blobQuerySizeInt) LTEIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r blobQuerySizeInt) GT(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r blobQuerySizeInt) GTIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r blobQuerySizeInt) GTE(value int) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "size",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r blobQuerySizeInt) GTEIfPresent(value *int) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r blobQuerySizeInt) Field() blobPrismaFields {
+	return blobFieldSize
+}
+
+// base struct
+type blobQueryMetadataBytes struct{}
+
+// Set the required value of Metadata
+func (r blobQueryMetadataBytes) Set(value Bytes) blobWithPrismaMetadataSetParam {
+
+	return blobWithPrismaMetadataSetParam{
+		data: builder.Field{
+			Name:  "metadata",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Metadata dynamically
+func (r blobQueryMetadataBytes) SetIfPresent(value *Bytes) blobWithPrismaMetadataSetParam {
+	if value == nil {
+		return blobWithPrismaMetadataSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r blobQueryMetadataBytes) Equals(value Bytes) blobWithPrismaMetadataEqualsParam {
+
+	return blobWithPrismaMetadataEqualsParam{
+		data: builder.Field{
+			Name: "metadata",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryMetadataBytes) EqualsIfPresent(value *Bytes) blobWithPrismaMetadataEqualsParam {
+	if value == nil {
+		return blobWithPrismaMetadataEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r blobQueryMetadataBytes) Order(direction SortOrder) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:  "metadata",
+			Value: direction,
+		},
+	}
+}
+
+func (r blobQueryMetadataBytes) Cursor(cursor Bytes) blobCursorParam {
+	return blobCursorParam{
+		data: builder.Field{
+			Name:  "metadata",
+			Value: cursor,
+		},
+	}
+}
+
+func (r blobQueryMetadataBytes) In(value []Bytes) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "metadata",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryMetadataBytes) InIfPresent(value []Bytes) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r blobQueryMetadataBytes) NotIn(value []Bytes) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "metadata",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryMetadataBytes) NotInIfPresent(value []Bytes) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r blobQueryMetadataBytes) Not(value Bytes) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "metadata",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryMetadataBytes) NotIfPresent(value *Bytes) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+func (r blobQueryMetadataBytes) Field() blobPrismaFields {
+	return blobFieldMetadata
+}
+
+// base struct
+type blobQueryFlaggedBoolean struct{}
+
+// Set the required value of Flagged
+func (r blobQueryFlaggedBoolean) Set(value bool) blobSetParam {
+
+	return blobSetParam{
+		data: builder.Field{
+			Name:  "flagged",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Flagged dynamically
+func (r blobQueryFlaggedBoolean) SetIfPresent(value *Boolean) blobSetParam {
+	if value == nil {
+		return blobSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r blobQueryFlaggedBoolean) Equals(value bool) blobWithPrismaFlaggedEqualsParam {
+
+	return blobWithPrismaFlaggedEqualsParam{
+		data: builder.Field{
+			Name: "flagged",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryFlaggedBoolean) EqualsIfPresent(value *bool) blobWithPrismaFlaggedEqualsParam {
+	if value == nil {
+		return blobWithPrismaFlaggedEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r blobQueryFlaggedBoolean) Order(direction SortOrder) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:  "flagged",
+			Value: direction,
+		},
+	}
+}
+
+func (r blobQueryFlaggedBoolean) Cursor(cursor bool) blobCursorParam {
+	return blobCursorParam{
+		data: builder.Field{
+			Name:  "flagged",
+			Value: cursor,
+		},
+	}
+}
+
+func (r blobQueryFlaggedBoolean) Field() blobPrismaFields {
+	return blobFieldFlagged
+}
+
+// base struct
+type blobQueryCreatedAtDateTime struct{}
+
+// Set the required value of CreatedAt
+func (r blobQueryCreatedAtDateTime) Set(value DateTime) blobSetParam {
+
+	return blobSetParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of CreatedAt dynamically
+func (r blobQueryCreatedAtDateTime) SetIfPresent(value *DateTime) blobSetParam {
+	if value == nil {
+		return blobSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r blobQueryCreatedAtDateTime) Equals(value DateTime) blobWithPrismaCreatedAtEqualsParam {
+
+	return blobWithPrismaCreatedAtEqualsParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) EqualsIfPresent(value *DateTime) blobWithPrismaCreatedAtEqualsParam {
+	if value == nil {
+		return blobWithPrismaCreatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r blobQueryCreatedAtDateTime) Order(direction SortOrder) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) Cursor(cursor DateTime) blobCursorParam {
+	return blobCursorParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) In(value []DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) InIfPresent(value []DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r blobQueryCreatedAtDateTime) NotIn(value []DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) NotInIfPresent(value []DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r blobQueryCreatedAtDateTime) Lt(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) LtIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r blobQueryCreatedAtDateTime) Lte(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) LteIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r blobQueryCreatedAtDateTime) Gt(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) GtIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r blobQueryCreatedAtDateTime) Gte(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) GteIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r blobQueryCreatedAtDateTime) Not(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r blobQueryCreatedAtDateTime) NotIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r blobQueryCreatedAtDateTime) Before(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r blobQueryCreatedAtDateTime) BeforeIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r blobQueryCreatedAtDateTime) After(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r blobQueryCreatedAtDateTime) AfterIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r blobQueryCreatedAtDateTime) BeforeEquals(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r blobQueryCreatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r blobQueryCreatedAtDateTime) AfterEquals(value DateTime) blobDefaultParam {
+	return blobDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r blobQueryCreatedAtDateTime) AfterEqualsIfPresent(value *DateTime) blobDefaultParam {
+	if value == nil {
+		return blobDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r blobQueryCreatedAtDateTime) Field() blobPrismaFields {
+	return blobFieldCreatedAt
+}
+
 // --- template actions.gotpl ---
 var countOutput = []builder.Output{
 	{Name: "count"},
@@ -27401,6 +29768,810 @@ func (p iapWithPrismaCreatedAtEqualsUniqueParam) createdAtField() {}
 func (iapWithPrismaCreatedAtEqualsUniqueParam) unique() {}
 func (iapWithPrismaCreatedAtEqualsUniqueParam) equals() {}
 
+type blobActions struct {
+	// client holds the prisma client
+	client *PrismaClient
+}
+
+var blobOutput = []builder.Output{
+	{Name: "id"},
+	{Name: "userId"},
+	{Name: "type"},
+	{Name: "s3Url"},
+	{Name: "size"},
+	{Name: "metadata"},
+	{Name: "flagged"},
+	{Name: "createdAt"},
+}
+
+type BlobRelationWith interface {
+	getQuery() builder.Query
+	with()
+	blobRelation()
+}
+
+type BlobWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+}
+
+type blobDefaultParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobDefaultParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobDefaultParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobDefaultParam) blobModel() {}
+
+type BlobOrderByParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+}
+
+type blobOrderByParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobOrderByParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobOrderByParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobOrderByParam) blobModel() {}
+
+type BlobCursorParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	isCursor()
+}
+
+type blobCursorParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobCursorParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobCursorParam) isCursor() {}
+
+func (p blobCursorParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobCursorParam) blobModel() {}
+
+type BlobParamUnique interface {
+	field() builder.Field
+	getQuery() builder.Query
+	unique()
+	blobModel()
+}
+
+type blobParamUnique struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobParamUnique) blobModel() {}
+
+func (blobParamUnique) unique() {}
+
+func (p blobParamUnique) field() builder.Field {
+	return p.data
+}
+
+func (p blobParamUnique) getQuery() builder.Query {
+	return p.query
+}
+
+type BlobEqualsWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+}
+
+type blobEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobEqualsParam) blobModel() {}
+
+func (blobEqualsParam) equals() {}
+
+func (p blobEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+type BlobEqualsUniqueWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	unique()
+	blobModel()
+}
+
+type blobEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobEqualsUniqueParam) blobModel() {}
+
+func (blobEqualsUniqueParam) unique() {}
+func (blobEqualsUniqueParam) equals() {}
+
+func (p blobEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+type BlobSetParam interface {
+	field() builder.Field
+	settable()
+	blobModel()
+}
+
+type blobSetParam struct {
+	data builder.Field
+}
+
+func (blobSetParam) settable() {}
+
+func (p blobSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobSetParam) blobModel() {}
+
+type BlobWithPrismaIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+	idField()
+}
+
+type BlobWithPrismaIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	idField()
+}
+
+type blobWithPrismaIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaIDSetParam) blobModel() {}
+
+func (p blobWithPrismaIDSetParam) idField() {}
+
+type BlobWithPrismaIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	idField()
+}
+
+type blobWithPrismaIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaIDEqualsParam) blobModel() {}
+
+func (p blobWithPrismaIDEqualsParam) idField() {}
+
+func (blobWithPrismaIDSetParam) settable()  {}
+func (blobWithPrismaIDEqualsParam) equals() {}
+
+type blobWithPrismaIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaIDEqualsUniqueParam) blobModel() {}
+func (p blobWithPrismaIDEqualsUniqueParam) idField()   {}
+
+func (blobWithPrismaIDEqualsUniqueParam) unique() {}
+func (blobWithPrismaIDEqualsUniqueParam) equals() {}
+
+type BlobWithPrismaUserIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+	userIDField()
+}
+
+type BlobWithPrismaUserIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	userIDField()
+}
+
+type blobWithPrismaUserIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaUserIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaUserIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaUserIDSetParam) blobModel() {}
+
+func (p blobWithPrismaUserIDSetParam) userIDField() {}
+
+type BlobWithPrismaUserIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	userIDField()
+}
+
+type blobWithPrismaUserIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaUserIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaUserIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaUserIDEqualsParam) blobModel() {}
+
+func (p blobWithPrismaUserIDEqualsParam) userIDField() {}
+
+func (blobWithPrismaUserIDSetParam) settable()  {}
+func (blobWithPrismaUserIDEqualsParam) equals() {}
+
+type blobWithPrismaUserIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaUserIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaUserIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaUserIDEqualsUniqueParam) blobModel()   {}
+func (p blobWithPrismaUserIDEqualsUniqueParam) userIDField() {}
+
+func (blobWithPrismaUserIDEqualsUniqueParam) unique() {}
+func (blobWithPrismaUserIDEqualsUniqueParam) equals() {}
+
+type BlobWithPrismaTypeEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+	typeField()
+}
+
+type BlobWithPrismaTypeSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	typeField()
+}
+
+type blobWithPrismaTypeSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaTypeSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaTypeSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaTypeSetParam) blobModel() {}
+
+func (p blobWithPrismaTypeSetParam) typeField() {}
+
+type BlobWithPrismaTypeWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	typeField()
+}
+
+type blobWithPrismaTypeEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaTypeEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaTypeEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaTypeEqualsParam) blobModel() {}
+
+func (p blobWithPrismaTypeEqualsParam) typeField() {}
+
+func (blobWithPrismaTypeSetParam) settable()  {}
+func (blobWithPrismaTypeEqualsParam) equals() {}
+
+type blobWithPrismaTypeEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaTypeEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaTypeEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaTypeEqualsUniqueParam) blobModel() {}
+func (p blobWithPrismaTypeEqualsUniqueParam) typeField() {}
+
+func (blobWithPrismaTypeEqualsUniqueParam) unique() {}
+func (blobWithPrismaTypeEqualsUniqueParam) equals() {}
+
+type BlobWithPrismaS3URLEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+	s3URLField()
+}
+
+type BlobWithPrismaS3URLSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	s3URLField()
+}
+
+type blobWithPrismaS3URLSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaS3URLSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaS3URLSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaS3URLSetParam) blobModel() {}
+
+func (p blobWithPrismaS3URLSetParam) s3URLField() {}
+
+type BlobWithPrismaS3URLWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	s3URLField()
+}
+
+type blobWithPrismaS3URLEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaS3URLEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaS3URLEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaS3URLEqualsParam) blobModel() {}
+
+func (p blobWithPrismaS3URLEqualsParam) s3URLField() {}
+
+func (blobWithPrismaS3URLSetParam) settable()  {}
+func (blobWithPrismaS3URLEqualsParam) equals() {}
+
+type blobWithPrismaS3URLEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaS3URLEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaS3URLEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaS3URLEqualsUniqueParam) blobModel()  {}
+func (p blobWithPrismaS3URLEqualsUniqueParam) s3URLField() {}
+
+func (blobWithPrismaS3URLEqualsUniqueParam) unique() {}
+func (blobWithPrismaS3URLEqualsUniqueParam) equals() {}
+
+type BlobWithPrismaSizeEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+	sizeField()
+}
+
+type BlobWithPrismaSizeSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	sizeField()
+}
+
+type blobWithPrismaSizeSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaSizeSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaSizeSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaSizeSetParam) blobModel() {}
+
+func (p blobWithPrismaSizeSetParam) sizeField() {}
+
+type BlobWithPrismaSizeWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	sizeField()
+}
+
+type blobWithPrismaSizeEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaSizeEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaSizeEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaSizeEqualsParam) blobModel() {}
+
+func (p blobWithPrismaSizeEqualsParam) sizeField() {}
+
+func (blobWithPrismaSizeSetParam) settable()  {}
+func (blobWithPrismaSizeEqualsParam) equals() {}
+
+type blobWithPrismaSizeEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaSizeEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaSizeEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaSizeEqualsUniqueParam) blobModel() {}
+func (p blobWithPrismaSizeEqualsUniqueParam) sizeField() {}
+
+func (blobWithPrismaSizeEqualsUniqueParam) unique() {}
+func (blobWithPrismaSizeEqualsUniqueParam) equals() {}
+
+type BlobWithPrismaMetadataEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+	metadataField()
+}
+
+type BlobWithPrismaMetadataSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	metadataField()
+}
+
+type blobWithPrismaMetadataSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaMetadataSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaMetadataSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaMetadataSetParam) blobModel() {}
+
+func (p blobWithPrismaMetadataSetParam) metadataField() {}
+
+type BlobWithPrismaMetadataWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	metadataField()
+}
+
+type blobWithPrismaMetadataEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaMetadataEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaMetadataEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaMetadataEqualsParam) blobModel() {}
+
+func (p blobWithPrismaMetadataEqualsParam) metadataField() {}
+
+func (blobWithPrismaMetadataSetParam) settable()  {}
+func (blobWithPrismaMetadataEqualsParam) equals() {}
+
+type blobWithPrismaMetadataEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaMetadataEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaMetadataEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaMetadataEqualsUniqueParam) blobModel()     {}
+func (p blobWithPrismaMetadataEqualsUniqueParam) metadataField() {}
+
+func (blobWithPrismaMetadataEqualsUniqueParam) unique() {}
+func (blobWithPrismaMetadataEqualsUniqueParam) equals() {}
+
+type BlobWithPrismaFlaggedEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+	flaggedField()
+}
+
+type BlobWithPrismaFlaggedSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	flaggedField()
+}
+
+type blobWithPrismaFlaggedSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaFlaggedSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaFlaggedSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaFlaggedSetParam) blobModel() {}
+
+func (p blobWithPrismaFlaggedSetParam) flaggedField() {}
+
+type BlobWithPrismaFlaggedWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	flaggedField()
+}
+
+type blobWithPrismaFlaggedEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaFlaggedEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaFlaggedEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaFlaggedEqualsParam) blobModel() {}
+
+func (p blobWithPrismaFlaggedEqualsParam) flaggedField() {}
+
+func (blobWithPrismaFlaggedSetParam) settable()  {}
+func (blobWithPrismaFlaggedEqualsParam) equals() {}
+
+type blobWithPrismaFlaggedEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaFlaggedEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaFlaggedEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaFlaggedEqualsUniqueParam) blobModel()    {}
+func (p blobWithPrismaFlaggedEqualsUniqueParam) flaggedField() {}
+
+func (blobWithPrismaFlaggedEqualsUniqueParam) unique() {}
+func (blobWithPrismaFlaggedEqualsUniqueParam) equals() {}
+
+type BlobWithPrismaCreatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	blobModel()
+	createdAtField()
+}
+
+type BlobWithPrismaCreatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	createdAtField()
+}
+
+type blobWithPrismaCreatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaCreatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaCreatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaCreatedAtSetParam) blobModel() {}
+
+func (p blobWithPrismaCreatedAtSetParam) createdAtField() {}
+
+type BlobWithPrismaCreatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	blobModel()
+	createdAtField()
+}
+
+type blobWithPrismaCreatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaCreatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaCreatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaCreatedAtEqualsParam) blobModel() {}
+
+func (p blobWithPrismaCreatedAtEqualsParam) createdAtField() {}
+
+func (blobWithPrismaCreatedAtSetParam) settable()  {}
+func (blobWithPrismaCreatedAtEqualsParam) equals() {}
+
+type blobWithPrismaCreatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p blobWithPrismaCreatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p blobWithPrismaCreatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p blobWithPrismaCreatedAtEqualsUniqueParam) blobModel()      {}
+func (p blobWithPrismaCreatedAtEqualsUniqueParam) createdAtField() {}
+
+func (blobWithPrismaCreatedAtEqualsUniqueParam) unique() {}
+func (blobWithPrismaCreatedAtEqualsUniqueParam) equals() {}
+
 // --- template create.gotpl ---
 
 // Creates a single user.
@@ -28030,6 +31201,84 @@ func (r iapCreateOne) Exec(ctx context.Context) (*IapModel, error) {
 
 func (r iapCreateOne) Tx() IapUniqueTxResult {
 	v := newIapUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+// Creates a single blob.
+func (r blobActions) CreateOne(
+	_id BlobWithPrismaIDSetParam,
+	_userID BlobWithPrismaUserIDSetParam,
+	_type BlobWithPrismaTypeSetParam,
+	_s3URL BlobWithPrismaS3URLSetParam,
+	_size BlobWithPrismaSizeSetParam,
+	_metadata BlobWithPrismaMetadataSetParam,
+
+	optional ...BlobSetParam,
+) blobCreateOne {
+	var v blobCreateOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "createOne"
+	v.query.Model = "Blob"
+	v.query.Outputs = blobOutput
+
+	var fields []builder.Field
+
+	fields = append(fields, _id.field())
+	fields = append(fields, _userID.field())
+	fields = append(fields, _type.field())
+	fields = append(fields, _s3URL.field())
+	fields = append(fields, _size.field())
+	fields = append(fields, _metadata.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+func (r blobCreateOne) With(params ...BlobRelationWith) blobCreateOne {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+type blobCreateOne struct {
+	query builder.Query
+}
+
+func (p blobCreateOne) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p blobCreateOne) blobModel() {}
+
+func (r blobCreateOne) Exec(ctx context.Context) (*BlobModel, error) {
+	var v BlobModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r blobCreateOne) Tx() BlobUniqueTxResult {
+	v := newBlobUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v
@@ -36103,6 +39352,656 @@ func (r iapDeleteMany) Tx() IapManyTxResult {
 	return v
 }
 
+type blobFindUnique struct {
+	query builder.Query
+}
+
+func (r blobFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r blobFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r blobFindUnique) with()         {}
+func (r blobFindUnique) blobModel()    {}
+func (r blobFindUnique) blobRelation() {}
+
+func (r blobActions) FindUnique(
+	params BlobEqualsUniqueWhereParam,
+) blobFindUnique {
+	var v blobFindUnique
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findUnique"
+
+	v.query.Model = "Blob"
+	v.query.Outputs = blobOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r blobFindUnique) With(params ...BlobRelationWith) blobFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r blobFindUnique) Select(params ...blobPrismaFields) blobFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r blobFindUnique) Omit(params ...blobPrismaFields) blobFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range blobOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r blobFindUnique) Exec(ctx context.Context) (
+	*BlobModel,
+	error,
+) {
+	var v *BlobModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r blobFindUnique) ExecInner(ctx context.Context) (
+	*InnerBlob,
+	error,
+) {
+	var v *InnerBlob
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r blobFindUnique) Update(params ...BlobSetParam) blobUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "Blob"
+
+	var v blobUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type blobUpdateUnique struct {
+	query builder.Query
+}
+
+func (r blobUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r blobUpdateUnique) blobModel() {}
+
+func (r blobUpdateUnique) Exec(ctx context.Context) (*BlobModel, error) {
+	var v BlobModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r blobUpdateUnique) Tx() BlobUniqueTxResult {
+	v := newBlobUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r blobFindUnique) Delete() blobDeleteUnique {
+	var v blobDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "Blob"
+
+	return v
+}
+
+type blobDeleteUnique struct {
+	query builder.Query
+}
+
+func (r blobDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p blobDeleteUnique) blobModel() {}
+
+func (r blobDeleteUnique) Exec(ctx context.Context) (*BlobModel, error) {
+	var v BlobModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r blobDeleteUnique) Tx() BlobUniqueTxResult {
+	v := newBlobUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type blobFindFirst struct {
+	query builder.Query
+}
+
+func (r blobFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r blobFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r blobFindFirst) with()         {}
+func (r blobFindFirst) blobModel()    {}
+func (r blobFindFirst) blobRelation() {}
+
+func (r blobActions) FindFirst(
+	params ...BlobWhereParam,
+) blobFindFirst {
+	var v blobFindFirst
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findFirst"
+
+	v.query.Model = "Blob"
+	v.query.Outputs = blobOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r blobFindFirst) With(params ...BlobRelationWith) blobFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r blobFindFirst) Select(params ...blobPrismaFields) blobFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r blobFindFirst) Omit(params ...blobPrismaFields) blobFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range blobOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r blobFindFirst) OrderBy(params ...BlobOrderByParam) blobFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r blobFindFirst) Skip(count int) blobFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r blobFindFirst) Take(count int) blobFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r blobFindFirst) Cursor(cursor BlobCursorParam) blobFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r blobFindFirst) Exec(ctx context.Context) (
+	*BlobModel,
+	error,
+) {
+	var v *BlobModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r blobFindFirst) ExecInner(ctx context.Context) (
+	*InnerBlob,
+	error,
+) {
+	var v *InnerBlob
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type blobFindMany struct {
+	query builder.Query
+}
+
+func (r blobFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r blobFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r blobFindMany) with()         {}
+func (r blobFindMany) blobModel()    {}
+func (r blobFindMany) blobRelation() {}
+
+func (r blobActions) FindMany(
+	params ...BlobWhereParam,
+) blobFindMany {
+	var v blobFindMany
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findMany"
+
+	v.query.Model = "Blob"
+	v.query.Outputs = blobOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r blobFindMany) With(params ...BlobRelationWith) blobFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r blobFindMany) Select(params ...blobPrismaFields) blobFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r blobFindMany) Omit(params ...blobPrismaFields) blobFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range blobOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r blobFindMany) OrderBy(params ...BlobOrderByParam) blobFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r blobFindMany) Skip(count int) blobFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r blobFindMany) Take(count int) blobFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r blobFindMany) Cursor(cursor BlobCursorParam) blobFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r blobFindMany) Exec(ctx context.Context) (
+	[]BlobModel,
+	error,
+) {
+	var v []BlobModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r blobFindMany) ExecInner(ctx context.Context) (
+	[]InnerBlob,
+	error,
+) {
+	var v []InnerBlob
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r blobFindMany) Update(params ...BlobSetParam) blobUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "Blob"
+
+	r.query.Outputs = countOutput
+
+	var v blobUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type blobUpdateMany struct {
+	query builder.Query
+}
+
+func (r blobUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r blobUpdateMany) blobModel() {}
+
+func (r blobUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r blobUpdateMany) Tx() BlobManyTxResult {
+	v := newBlobManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r blobFindMany) Delete() blobDeleteMany {
+	var v blobDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "Blob"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type blobDeleteMany struct {
+	query builder.Query
+}
+
+func (r blobDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p blobDeleteMany) blobModel() {}
+
+func (r blobDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r blobDeleteMany) Tx() BlobManyTxResult {
+	v := newBlobManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 // --- template transaction.gotpl ---
 
 func newUserUniqueTxResult() UserUniqueTxResult {
@@ -36531,6 +40430,54 @@ func (p IapManyTxResult) ExtractQuery() builder.Query {
 func (p IapManyTxResult) IsTx() {}
 
 func (r IapManyTxResult) Result() (v *BatchResult) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newBlobUniqueTxResult() BlobUniqueTxResult {
+	return BlobUniqueTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type BlobUniqueTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p BlobUniqueTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p BlobUniqueTxResult) IsTx() {}
+
+func (r BlobUniqueTxResult) Result() (v *BlobModel) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newBlobManyTxResult() BlobManyTxResult {
+	return BlobManyTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type BlobManyTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p BlobManyTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p BlobManyTxResult) IsTx() {}
+
+func (r BlobManyTxResult) Result() (v *BatchResult) {
 	if err := r.result.Get(r.query.TxResult, &v); err != nil {
 		panic(err)
 	}
@@ -37544,6 +41491,126 @@ func (r iapUpsertOne) Exec(ctx context.Context) (*IapModel, error) {
 
 func (r iapUpsertOne) Tx() IapUniqueTxResult {
 	v := newIapUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type blobUpsertOne struct {
+	query builder.Query
+}
+
+func (r blobUpsertOne) getQuery() builder.Query {
+	return r.query
+}
+
+func (r blobUpsertOne) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r blobUpsertOne) with()         {}
+func (r blobUpsertOne) blobModel()    {}
+func (r blobUpsertOne) blobRelation() {}
+
+func (r blobActions) UpsertOne(
+	params BlobEqualsUniqueWhereParam,
+) blobUpsertOne {
+	var v blobUpsertOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "upsertOne"
+	v.query.Model = "Blob"
+	v.query.Outputs = blobOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r blobUpsertOne) Create(
+
+	_id BlobWithPrismaIDSetParam,
+	_userID BlobWithPrismaUserIDSetParam,
+	_type BlobWithPrismaTypeSetParam,
+	_s3URL BlobWithPrismaS3URLSetParam,
+	_size BlobWithPrismaSizeSetParam,
+	_metadata BlobWithPrismaMetadataSetParam,
+
+	optional ...BlobSetParam,
+) blobUpsertOne {
+	var v blobUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	fields = append(fields, _id.field())
+	fields = append(fields, _userID.field())
+	fields = append(fields, _type.field())
+	fields = append(fields, _s3URL.field())
+	fields = append(fields, _size.field())
+	fields = append(fields, _metadata.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "create",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r blobUpsertOne) Update(
+	params ...BlobSetParam,
+) blobUpsertOne {
+	var v blobUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "update",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r blobUpsertOne) Exec(ctx context.Context) (*BlobModel, error) {
+	var v BlobModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r blobUpsertOne) Tx() BlobUniqueTxResult {
+	v := newBlobUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v
