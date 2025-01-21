@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 )
 
 var (
@@ -17,13 +19,13 @@ const (
 	BlobTypeUnknown BlobType = iota
 	BlobTypeImage
 	BlobTypeVideo
-  BlobTypeAudio
+	BlobTypeAudio
 )
 
 // Blob holds blob info
 type Blob struct {
-	ID        []byte
-	Owner     string
+	ID        *commonpb.BlobId
+	UserID    *commonpb.UserId
 	Type      BlobType
 	S3URL     string
 	Size      int64
@@ -34,14 +36,12 @@ type Blob struct {
 
 // Clone creates a deep copy
 func (b *Blob) Clone() *Blob {
-	idCopy := make([]byte, len(b.ID))
-	copy(idCopy, b.ID)
 	metadataCopy := make([]byte, len(b.Metadata))
 	copy(metadataCopy, b.Metadata)
 
 	return &Blob{
-		ID:        idCopy,
-		Owner:     b.Owner,
+		ID:        b.ID,
+		UserID:    b.UserID,
 		Type:      b.Type,
 		S3URL:     b.S3URL,
 		Size:      b.Size,
@@ -54,5 +54,5 @@ func (b *Blob) Clone() *Blob {
 // Store is an interface for blob operations
 type Store interface {
 	CreateBlob(ctx context.Context, blob *Blob) error
-	GetBlob(ctx context.Context, id []byte) (*Blob, error)
+	GetBlob(ctx context.Context, id *commonpb.BlobId) (*Blob, error)
 }

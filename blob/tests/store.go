@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/code-payments/flipchat-server/blob"
+	"github.com/code-payments/flipchat-server/model"
 )
 
 func RunStoreTests(t *testing.T, s blob.Store, teardown func()) {
@@ -23,15 +24,18 @@ func RunStoreTests(t *testing.T, s blob.Store, teardown func()) {
 func testCreateAndGet(t *testing.T, s blob.Store) {
 	ctx := context.Background()
 
+	blobID := model.MustGenerateBlobID()
+	userID := model.MustGenerateUserID()
+
 	// Attempt to retrieve a non-existent blob
-	_, err := s.GetBlob(ctx, []byte{0x01, 0x02})
+	_, err := s.GetBlob(ctx, blobID)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 
 	// Create a new blob
 	now := time.Now()
 	testBlob := &blob.Blob{
-		ID:        []byte{0x05, 0x06},
-		Owner:     "test-owner",
+		ID:        blobID,
+		UserID:    userID,
 		Type:      blob.BlobTypeImage,
 		S3URL:     "s3://test-bucket/test-key",
 		Size:      12345,
@@ -42,10 +46,10 @@ func testCreateAndGet(t *testing.T, s blob.Store) {
 	require.NoError(t, s.CreateBlob(ctx, testBlob))
 
 	// Retrieve and verify
-	got, err := s.GetBlob(ctx, testBlob.ID)
+	got, err := s.GetBlob(ctx, blobID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
-	require.Equal(t, testBlob.Owner, got.Owner)
+	require.Equal(t, testBlob.UserID, got.UserID)
 	require.Equal(t, testBlob.Size, got.Size)
 	require.Equal(t, testBlob.Type, got.Type)
 	require.Equal(t, testBlob.S3URL, got.S3URL)
@@ -57,14 +61,16 @@ func testCreateAndGet(t *testing.T, s blob.Store) {
 func testCreateDuplicate(t *testing.T, s blob.Store) {
 	ctx := context.Background()
 
+	blobID := model.MustGenerateBlobID()
+	userID := model.MustGenerateUserID()
+
 	// Create an initial blob
-	blobID := []byte{0x09, 0x0A}
 	testBlob := &blob.Blob{
-		ID:    blobID,
-		Owner: "duplicate-owner",
-		Type:  blob.BlobTypeAudio,
-		S3URL: "s3://audio-bucket/audio-key",
-		Size:  999,
+		ID:     blobID,
+		UserID: userID,
+		Type:   blob.BlobTypeAudio,
+		S3URL:  "s3://audio-bucket/audio-key",
+		Size:   999,
 	}
 	require.NoError(t, s.CreateBlob(ctx, testBlob))
 
