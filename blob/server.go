@@ -1,0 +1,136 @@
+package blob
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"time"
+
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	blobpb "github.com/code-payments/flipchat-protobuf-api/generated/go/blob/v1"
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+
+	codecommon "github.com/code-payments/code-server/pkg/code/common"
+	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/flags"
+	"github.com/code-payments/flipchat-server/model"
+
+	// Import the s3 package
+	"github.com/code-payments/flipchat-server/s3"
+)
+
+const loginWindow = 2 * time.Minute
+
+type Server struct {
+	log     *zap.Logger
+	store   Store
+	s3Store s3.Store
+
+	blobpb.UnimplementedBlobServiceServer
+}
+
+func NewServer(log *zap.Logger, store Store, s3Store s3.S3Store) *Server {
+	return &Server{
+		log:     log,
+		store:   store,
+		s3Store: s3Store,
+	}
+}
+
+func (s *Server) Upload(ctx context.Context, req *blobpb.UploadRequest) (*blobpb.UploadResponse, error) {
+	// Validate the request
+	if req.GetOwnerId() == nil {
+		return nil, status.Error(codes.InvalidArgument, "owner_id is required")
+	}
+	if req.GetBlobType() == blobpb.BlobType_BLOB_TYPE_UNKNOWN {
+		return nil, status.Error(codes.InvalidArgument, "blob_type is required")
+	}
+	if len(req.GetRawData()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "raw_data is required")
+	}
+
+	blobId := generateBlobID()
+
+	// Convert BlobType from protobuf to internal type
+	blobType, err := fromProtoBlobType(req.GetBlobType())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid blob_type")
+	}
+
+	// Serialize metadata based on BlobType
+	// TODO: do something more useful here
+	metadataBytes, err := newMetadata(blobType)
+	if err != nil {
+		return nil, err
+	}
+
+	// Upload raw_data to S3
+	s3URL, err := s.s3Store.UploadBlob(ctx, req.GetOwnerId(), blobId, req.GetRawData())
+	if err != nil {
+		s.log.Error("Failed to upload blob to S3", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to upload blob")
+	}
+
+	// Create the Blob record
+	blob := &Blob{
+		ID:        blobId,
+		UserID:    req.GetOwnerId(),
+		Type:      blobType,
+		S3URL:     s3URL,
+		Size:      int64(len(req.GetRawData())),
+		Metadata:  metadataBytes,
+		Flagged:   false,
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.store.CreateBlob(ctx, blob); err != nil {
+		if errors.Is(err, ErrExists) {
+			return nil, status.Error(codes.AlreadyExists, "blob already exists")
+		}
+		s.log.Error("Failed to store blob metadata", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to store blob metadata")
+	}
+
+	// Prepare response
+	responseBlob, err := toProtoBlob(blob)
+	if err != nil {
+		s.log.Error("Failed to convert Blob to proto", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to prepare response")
+	}
+
+	return &blobpb.UploadResponse{
+		Blob: responseBlob,
+	}, nil
+}
+
+func (s *Server) GetInfo(ctx context.Context, req *blobpb.GetInfoRequest) (*blobpb.GetInfoResponse, error) {
+	// Validate the request
+	if req.GetBlobId() == nil {
+		return nil, status.Error(codes.InvalidArgument, "blob_id is required")
+	}
+
+	// Retrieve Blob from the store
+	blob, err := s.store.GetBlob(ctx, req.GetBlobId())
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "blob not found")
+		}
+		s.log.Error("Failed to get blob from store", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to retrieve blob: %v", err)
+	}
+
+	// Convert Blob to blobpb.Blob
+	blobPB, err := toProtoBlob(blob)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to marshal blob: %v", err)
+	}
+
+	return &blobpb.GetInfoResponse{
+		Blob: blobPB,
+	}, nil
+}
