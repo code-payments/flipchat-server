@@ -351,9 +351,22 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		return &messagingpb.SendMessageResponse{Result: messagingpb.SendMessageResponse_DENIED}, nil
 	}
 
+	// Using chats store causes a import cycle, so we use the heuristic of needing
+	// a payment for user-generated content as the on/off stage check.
+	//
+	// todo: This works for now as an efficient check, but might not in the future.
+	var wasSenderOffStage bool
+	if req.PaymentIntent != nil {
+		switch req.Content[0].Type.(type) {
+		case *messagingpb.Content_Text, *messagingpb.Content_Reply:
+			wasSenderOffStage = true
+		}
+	}
+
 	msg := &messagingpb.Message{
-		SenderId: userID,
-		Content:  req.Content,
+		SenderId:          userID,
+		Content:           req.Content,
+		WasSenderOffStage: wasSenderOffStage,
 	}
 
 	sent, err := s.Send(ctx, req.ChatId, msg)
