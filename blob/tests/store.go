@@ -66,11 +66,12 @@ func testCreateDuplicate(t *testing.T, s blob.Store) {
 
 	// Create an initial blob
 	testBlob := &blob.Blob{
-		ID:     blobID,
-		UserID: userID,
-		Type:   blob.BlobTypeAudio,
-		S3URL:  "s3://audio-bucket/audio-key",
-		Size:   999,
+		ID:       blobID,
+		UserID:   userID,
+		Type:     blob.BlobTypeAudio,
+		Metadata: []byte("some metadata"),
+		S3URL:    "s3://audio-bucket/audio-key",
+		Size:     999,
 	}
 	require.NoError(t, s.CreateBlob(ctx, testBlob))
 
