@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/s3"
 )
 
@@ -23,11 +24,14 @@ func RunStoreTests(t *testing.T, s s3.Store, teardown func()) {
 func testUploadAndDownload(t *testing.T, s s3.Store) {
 	ctx := context.Background()
 
-	key := "testKey"
+	blobId := model.MustGenerateBlobID()
 	data := []byte("testData")
 
+	key, err := s3.GenerateS3URLPathForBlob(blobId)
+	require.NoError(t, err, "Failed to generate path using blobId")
+
 	// Upload data
-	err := s.Upload(ctx, key, data)
+	err = s.Upload(ctx, key, data)
 	require.NoError(t, err, "Upload should not return an error")
 
 	// Download data

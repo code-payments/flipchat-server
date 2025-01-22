@@ -2,13 +2,10 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/code-payments/flipchat-server/s3"
 )
-
-var ErrNotFound = errors.New("key not found")
 
 type store struct {
 	mu   sync.RWMutex
@@ -38,7 +35,7 @@ func (s *store) Download(ctx context.Context, key string) ([]byte, error) {
 
 	data, exists := s.data[key]
 	if !exists {
-		return nil, ErrNotFound
+		return nil, s3.ErrNotFound
 	}
 
 	// Return a copy of the data to prevent external modifications
