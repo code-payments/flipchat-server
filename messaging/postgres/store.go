@@ -361,6 +361,7 @@ func (s *store) createLegacyMessage(ctx context.Context, chatID *commonpb.ChatId
 
 	opt := []db.MessageSetParam{
 		db.Message.Version.Set(LEGACY_MESSAGE_VERSION),
+		db.Message.WasSenderOffStage.Set(msg.WasSenderOffStage),
 	}
 
 	if msg.SenderId != nil {
@@ -404,6 +405,7 @@ func (s *store) createContentMessage(ctx context.Context, chatID *commonpb.ChatI
 	opt := []db.MessageSetParam{
 		db.Message.Version.Set(CONTENT_MESSAGE_VERSION),
 		db.Message.ContentType.Set(contentType),
+		db.Message.WasSenderOffStage.Set(msg.WasSenderOffStage),
 	}
 
 	if msg.SenderId != nil {
@@ -478,9 +480,10 @@ func fromModel(message *db.MessageModel) (*messagingpb.Message, error) {
 		}
 
 		protoMessage := &messagingpb.Message{
-			MessageId: &messagingpb.MessageId{Value: message.ID},
-			Content:   []*messagingpb.Content{protoContent},
-			Ts:        ts,
+			MessageId:         &messagingpb.MessageId{Value: message.ID},
+			Content:           []*messagingpb.Content{protoContent},
+			Ts:                ts,
+			WasSenderOffStage: message.WasSenderOffStage,
 		}
 
 		if senderId, ok := message.SenderID(); ok {

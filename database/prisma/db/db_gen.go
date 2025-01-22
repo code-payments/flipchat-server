@@ -145,7 +145,7 @@ model Chat {
   id          String  @id
   displayName String?
   roomNumber  Int?    @unique
-  coverCharge BigInt  @default(0)
+  coverCharge BigInt  @default(0) // todo: rename to messaging fee
   type        Int     @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
   isOpen      Boolean @default(true)
 
@@ -195,9 +195,10 @@ model Member {
 model Message {
   // Fields
 
-  id       Bytes   @id
-  chatId   String
-  senderId String?
+  id                Bytes   @id
+  chatId            String
+  senderId          String?
+  wasSenderOffStage Boolean @default(false)
 
   version     Int   @default(0) @db.SmallInt // MessageVersion enum: Message: 0, Content: 1
   contentType Int   @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, LocalizedAnnouncement: 2, NaclBoxEncryptedContent: 4, ReactionContent: 5, ReplyContent: 6
@@ -467,14 +468,15 @@ const (
 type MessageScalarFieldEnum string
 
 const (
-	MessageScalarFieldEnumID          MessageScalarFieldEnum = "id"
-	MessageScalarFieldEnumChatID      MessageScalarFieldEnum = "chatId"
-	MessageScalarFieldEnumSenderID    MessageScalarFieldEnum = "senderId"
-	MessageScalarFieldEnumVersion     MessageScalarFieldEnum = "version"
-	MessageScalarFieldEnumContentType MessageScalarFieldEnum = "contentType"
-	MessageScalarFieldEnumContent     MessageScalarFieldEnum = "content"
-	MessageScalarFieldEnumCreatedAt   MessageScalarFieldEnum = "createdAt"
-	MessageScalarFieldEnumUpdatedAt   MessageScalarFieldEnum = "updatedAt"
+	MessageScalarFieldEnumID                MessageScalarFieldEnum = "id"
+	MessageScalarFieldEnumChatID            MessageScalarFieldEnum = "chatId"
+	MessageScalarFieldEnumSenderID          MessageScalarFieldEnum = "senderId"
+	MessageScalarFieldEnumWasSenderOffStage MessageScalarFieldEnum = "wasSenderOffStage"
+	MessageScalarFieldEnumVersion           MessageScalarFieldEnum = "version"
+	MessageScalarFieldEnumContentType       MessageScalarFieldEnum = "contentType"
+	MessageScalarFieldEnumContent           MessageScalarFieldEnum = "content"
+	MessageScalarFieldEnumCreatedAt         MessageScalarFieldEnum = "createdAt"
+	MessageScalarFieldEnumUpdatedAt         MessageScalarFieldEnum = "updatedAt"
 )
 
 type PointerScalarFieldEnum string
@@ -655,6 +657,8 @@ const messageFieldID messagePrismaFields = "id"
 const messageFieldChatID messagePrismaFields = "chatId"
 
 const messageFieldSenderID messagePrismaFields = "senderId"
+
+const messageFieldWasSenderOffStage messagePrismaFields = "wasSenderOffStage"
 
 const messageFieldVersion messagePrismaFields = "version"
 
@@ -1385,26 +1389,28 @@ type MessageModel struct {
 
 // InnerMessage holds the actual data
 type InnerMessage struct {
-	ID          Bytes    `json:"id"`
-	ChatID      string   `json:"chatId"`
-	SenderID    *string  `json:"senderId,omitempty"`
-	Version     int      `json:"version"`
-	ContentType int      `json:"contentType"`
-	Content     Bytes    `json:"content"`
-	CreatedAt   DateTime `json:"createdAt"`
-	UpdatedAt   DateTime `json:"updatedAt"`
+	ID                Bytes    `json:"id"`
+	ChatID            string   `json:"chatId"`
+	SenderID          *string  `json:"senderId,omitempty"`
+	WasSenderOffStage bool     `json:"wasSenderOffStage"`
+	Version           int      `json:"version"`
+	ContentType       int      `json:"contentType"`
+	Content           Bytes    `json:"content"`
+	CreatedAt         DateTime `json:"createdAt"`
+	UpdatedAt         DateTime `json:"updatedAt"`
 }
 
 // RawMessageModel is a struct for Message when used in raw queries
 type RawMessageModel struct {
-	ID          RawBytes    `json:"id"`
-	ChatID      RawString   `json:"chatId"`
-	SenderID    *RawString  `json:"senderId,omitempty"`
-	Version     RawInt      `json:"version"`
-	ContentType RawInt      `json:"contentType"`
-	Content     RawBytes    `json:"content"`
-	CreatedAt   RawDateTime `json:"createdAt"`
-	UpdatedAt   RawDateTime `json:"updatedAt"`
+	ID                RawBytes    `json:"id"`
+	ChatID            RawString   `json:"chatId"`
+	SenderID          *RawString  `json:"senderId,omitempty"`
+	WasSenderOffStage RawBoolean  `json:"wasSenderOffStage"`
+	Version           RawInt      `json:"version"`
+	ContentType       RawInt      `json:"contentType"`
+	Content           RawBytes    `json:"content"`
+	CreatedAt         RawDateTime `json:"createdAt"`
+	UpdatedAt         RawDateTime `json:"updatedAt"`
 }
 
 // RelationsMessage holds the relation data separately
@@ -11669,6 +11675,11 @@ type messageQuery struct {
 	// @optional
 	SenderID messageQuerySenderIDString
 
+	// WasSenderOffStage
+	//
+	// @required
+	WasSenderOffStage messageQueryWasSenderOffStageBoolean
+
 	// Version
 	//
 	// @required
@@ -12614,6 +12625,74 @@ func (r messageQuerySenderIDString) HasSuffixIfPresent(value *string) messageDef
 
 func (r messageQuerySenderIDString) Field() messagePrismaFields {
 	return messageFieldSenderID
+}
+
+// base struct
+type messageQueryWasSenderOffStageBoolean struct{}
+
+// Set the required value of WasSenderOffStage
+func (r messageQueryWasSenderOffStageBoolean) Set(value bool) messageSetParam {
+
+	return messageSetParam{
+		data: builder.Field{
+			Name:  "wasSenderOffStage",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of WasSenderOffStage dynamically
+func (r messageQueryWasSenderOffStageBoolean) SetIfPresent(value *Boolean) messageSetParam {
+	if value == nil {
+		return messageSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r messageQueryWasSenderOffStageBoolean) Equals(value bool) messageWithPrismaWasSenderOffStageEqualsParam {
+
+	return messageWithPrismaWasSenderOffStageEqualsParam{
+		data: builder.Field{
+			Name: "wasSenderOffStage",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r messageQueryWasSenderOffStageBoolean) EqualsIfPresent(value *bool) messageWithPrismaWasSenderOffStageEqualsParam {
+	if value == nil {
+		return messageWithPrismaWasSenderOffStageEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r messageQueryWasSenderOffStageBoolean) Order(direction SortOrder) messageDefaultParam {
+	return messageDefaultParam{
+		data: builder.Field{
+			Name:  "wasSenderOffStage",
+			Value: direction,
+		},
+	}
+}
+
+func (r messageQueryWasSenderOffStageBoolean) Cursor(cursor bool) messageCursorParam {
+	return messageCursorParam{
+		data: builder.Field{
+			Name:  "wasSenderOffStage",
+			Value: cursor,
+		},
+	}
+}
+
+func (r messageQueryWasSenderOffStageBoolean) Field() messagePrismaFields {
+	return messageFieldWasSenderOffStage
 }
 
 // base struct
@@ -24668,6 +24747,7 @@ var messageOutput = []builder.Output{
 	{Name: "id"},
 	{Name: "chatId"},
 	{Name: "senderId"},
+	{Name: "wasSenderOffStage"},
 	{Name: "version"},
 	{Name: "contentType"},
 	{Name: "content"},
@@ -25072,6 +25152,84 @@ func (p messageWithPrismaSenderIDEqualsUniqueParam) senderIDField() {}
 
 func (messageWithPrismaSenderIDEqualsUniqueParam) unique() {}
 func (messageWithPrismaSenderIDEqualsUniqueParam) equals() {}
+
+type MessageWithPrismaWasSenderOffStageEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	messageModel()
+	wasSenderOffStageField()
+}
+
+type MessageWithPrismaWasSenderOffStageSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	wasSenderOffStageField()
+}
+
+type messageWithPrismaWasSenderOffStageSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaWasSenderOffStageSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaWasSenderOffStageSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaWasSenderOffStageSetParam) messageModel() {}
+
+func (p messageWithPrismaWasSenderOffStageSetParam) wasSenderOffStageField() {}
+
+type MessageWithPrismaWasSenderOffStageWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	messageModel()
+	wasSenderOffStageField()
+}
+
+type messageWithPrismaWasSenderOffStageEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaWasSenderOffStageEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaWasSenderOffStageEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaWasSenderOffStageEqualsParam) messageModel() {}
+
+func (p messageWithPrismaWasSenderOffStageEqualsParam) wasSenderOffStageField() {}
+
+func (messageWithPrismaWasSenderOffStageSetParam) settable()  {}
+func (messageWithPrismaWasSenderOffStageEqualsParam) equals() {}
+
+type messageWithPrismaWasSenderOffStageEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p messageWithPrismaWasSenderOffStageEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p messageWithPrismaWasSenderOffStageEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p messageWithPrismaWasSenderOffStageEqualsUniqueParam) messageModel()           {}
+func (p messageWithPrismaWasSenderOffStageEqualsUniqueParam) wasSenderOffStageField() {}
+
+func (messageWithPrismaWasSenderOffStageEqualsUniqueParam) unique() {}
+func (messageWithPrismaWasSenderOffStageEqualsUniqueParam) equals() {}
 
 type MessageWithPrismaVersionEqualsSetParam interface {
 	field() builder.Field

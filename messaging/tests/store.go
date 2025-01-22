@@ -65,7 +65,8 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 	var reversedMessages []*messagingpb.Message
 
 	t.Run("Append", func(t *testing.T) {
-		for i := range 10 {
+		numMessages := 10
+		for i := range numMessages {
 			senders := append(users, nil)
 			for _, sender := range senders {
 				msg := &messagingpb.Message{
@@ -79,6 +80,7 @@ func testMessageStore(t *testing.T, s messaging.MessageStore, _ messaging.Pointe
 							},
 						},
 					},
+					WasSenderOffStage: i < numMessages/2,
 				}
 
 				// Ensure time ordering is progressing, otherwise ms collisions is

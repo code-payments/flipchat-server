@@ -121,9 +121,10 @@ model Member {
 model Message {
   // Fields
 
-  id       Bytes   @id
-  chatId   String
-  senderId String?
+  id                Bytes   @id
+  chatId            String
+  senderId          String?
+  wasSenderOffStage Boolean @default(false)
 
   version     Int   @default(0) @db.SmallInt // MessageVersion enum: Message: 0, Content: 1
   contentType Int   @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, LocalizedAnnouncement: 2, NaclBoxEncryptedContent: 4, ReactionContent: 5, ReplyContent: 6
