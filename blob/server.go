@@ -1,26 +1,16 @@
 package blob
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"time"
 
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	blobpb "github.com/code-payments/flipchat-protobuf-api/generated/go/blob/v1"
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
-	codecommon "github.com/code-payments/code-server/pkg/code/common"
-	"github.com/code-payments/flipchat-server/auth"
-	"github.com/code-payments/flipchat-server/flags"
-	"github.com/code-payments/flipchat-server/model"
-
-	// Import the s3 package
 	"github.com/code-payments/flipchat-server/s3"
 )
 
@@ -34,7 +24,7 @@ type Server struct {
 	blobpb.UnimplementedBlobServiceServer
 }
 
-func NewServer(log *zap.Logger, store Store, s3Store s3.S3Store) *Server {
+func NewServer(log *zap.Logger, store Store, s3Store s3.Store) *Server {
 	return &Server{
 		log:     log,
 		store:   store,
@@ -42,7 +32,7 @@ func NewServer(log *zap.Logger, store Store, s3Store s3.S3Store) *Server {
 	}
 }
 
-func (s *Server) Upload(ctx context.Context, req *blobpb.UploadRequest) (*blobpb.UploadResponse, error) {
+func (s *Server) Upload(ctx context.Context, req *blobpb.UploadBlobRequest) (*blobpb.UploadBlobResponse, error) {
 	// Validate the request
 	if req.GetOwnerId() == nil {
 		return nil, status.Error(codes.InvalidArgument, "owner_id is required")
@@ -62,15 +52,13 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadRequest) (*blobpb
 		return nil, status.Error(codes.InvalidArgument, "invalid blob_type")
 	}
 
-	// Serialize metadata based on BlobType
-	// TODO: do something more useful here
-	metadataBytes, err := newMetadata(blobType)
+	// Upload raw_data to S3
+	s3Url, err := s3.GenerateS3URLPathForBlob(blobId)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Internal, "failed to generate s3 url")
 	}
 
-	// Upload raw_data to S3
-	s3URL, err := s.s3Store.UploadBlob(ctx, req.GetOwnerId(), blobId, req.GetRawData())
+	err = s.s3Store.Upload(ctx, s3Url, req.GetRawData())
 	if err != nil {
 		s.log.Error("Failed to upload blob to S3", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to upload blob")
@@ -81,9 +69,9 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadRequest) (*blobpb
 		ID:        blobId,
 		UserID:    req.GetOwnerId(),
 		Type:      blobType,
-		S3URL:     s3URL,
+		S3URL:     s3Url,
 		Size:      int64(len(req.GetRawData())),
-		Metadata:  metadataBytes,
+		Metadata:  []byte("version_0: empty"),
 		Flagged:   false,
 		CreatedAt: time.Now(),
 	}
@@ -103,12 +91,12 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadRequest) (*blobpb
 		return nil, status.Error(codes.Internal, "failed to prepare response")
 	}
 
-	return &blobpb.UploadResponse{
+	return &blobpb.UploadBlobResponse{
 		Blob: responseBlob,
 	}, nil
 }
 
-func (s *Server) GetInfo(ctx context.Context, req *blobpb.GetInfoRequest) (*blobpb.GetInfoResponse, error) {
+func (s *Server) GetInfo(ctx context.Context, req *blobpb.GetBlobInfoRequest) (*blobpb.GetBlobInfoResponse, error) {
 	// Validate the request
 	if req.GetBlobId() == nil {
 		return nil, status.Error(codes.InvalidArgument, "blob_id is required")
@@ -130,7 +118,7 @@ func (s *Server) GetInfo(ctx context.Context, req *blobpb.GetInfoRequest) (*blob
 		return nil, status.Errorf(codes.Internal, "failed to marshal blob: %v", err)
 	}
 
-	return &blobpb.GetInfoResponse{
+	return &blobpb.GetBlobInfoResponse{
 		Blob: blobPB,
 	}, nil
 }

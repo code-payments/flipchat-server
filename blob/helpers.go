@@ -3,7 +3,6 @@ package blob
 import (
 	"errors"
 
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	blobpb "github.com/code-payments/flipchat-protobuf-api/generated/go/blob/v1"
@@ -53,40 +52,6 @@ func toProtoBlob(blob *Blob) (*blobpb.Blob, error) {
 		OwnerId:   blob.UserID,
 		S3Url:     blob.S3URL,
 		CreatedAt: timestamppb.New(blob.CreatedAt),
-		//Size:      blob.Size,
-		//Flagged:   blob.Flagged,
 	}
-
-	// Unmarshal metadata based on BlobType
-	switch blob.Type {
-	case BlobTypeImage:
-		var imgMeta blobpb.ImageMetadata
-		if err := proto.Unmarshal(blob.Metadata, &imgMeta); err != nil {
-			return nil, errors.New("failed to unmarshal image metadata")
-		}
-		protoBlob.Metadata = &blobpb.Blob_ImageMetadata{
-			ImageMetadata: &imgMeta,
-		}
-	case BlobTypeVideo:
-		var vidMeta blobpb.VideoMetadata
-		if err := proto.Unmarshal(blob.Metadata, &vidMeta); err != nil {
-			return nil, errors.New("failed to unmarshal video metadata")
-		}
-		protoBlob.Metadata = &blobpb.Blob_VideoMetadata{
-			VideoMetadata: &vidMeta,
-		}
-	case BlobTypeAudio:
-		var audMeta blobpb.AudioMetadata
-		if err := proto.Unmarshal(blob.Metadata, &audMeta); err != nil {
-			return nil, errors.New("failed to unmarshal audio metadata")
-		}
-		protoBlob.Metadata = &blobpb.Blob_AudioMetadata{
-			AudioMetadata: &audMeta,
-		}
-	default:
-		// BlobTypeUnknown or unhandled type
-		return nil, errors.New("failed to unmarshal metadata")
-	}
-
 	return protoBlob, nil
 }
