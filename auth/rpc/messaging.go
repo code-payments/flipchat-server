@@ -56,10 +56,10 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 
 	// todo: individual handlers for different content types
 	var canSendWhenClosed bool
-	var requiresRegularMember bool
+	var requiresListenerPayment bool
 	switch typed := content.Type.(type) {
 	case *messagingpb.Content_Text:
-		requiresRegularMember = true
+		requiresListenerPayment = true
 	case *messagingpb.Content_Reaction:
 		canSendWhenClosed = true
 
@@ -76,7 +76,7 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 			return false, "invalid reference content type", nil
 		}
 	case *messagingpb.Content_Reply:
-		requiresRegularMember = true
+		requiresListenerPayment = true
 
 		referenceMessage, err := a.messages.GetMessage(ctx, chatID, typed.Reply.OriginalMessageId)
 		if err == messaging.ErrMessageNotFound {
@@ -184,16 +184,12 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 		return false, "chat member is muted", nil
 	}
 
-	// todo: Is a regular member just a member that has send permissions? This
-	//       might make migration a bit easier between pre/post paid messaging
-	//       chats.
-	// todo: Need a temporary backwards compatibility check
-	if requiresRegularMember && !isOwner && !member.HasSendPermission {
+	if !isOwner && !member.HasSendPermission && requiresListenerPayment {
 		if paymentIntent == nil {
 			return false, "payment not provided", nil
 		}
 
-		var paymentMetadata messagingpb.SendMessageAsNonRegularPaymentMetadata
+		var paymentMetadata messagingpb.SendMessageAsListenerPaymentMetadata
 		_, err := intent.LoadPaymentMetadata(ctx, a.codeData, paymentIntent, &paymentMetadata)
 		if err == intent.ErrNoPaymentMetadata {
 			return false, "payment metadata missing", nil

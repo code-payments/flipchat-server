@@ -22,20 +22,20 @@ import (
 	"github.com/code-payments/flipchat-server/messaging"
 )
 
-type SendMessageAsNonRegularIntentHandler struct {
+type SendMessageAsListenerIntentHandler struct {
 	accounts account.Store
 	chats    chat.Store
 }
 
-func NewSendMessageAsNonRegularIntentHandler(accounts account.Store, chats chat.Store) *SendMessageAsNonRegularIntentHandler {
-	return &SendMessageAsNonRegularIntentHandler{
+func NewSendMessageAsListenerIntentHandler(accounts account.Store, chats chat.Store) *SendMessageAsListenerIntentHandler {
+	return &SendMessageAsListenerIntentHandler{
 		accounts: accounts,
 		chats:    chats,
 	}
 }
 
-func (h *SendMessageAsNonRegularIntentHandler) Validate(ctx context.Context, intentRecord *codeintent.Record, customMetadata proto.Message) (*intent.ValidationResult, error) {
-	typedMetadata, ok := customMetadata.(*messagingpb.SendMessageAsNonRegularPaymentMetadata)
+func (h *SendMessageAsListenerIntentHandler) Validate(ctx context.Context, intentRecord *codeintent.Record, customMetadata proto.Message) (*intent.ValidationResult, error) {
+	typedMetadata, ok := customMetadata.(*messagingpb.SendMessageAsListenerPaymentMetadata)
 	if !ok {
 		return nil, errors.New("unexepected custom metadata")
 	}
