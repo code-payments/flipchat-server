@@ -53,12 +53,12 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadBlobRequest) (*bl
 	}
 
 	// Upload raw_data to S3
-	s3Url, err := s3.GenerateS3URLPathForBlob(blobId)
+	key, err := s3.ToS3Key(blobId.Value)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate s3 url")
 	}
 
-	err = s.s3Store.Upload(ctx, s3Url, req.GetRawData())
+	s3Url, err := s.s3Store.Upload(ctx, key, req.GetRawData())
 	if err != nil {
 		s.log.Error("Failed to upload blob to S3", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to upload blob")

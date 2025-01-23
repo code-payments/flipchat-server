@@ -3,25 +3,27 @@ package s3
 import (
 	"encoding/hex"
 	"fmt"
-	"net/url"
-
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 )
 
-// Generates a full S3 URL for a given blobId.
-// It encodes the blobId as a hexadecimal string to ensure it's URL-safe.
-func GenerateS3URLPathForBlob(blobId *commonpb.BlobId) (string, error) {
-	if blobId == nil {
-		return "", fmt.Errorf("blobId cannot be nil")
+// Encodes the byte id as a hexadecimal string to ensure it's URL-safe.
+func ToS3Key(byteId []byte) (string, error) {
+	if byteId == nil {
+		return "", fmt.Errorf("byteId cannot be nil")
 	}
 
-	// Encode blobId to a hex string
-	encodedBlobId := hex.EncodeToString(blobId.Value)
-	objectKey := fmt.Sprintf("%s%s", BlobPathPrefix, encodedBlobId)
-	encodedObjectKey := url.PathEscape(objectKey)
+	return hex.EncodeToString(byteId), nil
+}
 
-	// Construct the full S3 URL
-	s3URL := fmt.Sprintf(S3BaseURL, S3Bucket, S3Region) + encodedObjectKey
+// Returns the S3 URL path for the given key, bucket, and region.
+func GenerateS3URLPathForByteId(key string, bucket string) (string, error) {
+	if key == "" {
+		return "", fmt.Errorf("key cannot be empty")
+	}
+	if bucket == "" {
+		return "", fmt.Errorf("bucket cannot be empty")
+	}
 
-	return s3URL, nil
+	url := fmt.Sprintf(S3_BaseURL, bucket, S3_Region, key)
+
+	return url, nil
 }

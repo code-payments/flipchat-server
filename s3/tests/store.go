@@ -27,11 +27,12 @@ func testUploadAndDownload(t *testing.T, s s3.Store) {
 	blobId := model.MustGenerateBlobID()
 	data := []byte("testData")
 
-	key, err := s3.GenerateS3URLPathForBlob(blobId)
+	// Generate key
+	key, err := s3.ToS3Key(blobId.Value)
 	require.NoError(t, err, "Failed to generate path using blobId")
 
 	// Upload data
-	err = s.Upload(ctx, key, data)
+	_, err = s.Upload(ctx, key, data)
 	require.NoError(t, err, "Upload should not return an error")
 
 	// Download data
@@ -59,11 +60,11 @@ func testOverwriteUpload(t *testing.T, s s3.Store) {
 	newData := []byte("newData")
 
 	// Upload initial data
-	err := s.Upload(ctx, key, initialData)
+	_, err := s.Upload(ctx, key, initialData)
 	require.NoError(t, err, "Initial upload should not return an error")
 
 	// Overwrite with new data
-	err = s.Upload(ctx, key, newData)
+	_, err = s.Upload(ctx, key, newData)
 	require.NoError(t, err, "Overwrite upload should not return an error")
 
 	// Download data and verify it's the new data

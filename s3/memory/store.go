@@ -18,7 +18,7 @@ func NewInMemory() s3.Store {
 	}
 }
 
-func (s *store) Upload(ctx context.Context, key string, data []byte) error {
+func (s *store) Upload(ctx context.Context, key string, data []byte) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -26,7 +26,13 @@ func (s *store) Upload(ctx context.Context, key string, data []byte) error {
 	dataCopy := make([]byte, len(data))
 	copy(dataCopy, data)
 	s.data[key] = dataCopy
-	return nil
+
+	url, err := s3.GenerateS3URLPathForByteId(key, "test-bucket")
+	if err != nil {
+		return "", err
+	}
+
+	return url, nil
 }
 
 func (s *store) Download(ctx context.Context, key string) ([]byte, error) {
