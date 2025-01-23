@@ -196,3 +196,23 @@ model Iap {
 
   @@map("flipchat_iap")
 }
+
+model Blob {
+  // Fields
+  id Bytes @id
+
+  userId   String
+  type     Int     @db.SmallInt
+  s3Url    String
+  size     Int
+  metadata Bytes
+  flagged  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  // Relations
+
+  // Constraints
+
+  @@map("flipchat_blob")
+}
