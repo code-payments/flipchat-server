@@ -21,6 +21,13 @@ func NewInMemory() blob.Store {
 	}
 }
 
+func (s *store) reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.data = make(map[string]*blob.Blob)
+}
+
 func (s *store) CreateBlob(ctx context.Context, b *blob.Blob) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
