@@ -44,10 +44,10 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadBlobRequest) (*bl
 		return nil, status.Error(codes.InvalidArgument, "raw_data is required")
 	}
 
-	blobId := generateBlobID()
+	blobId := GenerateBlobID()
 
 	// Convert BlobType from protobuf to internal type
-	blobType, err := fromProtoBlobType(req.GetBlobType())
+	blobType, err := FromProtoBlobType(req.GetBlobType())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid blob_type")
 	}
@@ -85,7 +85,7 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadBlobRequest) (*bl
 	}
 
 	// Prepare response
-	responseBlob, err := toProtoBlob(blob)
+	responseBlob, err := ToProtoBlob(blob)
 	if err != nil {
 		s.log.Error("Failed to convert Blob to proto", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to prepare response")
@@ -113,7 +113,7 @@ func (s *Server) GetInfo(ctx context.Context, req *blobpb.GetBlobInfoRequest) (*
 	}
 
 	// Convert Blob to blobpb.Blob
-	blobPB, err := toProtoBlob(blob)
+	blobPB, err := ToProtoBlob(blob)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to marshal blob: %v", err)
 	}

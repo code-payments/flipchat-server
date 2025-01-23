@@ -12,12 +12,12 @@ import (
 )
 
 // Generates a unique BlobId
-func generateBlobID() *commonpb.BlobId {
+func GenerateBlobID() *commonpb.BlobId {
 	return model.MustGenerateBlobID()
 }
 
 // Converts protobuf BlobType to internal BlobType
-func fromProtoBlobType(protoType blobpb.BlobType) (BlobType, error) {
+func FromProtoBlobType(protoType blobpb.BlobType) (BlobType, error) {
 	switch protoType {
 	case blobpb.BlobType_BLOB_TYPE_IMAGE:
 		return BlobTypeImage, nil
@@ -31,7 +31,7 @@ func fromProtoBlobType(protoType blobpb.BlobType) (BlobType, error) {
 }
 
 // toProtoBlobType converts internal BlobType to protobuf BlobType
-func toProtoBlobType(internalType BlobType) blobpb.BlobType {
+func ToProtoBlobType(internalType BlobType) blobpb.BlobType {
 	switch internalType {
 	case BlobTypeImage:
 		return blobpb.BlobType_BLOB_TYPE_IMAGE
@@ -45,10 +45,10 @@ func toProtoBlobType(internalType BlobType) blobpb.BlobType {
 }
 
 // Converts internal Blob to protobuf Blob, including unmarshaling metadata.
-func toProtoBlob(blob *Blob) (*blobpb.Blob, error) {
+func ToProtoBlob(blob *Blob) (*blobpb.Blob, error) {
 	protoBlob := &blobpb.Blob{
 		BlobId:    blob.ID,
-		BlobType:  toProtoBlobType(blob.Type),
+		BlobType:  ToProtoBlobType(blob.Type),
 		OwnerId:   blob.UserID,
 		S3Url:     blob.S3URL,
 		CreatedAt: timestamppb.New(blob.CreatedAt),
