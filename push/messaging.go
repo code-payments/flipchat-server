@@ -64,6 +64,11 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 		h.log.Debug("Dropping push, no content")
 		return nil
 	}
+	// todo: filter by speakers?
+	if msg.WasSenderOffStage {
+		h.log.Debug("Dropping push, sender was off stage")
+		return nil
+	}
 
 	sender, err := h.profiles.GetProfile(ctx, msg.SenderId)
 	if errors.Is(err, profile.ErrNotFound) {
