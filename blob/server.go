@@ -1,6 +1,7 @@
 package blob
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"time"
@@ -11,24 +12,33 @@ import (
 
 	blobpb "github.com/code-payments/flipchat-protobuf-api/generated/go/blob/v1"
 
+	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/s3"
 )
 
 const loginWindow = 2 * time.Minute
 
 type Server struct {
-	log     *zap.Logger
-	store   Store
-	s3Store s3.Store
+	log *zap.Logger
+
+	blobStore Store
+	s3Store   s3.Store
+	authz     auth.Authorizer
 
 	blobpb.UnimplementedBlobServiceServer
 }
 
-func NewServer(log *zap.Logger, store Store, s3Store s3.Store) *Server {
+func NewServer(
+	log *zap.Logger,
+	authz auth.Authorizer,
+	blobStore Store,
+	s3Store s3.Store,
+) *Server {
 	return &Server{
-		log:     log,
-		store:   store,
-		s3Store: s3Store,
+		log:       log,
+		authz:     authz,
+		blobStore: blobStore,
+		s3Store:   s3Store,
 	}
 }
 
@@ -42,6 +52,17 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadBlobRequest) (*bl
 	}
 	if len(req.GetRawData()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "raw_data is required")
+	}
+
+	// Check if the user is authorized to upload the blob
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the owner_id matches the authenticated user
+	if bytes.Compare(userID.Value, req.GetOwnerId().Value) != 0 {
+		return nil, status.Error(codes.PermissionDenied, "owner_id does not match authenticated user")
 	}
 
 	blobId := GenerateBlobID()
@@ -76,7 +97,7 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadBlobRequest) (*bl
 		CreatedAt: time.Now(),
 	}
 
-	if err := s.store.CreateBlob(ctx, blob); err != nil {
+	if err := s.blobStore.CreateBlob(ctx, blob); err != nil {
 		if errors.Is(err, ErrExists) {
 			return nil, status.Error(codes.AlreadyExists, "blob already exists")
 		}
@@ -103,7 +124,7 @@ func (s *Server) GetInfo(ctx context.Context, req *blobpb.GetBlobInfoRequest) (*
 	}
 
 	// Retrieve Blob from the store
-	blob, err := s.store.GetBlob(ctx, req.GetBlobId())
+	blob, err := s.blobStore.GetBlob(ctx, req.GetBlobId())
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "blob not found")
