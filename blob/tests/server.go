@@ -198,6 +198,12 @@ func testServer(
 
 		_, err = client.Upload(ctx, req)
 		require.Error(t, err, "Upload must fail if signature is invalid")
+
+		// Test if using a valid signature works after an invalid one
+		require.NoError(t, ownerKeyPair.Auth(req, &req.Auth))
+
+		_, err = client.Upload(ctx, req)
+		require.NoError(t, err, "Upload must succeed if signature is valid")
 	})
 
 	t.Run("GetInfo_Error_NoBlobID", func(t *testing.T) {
