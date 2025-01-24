@@ -165,6 +165,30 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 		if !hasDeletePermission {
 			return false, "chat member doesn't have delete permission", nil
 		}
+	case *messagingpb.Content_Review:
+		canSendWhenClosed = true
+
+		referenceMessage, err := a.messages.GetMessage(ctx, chatID, typed.Review.OriginalMessageId)
+		if err == messaging.ErrMessageNotFound {
+			return false, "reference not found", nil
+		} else if err != nil {
+			return false, "", err
+		}
+
+		if !referenceMessage.WasSenderOffStage {
+			return false, "reference message must have been sent off stage", nil
+		}
+
+		switch referenceMessage.Content[0].Type.(type) {
+		case *messagingpb.Content_Text, *messagingpb.Content_Reply:
+		default:
+			return false, "invalid reference content type", nil
+		}
+
+		// todo: this will be expanded to other members
+		if !isOwner {
+			return false, "only chat owners can review messages", nil
+		}
 	default:
 		return false, "unsupported content type", nil
 	}
