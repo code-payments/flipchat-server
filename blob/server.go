@@ -9,10 +9,12 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	blobpb "github.com/code-payments/flipchat-protobuf-api/generated/go/blob/v1"
 
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/image"
 	"github.com/code-payments/flipchat-server/s3"
 )
 
@@ -85,6 +87,33 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadBlobRequest) (*bl
 		return nil, status.Error(codes.Internal, "failed to upload blob")
 	}
 
+	// Process the raw_data based on the BlobType
+	metadata := &blobpb.Blob_Metadata{Version: 0}
+	switch blobType {
+	case BlobTypeImage:
+		info, err := image.ProcessImage(req.GetRawData())
+		if err != nil {
+			s.log.Error("Failed to process image", zap.Error(err))
+		} else {
+			metadata.Info = &blobpb.Blob_Metadata_Image{Image: info}
+		}
+	case BlobTypeVideo:
+		// Not implemented yet
+		s.log.Warn("Video blob type not implemented")
+	case BlobTypeAudio:
+		// Not implemented yet
+		s.log.Warn("Video blob type not implemented")
+	default:
+		// Not Supported
+		return nil, status.Error(codes.InvalidArgument, "blob_type not supported")
+	}
+
+	serializedMetadata, err := proto.Marshal(metadata)
+	if err != nil {
+		s.log.Error("Failed to marshal metadata", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to marshal metadata")
+	}
+
 	// Create the Blob record
 	blob := &Blob{
 		ID:        blobId,
@@ -92,7 +121,7 @@ func (s *Server) Upload(ctx context.Context, req *blobpb.UploadBlobRequest) (*bl
 		Type:      blobType,
 		S3URL:     s3Url,
 		Size:      int64(len(req.GetRawData())),
-		Metadata:  []byte("version_0: empty"),
+		Metadata:  serializedMetadata,
 		Flagged:   false,
 		CreatedAt: time.Now(),
 	}

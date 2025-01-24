@@ -3,6 +3,7 @@ package blob
 import (
 	"errors"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	blobpb "github.com/code-payments/flipchat-protobuf-api/generated/go/blob/v1"
@@ -46,11 +47,18 @@ func ToProtoBlobType(internalType BlobType) blobpb.BlobType {
 
 // Converts internal Blob to protobuf Blob, including unmarshaling metadata.
 func ToProtoBlob(blob *Blob) (*blobpb.Blob, error) {
+	var metadata blobpb.Blob_Metadata
+	err := proto.Unmarshal(blob.Metadata, &metadata)
+	if err != nil {
+		return nil, err
+	}
+
 	protoBlob := &blobpb.Blob{
 		BlobId:    blob.ID,
 		BlobType:  ToProtoBlobType(blob.Type),
 		OwnerId:   blob.UserID,
 		S3Url:     blob.S3URL,
+		Metadata:  &metadata,
 		CreatedAt: timestamppb.New(blob.CreatedAt),
 	}
 	return protoBlob, nil

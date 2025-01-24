@@ -26,7 +26,10 @@ require (
 	google.golang.org/protobuf v1.35.2
 )
 
-require github.com/ReneKroon/ttlcache v1.7.0
+require (
+	github.com/ReneKroon/ttlcache v1.7.0
+	github.com/buckket/go-blurhash v1.1.0
+)
 
 require (
 	cloud.google.com/go/auth v0.13.0 // indirect
