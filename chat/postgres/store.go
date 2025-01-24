@@ -69,9 +69,9 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		name = displayName
 	}
 
-	coverCharge := (*commonpb.PaymentAmount)(nil)
+	messagingFee := (*commonpb.PaymentAmount)(nil)
 	if m.CoverCharge != 0 {
-		coverCharge = &commonpb.PaymentAmount{Quarks: uint64(m.CoverCharge)}
+		messagingFee = &commonpb.PaymentAmount{Quarks: uint64(m.CoverCharge)}
 	}
 
 	return &chatpb.Metadata{
@@ -87,7 +87,7 @@ func fromModel(m *db.ChatModel) (*chatpb.Metadata, error) {
 		NumUnread:     0,     // not stored in the DB on this model
 		HasMoreUnread: false, // not stored in the DB on this model
 
-		CoverCharge: coverCharge,
+		MessagingFee: messagingFee,
 
 		LastActivity: timestamppb.New(m.LastActivityAt),
 
@@ -420,9 +420,9 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		}
 	}
 
-	coverCharge := uint64(0)
-	if md.CoverCharge != nil {
-		coverCharge = md.CoverCharge.Quarks
+	messagingFee := uint64(0)
+	if md.MessagingFee != nil {
+		messagingFee = md.MessagingFee.Quarks
 	}
 
 	isOpen := true
@@ -433,7 +433,7 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 	opt := []db.ChatSetParam{
 		db.Chat.RoomNumber.Set(int(nextNumber)),
 		db.Chat.Type.Set(int(md.Type)),
-		db.Chat.CoverCharge.Set(db.BigInt(coverCharge)),
+		db.Chat.CoverCharge.Set(db.BigInt(messagingFee)),
 		db.Chat.LastActivityAt.Set(md.LastActivity.AsTime()),
 		db.Chat.IsOpen.Set(isOpen),
 	}
@@ -593,13 +593,13 @@ func (s *store) SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, dis
 	return err
 }
 
-func (s *store) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
+func (s *store) SetMessagingFee(ctx context.Context, chatID *commonpb.ChatId, messagingFee *commonpb.PaymentAmount) error {
 	encodedChatID := pg.Encode(chatID.Value)
 
 	_, err := s.client.Chat.FindUnique(
 		db.Chat.ID.Equals(encodedChatID),
 	).Update(
-		db.Chat.CoverCharge.Set(db.BigInt(coverCharge.Quarks)),
+		db.Chat.CoverCharge.Set(db.BigInt(messagingFee.Quarks)),
 	).Exec(ctx)
 
 	if errors.Is(err, db.ErrNotFound) {

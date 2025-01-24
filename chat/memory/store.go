@@ -300,7 +300,7 @@ func (s *InMemoryStore) SetDisplayName(ctx context.Context, chatID *commonpb.Cha
 	return nil
 }
 
-func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.ChatId, coverCharge *commonpb.PaymentAmount) error {
+func (s *InMemoryStore) SetMessagingFee(ctx context.Context, chatID *commonpb.ChatId, messagingFee *commonpb.PaymentAmount) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -309,7 +309,7 @@ func (s *InMemoryStore) SetCoverCharge(ctx context.Context, chatID *commonpb.Cha
 		return chat.ErrChatNotFound
 	}
 
-	md.CoverCharge = proto.Clone(coverCharge).(*commonpb.PaymentAmount)
+	md.MessagingFee = proto.Clone(messagingFee).(*commonpb.PaymentAmount)
 
 	return nil
 }

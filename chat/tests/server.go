@@ -186,7 +186,7 @@ func testServer(
 		require.Equal(t, chatpb.StartChatResponse_OK, created.Result)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
-		require.Equal(t, chat.InitialCoverCharge, created.Chat.CoverCharge.Quarks)
+		require.Equal(t, chat.InitialMessagingFee, created.Chat.MessagingFee.Quarks)
 		require.True(t, created.Chat.OpenStatus.IsCurrentlyOpen)
 
 		expectedMembers := []*chatpb.Member{{
@@ -328,7 +328,7 @@ func testServer(
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
@@ -373,7 +373,7 @@ func testServer(
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			joinIntentID = testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+			joinIntentID = testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 			join = &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_RoomId{
 					RoomId: created.Chat.RoomNumber,
@@ -430,7 +430,7 @@ func testServer(
 				UserId: otherUser,
 				ChatId: created.Chat.ChatId,
 			}
-			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 
 			join = &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
@@ -469,6 +469,84 @@ func testServer(
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
 			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+		})
+
+		t.Run("Promote and demote user", func(t *testing.T) {
+			otherUser := model.MustGenerateUserID()
+			otherKeyPair := model.MustGenerateKeyPair()
+			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
+
+			newExpectedMembers := protoutil.SliceClone(expectedMembers)
+			for _, m := range newExpectedMembers {
+				m.IsSelf = false
+			}
+			newExpectedMembers = append(newExpectedMembers, &chatpb.Member{
+				UserId:            otherUser,
+				Identity:          &chatpb.MemberIdentity{},
+				IsSelf:            true,
+				HasSendPermission: false,
+			})
+
+			// Join without send permission
+			join := &chatpb.JoinChatRequest{
+				Identifier: &chatpb.JoinChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+				WithoutSendPermission: true,
+			}
+			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
+			joinResp, err := client.JoinChat(context.Background(), join)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
+			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
+
+			promote := &chatpb.PromoteUserRequest{
+				ChatId:               created.Chat.ChatId,
+				UserId:               otherUser,
+				EnableSendPermission: true,
+			}
+			require.NoError(t, keyPair.Auth(promote, &promote.Auth))
+			promoteResp, err := client.PromoteUser(context.Background(), promote)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.PromoteUserResponse_OK, promoteResp.Result)
+
+			newExpectedMembers[len(newExpectedMembers)-1].HasSendPermission = true
+			getByID := &chatpb.GetChatRequest{
+				Identifier: &chatpb.GetChatRequest_ChatId{
+					ChatId: created.Chat.GetChatId(),
+				},
+			}
+			require.NoError(t, otherKeyPair.Auth(getByID, &getByID.Auth))
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+
+			demote := &chatpb.DemoteUserRequest{
+				ChatId:                created.Chat.ChatId,
+				UserId:                otherUser,
+				DisableSendPermission: true,
+			}
+			require.NoError(t, keyPair.Auth(demote, &demote.Auth))
+			demoteResp, err := client.DemoteUser(context.Background(), demote)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.DemoteUserResponse_OK, demoteResp.Result)
+
+			newExpectedMembers[len(newExpectedMembers)-1].HasSendPermission = false
+			get, err = client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
+			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+
+			leave := &chatpb.LeaveChatRequest{
+				ChatId: created.Chat.GetChatId(),
+			}
+			require.NoError(t, otherKeyPair.Auth(leave, &leave.Auth))
+			leaveResp, err := client.LeaveChat(context.Background(), leave)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
 		})
 
 		t.Run("Remove user", func(t *testing.T) {
@@ -559,21 +637,21 @@ func testServer(
 			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
 		})
 
-		t.Run("Set cover charge", func(t *testing.T) {
-			setCoverCharge := &chatpb.SetCoverChargeRequest{
-				ChatId:      created.Chat.ChatId,
-				CoverCharge: &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(500)},
+		t.Run("Set messaging fee", func(t *testing.T) {
+			setMessagingFee := &chatpb.SetMessagingFeeRequest{
+				ChatId:       created.Chat.ChatId,
+				MessagingFee: &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(500)},
 			}
-			require.NoError(t, keyPair.Auth(setCoverCharge, &setCoverCharge.Auth))
+			require.NoError(t, keyPair.Auth(setMessagingFee, &setMessagingFee.Auth))
 
-			setCoverChargeResp, err := client.SetCoverCharge(context.Background(), setCoverCharge)
+			setMessagingFeeResp, err := client.SetMessagingFee(context.Background(), setMessagingFee)
 			require.NoError(t, err)
-			require.Equal(t, chatpb.SetCoverChargeResponse_OK, setCoverChargeResp.Result)
+			require.Equal(t, chatpb.SetMessagingFeeResponse_OK, setMessagingFeeResp.Result)
 
 			get, err := client.GetChat(context.Background(), getByID)
 			require.NoError(t, err)
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
-			require.NoError(t, protoutil.ProtoEqualError(setCoverCharge.CoverCharge, get.Metadata.CoverCharge))
+			require.NoError(t, protoutil.ProtoEqualError(setMessagingFee.MessagingFee, get.Metadata.MessagingFee))
 		})
 
 		t.Run("Set display name", func(t *testing.T) {
@@ -812,7 +890,7 @@ func testServer(
 			UserId: streamUser,
 			ChatId: startedOther.Chat.ChatId,
 		}
-		joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialCoverCharge, joinPaymentMetadata)
+		joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 		join := &chatpb.JoinChatRequest{
 			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
 			PaymentIntent: joinIntentID,
@@ -857,22 +935,22 @@ func testServer(
 		require.Empty(t, u.MemberUpdates)
 		require.True(t, u.MetadataUpdates[0].GetOpenStatusChanged().NewOpenStatus.IsCurrentlyOpen)
 
-		// Other user updates chat cover charge
-		setCoverCharge := &chatpb.SetCoverChargeRequest{
+		// Other user updates messaging fee
+		setMessagingFee := &chatpb.SetMessagingFeeRequest{
 			ChatId: startedOther.Chat.ChatId,
-			CoverCharge: &commonpb.PaymentAmount{
-				Quarks: 2 * chat.InitialCoverCharge,
+			MessagingFee: &commonpb.PaymentAmount{
+				Quarks: 2 * chat.InitialMessagingFee,
 			},
 		}
-		require.NoError(t, keyPair.Auth(setCoverCharge, &setCoverCharge.Auth))
-		_, err = client.SetCoverCharge(ctx, setCoverCharge)
+		require.NoError(t, keyPair.Auth(setMessagingFee, &setMessagingFee.Auth))
+		_, err = client.SetMessagingFee(ctx, setMessagingFee)
 		require.NoError(t, err)
 
 		u = <-updateCh
 		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
 		require.Len(t, u.MetadataUpdates, 1)
 		require.Empty(t, u.MemberUpdates, 0)
-		require.NoError(t, protoutil.ProtoEqualError(u.MetadataUpdates[0].GetCoverChargeChanged().NewCoverCharge, setCoverCharge.CoverCharge))
+		require.NoError(t, protoutil.ProtoEqualError(u.MetadataUpdates[0].GetMessagingFeeChanged().NewMessagingFee, setMessagingFee.MessagingFee))
 
 		// Other user updates chat display name
 		setDisplayName := &chatpb.SetDisplayNameRequest{
@@ -935,6 +1013,42 @@ func testServer(
 		require.Len(t, u.MemberUpdates, 1)
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetMuted().Member, streamUser))
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetMuted().MutedBy, userID))
+
+		// Other user demotes us
+		demote := &chatpb.DemoteUserRequest{
+			ChatId:                startedOther.Chat.ChatId,
+			UserId:                streamUser,
+			DisableSendPermission: true,
+		}
+		require.NoError(t, keyPair.Auth(demote, &demote.Auth))
+		_, err = client.DemoteUser(context.Background(), demote)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Empty(t, u.MetadataUpdates)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetDemoted().Member, streamUser))
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetDemoted().DemotedBy, userID))
+		require.True(t, u.MemberUpdates[0].GetDemoted().SendPermissionDisabled)
+
+		// Other user promotes us
+		promote := &chatpb.PromoteUserRequest{
+			ChatId:               startedOther.Chat.ChatId,
+			UserId:               streamUser,
+			EnableSendPermission: true,
+		}
+		require.NoError(t, keyPair.Auth(promote, &promote.Auth))
+		_, err = client.PromoteUser(context.Background(), promote)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Empty(t, u.MetadataUpdates)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetPromoted().Member, streamUser))
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetPromoted().PromotedBy, userID))
+		require.True(t, u.MemberUpdates[0].GetPromoted().SendPermissionEnabled)
 
 		// Leave the chat
 		leave = &chatpb.LeaveChatRequest{ChatId: started.Chat.ChatId}

@@ -183,6 +183,7 @@ func testServerHappy(
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
 			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			require.False(t, sent.Message.WasSenderOffStage)
 
 			expected = append(expected, sent.Message)
 			expectedTextMessages = append(expectedTextMessages, sent.Message)
@@ -210,6 +211,7 @@ func testServerHappy(
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
 			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			require.False(t, sent.Message.WasSenderOffStage)
 
 			expected = append(expected, sent.Message)
 			expectedReplyMessages = append(expectedReplyMessages, sent.Message)
@@ -237,6 +239,7 @@ func testServerHappy(
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
 			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			require.False(t, sent.Message.WasSenderOffStage)
 
 			expected = append(expected, sent.Message)
 			expectedReactionMessages = append(expectedReactionMessages, sent.Message)
@@ -273,6 +276,7 @@ func testServerHappy(
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
 			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			require.False(t, sent.Message.WasSenderOffStage)
 
 			expected = append(expected, sent.Message)
 			expectedTipMessages = append(expectedTipMessages, sent.Message)
@@ -300,6 +304,7 @@ func testServerHappy(
 		sent, err := client.SendMessage(ctx, send)
 		require.NoError(t, err)
 		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+		require.False(t, sent.Message.WasSenderOffStage)
 
 		expected = append(expected, sent.Message)
 		expectedDeletedMessages = append(expectedDeletedMessages, sent.Message)
@@ -561,6 +566,8 @@ func testServerHappy(
 		require.NoError(t, err)
 		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
 		<-eventCh
+		expected = append(expected, sent.Message)
+		expectedTextMessages = append(expectedTextMessages, sent.Message)
 
 		require.NoError(t, chatsDB.SetOpenStatus(ctx, chatID, true))
 
@@ -584,6 +591,90 @@ func testServerHappy(
 		require.NoError(t, err)
 		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
 		<-eventCh
+		expected = append(expected, sent.Message)
+		expectedReactionMessages = append(expectedReactionMessages, sent.Message)
+	})
+
+	t.Run("Send message when off stage", func(t *testing.T) {
+		listenerUserID := model.MustGenerateUserID()
+		listenerKeyPair := model.MustGenerateKeyPair()
+		_, _ = accountStore.Bind(ctx, listenerUserID, listenerKeyPair.Proto())
+		require.NoError(t, chatsDB.AddMember(ctx, chatID, chat.Member{
+			UserID:            listenerUserID,
+			HasSendPermission: false,
+		}))
+
+		sendAsListenerPaymentMetadata := &messagingpb.SendMessageAsListenerPaymentMetadata{
+			ChatId: chatID,
+			UserId: listenerUserID,
+		}
+
+		send := &messagingpb.SendMessageRequest{
+			ChatId: chatID,
+			Content: []*messagingpb.Content{
+				{
+					Type: &messagingpb.Content_Text{
+						Text: &messagingpb.TextContent{Text: "msg-off-stage"},
+					},
+				},
+			},
+		}
+		require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
+
+		sent, err := client.SendMessage(ctx, send)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
+
+		send = &messagingpb.SendMessageRequest{
+			ChatId: chatID,
+			Content: []*messagingpb.Content{
+				{
+					Type: &messagingpb.Content_Text{
+						Text: &messagingpb.TextContent{Text: "msg-off-stage"},
+					},
+				},
+			},
+			PaymentIntent: testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), sendAsListenerPaymentMetadata),
+		}
+		require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
+
+		sent, err = client.SendMessage(ctx, send)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+		require.True(t, sent.Message.WasSenderOffStage)
+
+		expected = append(expected, sent.Message)
+		expectedTextMessages = append(expectedTextMessages, sent.Message)
+
+		notification := <-eventCh
+		require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+
+		send = &messagingpb.SendMessageRequest{
+			ChatId: chatID,
+			Content: []*messagingpb.Content{
+				{
+					Type: &messagingpb.Content_Reply{
+						Reply: &messagingpb.ReplyContent{
+							OriginalMessageId: sent.Message.MessageId,
+							ReplyText:         "reply-off-stage",
+						},
+					},
+				},
+			},
+			PaymentIntent: testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), sendAsListenerPaymentMetadata),
+		}
+		require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
+
+		sent, err = client.SendMessage(ctx, send)
+		require.NoError(t, err)
+		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+		require.True(t, sent.Message.WasSenderOffStage)
+
+		expected = append(expected, sent.Message)
+		expectedReplyMessages = append(expectedReplyMessages, sent.Message)
+
+		notification = <-eventCh
+		require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 	})
 
 	t.Run("GetMessage", func(t *testing.T) {
@@ -619,6 +710,12 @@ func testServerHappy(
 	t.Run("GetMessages Paging", func(t *testing.T) {
 		get := &messagingpb.GetMessagesRequest{
 			ChatId: chatID,
+			Query: &messagingpb.GetMessagesRequest_Options{
+				Options: &commonpb.QueryOptions{
+					PageSize: 1024,
+					Order:    commonpb.QueryOptions_ASC,
+				},
+			},
 		}
 		require.NoError(t, ownerKeyPair.Auth(get, &get.Auth))
 

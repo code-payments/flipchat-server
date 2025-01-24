@@ -35,7 +35,7 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 		testChatStore_JoinLeaveWithPermissions,
 		testChatStore_AddRemove,
 		testChatStore_SetDisplayName,
-		testChatStore_SetCoverCharge,
+		testChatStore_SetMessagingFee,
 		testChatStore_AdvanceLastChatActivity,
 	} {
 		tf(t, s)
@@ -49,7 +49,7 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 		ChatId:       chatID1,
 		Type:         chatpb.Metadata_GROUP,
 		Owner:        model.MustGenerateUserID(),
-		CoverCharge:  &commonpb.PaymentAmount{Quarks: 1},
+		MessagingFee: &commonpb.PaymentAmount{Quarks: 1},
 		RoomNumber:   1,
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
@@ -61,7 +61,7 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 		ChatId:       chatID2,
 		Type:         chatpb.Metadata_GROUP,
 		Owner:        model.MustGenerateUserID(),
-		CoverCharge:  &commonpb.PaymentAmount{Quarks: 2},
+		MessagingFee: &commonpb.PaymentAmount{Quarks: 2},
 		RoomNumber:   2,
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
@@ -566,10 +566,10 @@ func testChatStore_SetDisplayName(t *testing.T, store chat.Store) {
 	require.Equal(t, "", result.DisplayName)
 }
 
-func testChatStore_SetCoverCharge(t *testing.T, store chat.Store) {
+func testChatStore_SetMessagingFee(t *testing.T, store chat.Store) {
 	chatID := model.MustGenerateChatID()
 
-	require.Equal(t, chat.ErrChatNotFound, store.SetCoverCharge(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
+	require.Equal(t, chat.ErrChatNotFound, store.SetMessagingFee(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
 
 	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
 		ChatId:       chatID,
@@ -580,13 +580,13 @@ func testChatStore_SetCoverCharge(t *testing.T, store chat.Store) {
 
 	result, err := store.GetChatMetadata(context.Background(), chatID)
 	require.NoError(t, err)
-	require.Nil(t, result.CoverCharge)
+	require.Nil(t, result.MessagingFee)
 
-	require.NoError(t, store.SetCoverCharge(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
+	require.NoError(t, store.SetMessagingFee(context.Background(), chatID, &commonpb.PaymentAmount{Quarks: kin.ToQuarks(100)}))
 
 	result, err = store.GetChatMetadata(context.Background(), chatID)
 	require.NoError(t, err)
-	require.Equal(t, kin.ToQuarks(100), result.CoverCharge.Quarks)
+	require.Equal(t, kin.ToQuarks(100), result.MessagingFee.Quarks)
 }
 
 func testChatStore_AdvanceLastChatActivity(t *testing.T, store chat.Store) {
