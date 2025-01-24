@@ -503,7 +503,7 @@ func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, use
 	for _, message := range messages {
 		batch = append(batch, message)
 		if len(batch) >= flushedMessageBatchSize {
-			if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
+			if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: batch}, streamTimeout); err != nil {
 				log.Info("Failed to send message to stream", zap.Error(err))
 				return
 			}
@@ -511,7 +511,7 @@ func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, use
 		}
 	}
 	if len(batch) > 0 {
-		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: messages}, streamTimeout); err != nil {
+		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: batch}, streamTimeout); err != nil {
 			log.Info("Failed to send message to stream", zap.Error(err))
 			return
 		}
