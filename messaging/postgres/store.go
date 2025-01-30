@@ -35,6 +35,7 @@ const (
 	ContentTypeReply                  = 6
 	ContentTypeTip                    = 7
 	ContentTypeDeleted                = 8
+	ContentTypeReview                 = 9
 	ContentTypeActionableAnnouncement = 10
 )
 
@@ -442,6 +443,8 @@ func getContentType(content *messagingpb.Content) int {
 		return ContentTypeTip
 	case *messagingpb.Content_Deleted:
 		return ContentTypeDeleted
+	case *messagingpb.Content_Review:
+		return ContentTypeReview
 	case *messagingpb.Content_ActionableAnnouncement:
 		return ContentTypeActionableAnnouncement
 	default:
