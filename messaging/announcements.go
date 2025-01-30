@@ -27,6 +27,9 @@ func SendAnnouncement(ctx context.Context, messenger Messenger, chatID *commonpb
 	if err != nil {
 		return err
 	}
+	if err := content.Validate(); err != nil {
+		return err
+	}
 	msg := &messagingpb.Message{
 		Content: []*messagingpb.Content{
 			{Type: &messagingpb.Content_LocalizedAnnouncement{LocalizedAnnouncement: content}},
