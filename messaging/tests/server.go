@@ -166,6 +166,7 @@ func testServerHappy(
 	var expectedReactionMessages []*messagingpb.Message
 	var expectedTipMessages []*messagingpb.Message
 	var expectedDeletedMessages []*messagingpb.Message
+	var expectedReviewMessages []*messagingpb.Message
 	t.Run("Send Messages", func(t *testing.T) {
 		for i := range 10 {
 			send := &messagingpb.SendMessageRequest{
@@ -284,397 +285,481 @@ func testServerHappy(
 			notification := <-eventCh
 			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 		}
-	})
 
-	for _, reference := range append(expectedTextMessages, append(expectedReplyMessages, expectedReactionMessages...)...) {
-		send := &messagingpb.SendMessageRequest{
-			ChatId: chatID,
-			Content: []*messagingpb.Content{
-				{
-					Type: &messagingpb.Content_Deleted{
-						Deleted: &messagingpb.DeleteMessageContent{
-							OriginalMessageId: reference.MessageId,
-						},
-					},
-				},
-			},
-		}
-		require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
-
-		sent, err := client.SendMessage(ctx, send)
-		require.NoError(t, err)
-		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
-		require.False(t, sent.Message.WasSenderOffStage)
-
-		expected = append(expected, sent.Message)
-		expectedDeletedMessages = append(expectedDeletedMessages, sent.Message)
-
-		notification := <-eventCh
-		require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
-	}
-
-	t.Run("Send message with invalid reference", func(t *testing.T) {
-		contentsWithReference := [][]*messagingpb.Content{
-			{
-				{
-					Type: &messagingpb.Content_Reaction{
-						Reaction: &messagingpb.ReactionContent{
-							OriginalMessageId: messaging.MustGenerateMessageID(),
-							Emoji:             "👎",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Reaction{
-						Reaction: &messagingpb.ReactionContent{
-							OriginalMessageId: expectedReactionMessages[0].MessageId,
-							Emoji:             "👎",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Reaction{
-						Reaction: &messagingpb.ReactionContent{
-							OriginalMessageId: expectedTipMessages[0].MessageId,
-							Emoji:             "👎",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Reaction{
-						Reaction: &messagingpb.ReactionContent{
-							OriginalMessageId: expectedDeletedMessages[0].MessageId,
-							Emoji:             "👎",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Reply{
-						Reply: &messagingpb.ReplyContent{
-							OriginalMessageId: messaging.MustGenerateMessageID(),
-							ReplyText:         "invald-reply",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Reply{
-						Reply: &messagingpb.ReplyContent{
-							OriginalMessageId: expectedReactionMessages[0].MessageId,
-							ReplyText:         "invald-reply",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Reply{
-						Reply: &messagingpb.ReplyContent{
-							OriginalMessageId: expectedTipMessages[0].MessageId,
-							ReplyText:         "invald-reply",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Reply{
-						Reply: &messagingpb.ReplyContent{
-							OriginalMessageId: expectedDeletedMessages[0].MessageId,
-							ReplyText:         "invald-reply",
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Tip{
-						Tip: &messagingpb.TipContent{
-							OriginalMessageId: messaging.MustGenerateMessageID(),
-							TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Tip{
-						Tip: &messagingpb.TipContent{
-							OriginalMessageId: expectedReactionMessages[0].MessageId,
-							TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Tip{
-						Tip: &messagingpb.TipContent{
-							OriginalMessageId: expectedTipMessages[0].MessageId,
-							TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Tip{
-						Tip: &messagingpb.TipContent{
-							OriginalMessageId: expectedDeletedMessages[0].MessageId,
-							TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Deleted{
-						Deleted: &messagingpb.DeleteMessageContent{
-							OriginalMessageId: messaging.MustGenerateMessageID(),
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Deleted{
-						Deleted: &messagingpb.DeleteMessageContent{
-							OriginalMessageId: expectedTipMessages[0].MessageId,
-						},
-					},
-				},
-			},
-			{
-				{
-					Type: &messagingpb.Content_Deleted{
-						Deleted: &messagingpb.DeleteMessageContent{
-							OriginalMessageId: expectedDeletedMessages[0].MessageId,
-						},
-					},
-				},
-			},
-		}
-		for _, content := range contentsWithReference {
-			send := &messagingpb.SendMessageRequest{
-				ChatId:  chatID,
-				Content: content,
-			}
-			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
-			sent, err := client.SendMessage(ctx, send)
-			require.NoError(t, err)
-			require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
-		}
-	})
-
-	t.Run("Send tip message with invalid intent", func(t *testing.T) {
-		invalidIntentCtors := []func() *commonpb.IntentId{
-			func() *commonpb.IntentId {
-				return nil
-			},
-			func() *commonpb.IntentId {
-				return &commonpb.IntentId{Value: make([]byte, 32)}
-			},
-			func() *commonpb.IntentId {
-				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
-					ChatId:    chatID,
-					MessageId: expectedTextMessages[0].MessageId,
-					TipperId:  ownerUserID,
-				}
-				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1)+1, tipPaymentMetadata)
-			},
-			func() *commonpb.IntentId {
-				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
-					ChatId:    model.MustGenerateChatID(),
-					MessageId: expectedTextMessages[0].MessageId,
-					TipperId:  ownerUserID,
-				}
-				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
-			},
-			func() *commonpb.IntentId {
-				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
-					ChatId:    chatID,
-					MessageId: expectedTextMessages[1].MessageId,
-					TipperId:  ownerUserID,
-				}
-				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
-			},
-			func() *commonpb.IntentId {
-				tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
-					ChatId:    chatID,
-					MessageId: expectedTextMessages[0].MessageId,
-					TipperId:  model.MustGenerateUserID(),
-				}
-				return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
-			},
-		}
-
-		for _, tc := range invalidIntentCtors {
+		for _, reference := range append(expectedTextMessages, append(expectedReplyMessages, expectedReactionMessages...)...) {
 			send := &messagingpb.SendMessageRequest{
 				ChatId: chatID,
 				Content: []*messagingpb.Content{
 					{
+						Type: &messagingpb.Content_Deleted{
+							Deleted: &messagingpb.DeleteMessageContent{
+								OriginalMessageId: reference.MessageId,
+							},
+						},
+					},
+				},
+			}
+			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
+
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			require.False(t, sent.Message.WasSenderOffStage)
+
+			expected = append(expected, sent.Message)
+			expectedDeletedMessages = append(expectedDeletedMessages, sent.Message)
+
+			notification := <-eventCh
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+		}
+
+		t.Run("Send message with invalid reference", func(t *testing.T) {
+			contentsWithReference := [][]*messagingpb.Content{
+				{
+					{
+						Type: &messagingpb.Content_Reaction{
+							Reaction: &messagingpb.ReactionContent{
+								OriginalMessageId: messaging.MustGenerateMessageID(),
+								Emoji:             "👎",
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Reaction{
+							Reaction: &messagingpb.ReactionContent{
+								OriginalMessageId: expectedReactionMessages[0].MessageId,
+								Emoji:             "👎",
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Reaction{
+							Reaction: &messagingpb.ReactionContent{
+								OriginalMessageId: expectedTipMessages[0].MessageId,
+								Emoji:             "👎",
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Reaction{
+							Reaction: &messagingpb.ReactionContent{
+								OriginalMessageId: expectedDeletedMessages[0].MessageId,
+								Emoji:             "👎",
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Reply{
+							Reply: &messagingpb.ReplyContent{
+								OriginalMessageId: messaging.MustGenerateMessageID(),
+								ReplyText:         "invald-reply",
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Reply{
+							Reply: &messagingpb.ReplyContent{
+								OriginalMessageId: expectedReactionMessages[0].MessageId,
+								ReplyText:         "invald-reply",
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Reply{
+							Reply: &messagingpb.ReplyContent{
+								OriginalMessageId: expectedTipMessages[0].MessageId,
+								ReplyText:         "invald-reply",
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Reply{
+							Reply: &messagingpb.ReplyContent{
+								OriginalMessageId: expectedDeletedMessages[0].MessageId,
+								ReplyText:         "invald-reply",
+							},
+						},
+					},
+				},
+				{
+					{
 						Type: &messagingpb.Content_Tip{
 							Tip: &messagingpb.TipContent{
-								OriginalMessageId: expectedTextMessages[0].MessageId,
+								OriginalMessageId: messaging.MustGenerateMessageID(),
 								TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
 							},
 						},
 					},
 				},
-				PaymentIntent: tc(),
+				{
+					{
+						Type: &messagingpb.Content_Tip{
+							Tip: &messagingpb.TipContent{
+								OriginalMessageId: expectedReactionMessages[0].MessageId,
+								TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Tip{
+							Tip: &messagingpb.TipContent{
+								OriginalMessageId: expectedTipMessages[0].MessageId,
+								TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Tip{
+							Tip: &messagingpb.TipContent{
+								OriginalMessageId: expectedDeletedMessages[0].MessageId,
+								TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Deleted{
+							Deleted: &messagingpb.DeleteMessageContent{
+								OriginalMessageId: messaging.MustGenerateMessageID(),
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Deleted{
+							Deleted: &messagingpb.DeleteMessageContent{
+								OriginalMessageId: expectedTipMessages[0].MessageId,
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Deleted{
+							Deleted: &messagingpb.DeleteMessageContent{
+								OriginalMessageId: expectedDeletedMessages[0].MessageId,
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Review{
+							Review: &messagingpb.ReviewContent{
+								OriginalMessageId: messaging.MustGenerateMessageID(),
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Review{
+							Review: &messagingpb.ReviewContent{
+								OriginalMessageId: expectedTextMessages[0].MessageId,
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Review{
+							Review: &messagingpb.ReviewContent{
+								OriginalMessageId: expectedReplyMessages[0].MessageId,
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Review{
+							Review: &messagingpb.ReviewContent{
+								OriginalMessageId: expectedReactionMessages[0].MessageId,
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Review{
+							Review: &messagingpb.ReviewContent{
+								OriginalMessageId: expectedTipMessages[0].MessageId,
+							},
+						},
+					},
+				},
+				{
+					{
+						Type: &messagingpb.Content_Review{
+							Review: &messagingpb.ReviewContent{
+								OriginalMessageId: expectedDeletedMessages[0].MessageId,
+							},
+						},
+					},
+				},
 			}
+			for _, content := range contentsWithReference {
+				send := &messagingpb.SendMessageRequest{
+					ChatId:  chatID,
+					Content: content,
+				}
+				require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
+				sent, err := client.SendMessage(ctx, send)
+				require.NoError(t, err)
+				require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
+			}
+		})
+
+		t.Run("Send tip message with invalid intent", func(t *testing.T) {
+			invalidIntentCtors := []func() *commonpb.IntentId{
+				func() *commonpb.IntentId {
+					return nil
+				},
+				func() *commonpb.IntentId {
+					return &commonpb.IntentId{Value: make([]byte, 32)}
+				},
+				func() *commonpb.IntentId {
+					tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+						ChatId:    chatID,
+						MessageId: expectedTextMessages[0].MessageId,
+						TipperId:  ownerUserID,
+					}
+					return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1)+1, tipPaymentMetadata)
+				},
+				func() *commonpb.IntentId {
+					tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+						ChatId:    model.MustGenerateChatID(),
+						MessageId: expectedTextMessages[0].MessageId,
+						TipperId:  ownerUserID,
+					}
+					return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
+				},
+				func() *commonpb.IntentId {
+					tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+						ChatId:    chatID,
+						MessageId: expectedTextMessages[1].MessageId,
+						TipperId:  ownerUserID,
+					}
+					return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
+				},
+				func() *commonpb.IntentId {
+					tipPaymentMetadata := &messagingpb.SendTipMessagePaymentMetadata{
+						ChatId:    chatID,
+						MessageId: expectedTextMessages[0].MessageId,
+						TipperId:  model.MustGenerateUserID(),
+					}
+					return testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), tipPaymentMetadata)
+				},
+			}
+
+			for _, tc := range invalidIntentCtors {
+				send := &messagingpb.SendMessageRequest{
+					ChatId: chatID,
+					Content: []*messagingpb.Content{
+						{
+							Type: &messagingpb.Content_Tip{
+								Tip: &messagingpb.TipContent{
+									OriginalMessageId: expectedTextMessages[0].MessageId,
+									TipAmount:         &commonpb.PaymentAmount{Quarks: codekin.ToQuarks(1)},
+								},
+							},
+						},
+					},
+					PaymentIntent: tc(),
+				}
+				require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
+
+				sent, err := client.SendMessage(ctx, send)
+				require.NoError(t, err)
+				require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
+			}
+		})
+
+		t.Run("Send message to closed room", func(t *testing.T) {
+			require.NoError(t, chatsDB.SetOpenStatus(ctx, chatID, false))
+
+			send := &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Text{
+							Text: &messagingpb.TextContent{Text: "msg"},
+						},
+					},
+				},
+			}
+
+			// Test other user cannot send certain types of messages (eg. text)
+			require.NoError(t, otherKeyPair.Auth(send, &send.Auth))
+			sent, err := client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
+
+			// However, owner is always allowed
 			require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
+			sent, err = client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			<-eventCh
+			expected = append(expected, sent.Message)
+			expectedTextMessages = append(expectedTextMessages, sent.Message)
+
+			require.NoError(t, chatsDB.SetOpenStatus(ctx, chatID, true))
+
+			send = &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Reaction{
+							Reaction: &messagingpb.ReactionContent{
+								OriginalMessageId: sent.Message.MessageId,
+								Emoji:             "👍",
+							},
+						},
+					},
+				},
+			}
+
+			// Test other user can send certain types of messages (eg. reaction)
+			require.NoError(t, otherKeyPair.Auth(send, &send.Auth))
+			sent, err = client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			<-eventCh
+			expected = append(expected, sent.Message)
+			expectedReactionMessages = append(expectedReactionMessages, sent.Message)
+		})
+
+		t.Run("Send message when off stage with reviews", func(t *testing.T) {
+			listenerUserID := model.MustGenerateUserID()
+			listenerKeyPair := model.MustGenerateKeyPair()
+			_, _ = accountStore.Bind(ctx, listenerUserID, listenerKeyPair.Proto())
+			require.NoError(t, chatsDB.AddMember(ctx, chatID, chat.Member{
+				UserID:            listenerUserID,
+				HasSendPermission: false,
+			}))
+
+			sendAsListenerPaymentMetadata := &messagingpb.SendMessageAsListenerPaymentMetadata{
+				ChatId: chatID,
+				UserId: listenerUserID,
+			}
+
+			send := &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Text{
+							Text: &messagingpb.TextContent{Text: "msg-off-stage"},
+						},
+					},
+				},
+			}
+			require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
 
 			sent, err := client.SendMessage(ctx, send)
 			require.NoError(t, err)
 			require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
-		}
-	})
 
-	t.Run("Send message to closed room", func(t *testing.T) {
-		require.NoError(t, chatsDB.SetOpenStatus(ctx, chatID, false))
-
-		send := &messagingpb.SendMessageRequest{
-			ChatId: chatID,
-			Content: []*messagingpb.Content{
-				{
-					Type: &messagingpb.Content_Text{
-						Text: &messagingpb.TextContent{Text: "msg"},
-					},
-				},
-			},
-		}
-
-		// Test other user cannot send certain types of messages (eg. text)
-		require.NoError(t, otherKeyPair.Auth(send, &send.Auth))
-		sent, err := client.SendMessage(ctx, send)
-		require.NoError(t, err)
-		require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
-
-		// However, owner is always allowed
-		require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
-		sent, err = client.SendMessage(ctx, send)
-		require.NoError(t, err)
-		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
-		<-eventCh
-		expected = append(expected, sent.Message)
-		expectedTextMessages = append(expectedTextMessages, sent.Message)
-
-		require.NoError(t, chatsDB.SetOpenStatus(ctx, chatID, true))
-
-		send = &messagingpb.SendMessageRequest{
-			ChatId: chatID,
-			Content: []*messagingpb.Content{
-				{
-					Type: &messagingpb.Content_Reaction{
-						Reaction: &messagingpb.ReactionContent{
-							OriginalMessageId: sent.Message.MessageId,
-							Emoji:             "👍",
+			send = &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Text{
+							Text: &messagingpb.TextContent{Text: "msg-off-stage"},
 						},
 					},
 				},
-			},
-		}
+				PaymentIntent: testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), sendAsListenerPaymentMetadata),
+			}
+			require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
 
-		// Test other user can send certain types of messages (eg. reaction)
-		require.NoError(t, otherKeyPair.Auth(send, &send.Auth))
-		sent, err = client.SendMessage(ctx, send)
-		require.NoError(t, err)
-		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
-		<-eventCh
-		expected = append(expected, sent.Message)
-		expectedReactionMessages = append(expectedReactionMessages, sent.Message)
-	})
+			sent, err = client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			require.True(t, sent.Message.WasSenderOffStage)
 
-	t.Run("Send message when off stage", func(t *testing.T) {
-		listenerUserID := model.MustGenerateUserID()
-		listenerKeyPair := model.MustGenerateKeyPair()
-		_, _ = accountStore.Bind(ctx, listenerUserID, listenerKeyPair.Proto())
-		require.NoError(t, chatsDB.AddMember(ctx, chatID, chat.Member{
-			UserID:            listenerUserID,
-			HasSendPermission: false,
-		}))
+			expected = append(expected, sent.Message)
+			expectedTextMessages = append(expectedTextMessages, sent.Message)
 
-		sendAsListenerPaymentMetadata := &messagingpb.SendMessageAsListenerPaymentMetadata{
-			ChatId: chatID,
-			UserId: listenerUserID,
-		}
+			notification := <-eventCh
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
 
-		send := &messagingpb.SendMessageRequest{
-			ChatId: chatID,
-			Content: []*messagingpb.Content{
-				{
-					Type: &messagingpb.Content_Text{
-						Text: &messagingpb.TextContent{Text: "msg-off-stage"},
-					},
-				},
-			},
-		}
-		require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
-
-		sent, err := client.SendMessage(ctx, send)
-		require.NoError(t, err)
-		require.Equal(t, messagingpb.SendMessageResponse_DENIED, sent.Result)
-
-		send = &messagingpb.SendMessageRequest{
-			ChatId: chatID,
-			Content: []*messagingpb.Content{
-				{
-					Type: &messagingpb.Content_Text{
-						Text: &messagingpb.TextContent{Text: "msg-off-stage"},
-					},
-				},
-			},
-			PaymentIntent: testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), sendAsListenerPaymentMetadata),
-		}
-		require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
-
-		sent, err = client.SendMessage(ctx, send)
-		require.NoError(t, err)
-		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
-		require.True(t, sent.Message.WasSenderOffStage)
-
-		expected = append(expected, sent.Message)
-		expectedTextMessages = append(expectedTextMessages, sent.Message)
-
-		notification := <-eventCh
-		require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
-
-		send = &messagingpb.SendMessageRequest{
-			ChatId: chatID,
-			Content: []*messagingpb.Content{
-				{
-					Type: &messagingpb.Content_Reply{
-						Reply: &messagingpb.ReplyContent{
-							OriginalMessageId: sent.Message.MessageId,
-							ReplyText:         "reply-off-stage",
+			send = &messagingpb.SendMessageRequest{
+				ChatId: chatID,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Reply{
+							Reply: &messagingpb.ReplyContent{
+								OriginalMessageId: sent.Message.MessageId,
+								ReplyText:         "reply-off-stage",
+							},
 						},
 					},
 				},
-			},
-			PaymentIntent: testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), sendAsListenerPaymentMetadata),
-		}
-		require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
+				PaymentIntent: testutil.CreatePayment(t, codeData, codekin.ToQuarks(1), sendAsListenerPaymentMetadata),
+			}
+			require.NoError(t, listenerKeyPair.Auth(send, &send.Auth))
 
-		sent, err = client.SendMessage(ctx, send)
-		require.NoError(t, err)
-		require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
-		require.True(t, sent.Message.WasSenderOffStage)
+			sent, err = client.SendMessage(ctx, send)
+			require.NoError(t, err)
+			require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+			require.True(t, sent.Message.WasSenderOffStage)
 
-		expected = append(expected, sent.Message)
-		expectedReplyMessages = append(expectedReplyMessages, sent.Message)
+			expected = append(expected, sent.Message)
+			expectedReplyMessages = append(expectedReplyMessages, sent.Message)
 
-		notification = <-eventCh
-		require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			notification = <-eventCh
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+
+			for _, reference := range append(expectedTextMessages, expectedReplyMessages...) {
+				if reference.WasSenderOffStage {
+					send := &messagingpb.SendMessageRequest{
+						ChatId: chatID,
+						Content: []*messagingpb.Content{
+							{
+								Type: &messagingpb.Content_Review{
+									Review: &messagingpb.ReviewContent{
+										OriginalMessageId: reference.MessageId,
+										IsApproved:        true,
+									},
+								},
+							},
+						},
+					}
+					require.NoError(t, ownerKeyPair.Auth(send, &send.Auth))
+
+					sent, err := client.SendMessage(ctx, send)
+					require.NoError(t, err)
+					require.Equal(t, messagingpb.SendMessageResponse_OK, sent.Result)
+					require.False(t, sent.Message.WasSenderOffStage)
+
+					expected = append(expected, sent.Message)
+					expectedReviewMessages = append(expectedReviewMessages, sent.Message)
+
+					notification := <-eventCh
+					require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+				}
+			}
+		})
 	})
 
 	t.Run("GetMessage", func(t *testing.T) {
