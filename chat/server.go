@@ -516,11 +516,17 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		ctx := context.Background()
 
 		if md.Type == chatpb.Metadata_GROUP {
+			announcementContentBuilder := messaging.NewRoomIsLiveAnnouncementContentBuilder(md.RoomNumber)
+			isStaff, _ := s.accounts.IsStaff(ctx, userID)
+			if isStaff {
+				announcementContentBuilder = messaging.NewFlipchatIsLiveAnnouncementContentBuilder(md.RoomNumber)
+			}
+
 			if err := messaging.SendAnnouncement(
 				ctx,
 				s.messenger,
 				md.ChatId,
-				messaging.NewRoomIsLiveAnnouncementContentBuilder(md.RoomNumber),
+				announcementContentBuilder,
 			); err != nil {
 				log.Warn("Failed to send announcement", zap.Error(err))
 			}

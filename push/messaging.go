@@ -107,9 +107,6 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	switch typed := msg.Content[0].Type.(type) {
 	case *messagingpb.Content_Text:
 		pushPreview = typed.Text.Text
-	case *messagingpb.Content_LocalizedAnnouncement:
-		// todo: this needs tests
-		pushPreview = typed.LocalizedAnnouncement.KeyOrText
 	case *messagingpb.Content_Reply:
 		// todo: this needs tests
 		pushPreview = typed.Reply.ReplyText

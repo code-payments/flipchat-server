@@ -28,14 +28,15 @@ const (
 
 // Message.ContentType enum
 const (
-	ContentTypeUnknown               = 0
-	ContentTypeText                  = 1
-	ContentTypeLocalizedAnnouncement = 2
-	ContentTypeReaction              = 5
-	ContentTypeReply                 = 6
-	ContentTypeTip                   = 7
-	ContentTypeDeleted               = 8
-	ContentTypeReview                = 9
+	ContentTypeUnknown                = 0
+	ContentTypeText                   = 1
+	ContentTypeLocalizedAnnouncement  = 2
+	ContentTypeReaction               = 5
+	ContentTypeReply                  = 6
+	ContentTypeTip                    = 7
+	ContentTypeDeleted                = 8
+	ContentTypeReview                 = 9
+	ContentTypeActionableAnnouncement = 10
 )
 
 func NewInPostgresMessages(client *db.PrismaClient) messaging.MessageStore {
@@ -444,6 +445,8 @@ func getContentType(content *messagingpb.Content) int {
 		return ContentTypeDeleted
 	case *messagingpb.Content_Review:
 		return ContentTypeReview
+	case *messagingpb.Content_ActionableAnnouncement:
+		return ContentTypeActionableAnnouncement
 	default:
 		return ContentTypeUnknown
 	}
