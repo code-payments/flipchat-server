@@ -175,6 +175,7 @@ func testServer(
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
 					Users:         otherUsers,
+					DisplayName:   "Start Group Chat Test",
 					PaymentIntent: startIntentID,
 				},
 			},
@@ -185,6 +186,7 @@ func testServer(
 		require.NoError(t, err)
 		require.Equal(t, chatpb.StartChatResponse_OK, created.Result)
 		require.EqualValues(t, 1, created.Chat.RoomNumber)
+		require.Equal(t, start.GetGroupChat().DisplayName, created.Chat.DisplayName)
 		require.NoError(t, protoutil.ProtoEqualError(userID, created.Chat.Owner))
 		require.Equal(t, chat.InitialMessagingFee, created.Chat.MessagingFee.Quarks)
 		require.True(t, created.Chat.OpenStatus.IsCurrentlyOpen)
@@ -845,6 +847,7 @@ func testServer(
 			Parameters: &chatpb.StartChatRequest_GroupChat{
 				GroupChat: &chatpb.StartChatRequest_StartGroupChatParameters{
 					Users:         []*commonpb.UserId{userID},
+					DisplayName:   "Stream Test",
 					PaymentIntent: startIntentID,
 				},
 			},

@@ -48,6 +48,7 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 	expected1 := &chatpb.Metadata{
 		ChatId:       chatID1,
 		Type:         chatpb.Metadata_GROUP,
+		DisplayName:  "Chat With Display Name",
 		Owner:        model.MustGenerateUserID(),
 		MessagingFee: &commonpb.PaymentAmount{Quarks: 1},
 		RoomNumber:   1,
@@ -60,6 +61,7 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 	expected2 := &chatpb.Metadata{
 		ChatId:       chatID2,
 		Type:         chatpb.Metadata_GROUP,
+		DisplayName:  "",
 		Owner:        model.MustGenerateUserID(),
 		MessagingFee: &commonpb.PaymentAmount{Quarks: 2},
 		RoomNumber:   2,

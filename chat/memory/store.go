@@ -181,10 +181,6 @@ func (s *InMemoryStore) CreateChat(_ context.Context, md *chatpb.Metadata) (*cha
 	if md.RoomNumber != 0 {
 		return nil, errors.New("cannot create chat with room number")
 	}
-	if len(md.DisplayName) > 0 {
-		// todo: May not always be the case in the future, but true for current flows
-		return nil, errors.New("cannot create chat with display name")
-	}
 
 	md.NumUnread = 0
 	md.HasMoreUnread = false

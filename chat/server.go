@@ -453,6 +453,21 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			MessagingFee: &commonpb.PaymentAmount{Quarks: InitialMessagingFee},
 		}
 
+		if len(t.GroupChat.DisplayName) > 0 {
+			// todo: remember the display name moderation result from the check RPC
+			moderationResult, err := s.moderationClient.ClassifyText(t.GroupChat.DisplayName)
+			if err != nil {
+				s.log.Warn("Failed to moderate display name", zap.Error(err))
+				return nil, status.Errorf(codes.Internal, "failed to moderate display name")
+			}
+
+			if moderationResult.Flagged {
+				return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
+			}
+
+			md.DisplayName = t.GroupChat.DisplayName
+		}
+
 		users = append(t.GroupChat.Users, userID)
 
 	default:
@@ -855,6 +870,22 @@ func (s *Server) CloseChat(ctx context.Context, req *chatpb.CloseChatRequest) (*
 	return &chatpb.CloseChatResponse{}, nil
 }
 
+// todo: this RPC needs tests
+func (s *Server) CheckDisplayName(ctx context.Context, req *chatpb.CheckDisplayNameRequest) (*chatpb.CheckDisplayNameResponse, error) {
+	log := s.log.With(zap.String("display_name", req.DisplayName))
+
+	moderationResult, err := s.moderationClient.ClassifyText(req.DisplayName)
+	if err != nil {
+		log.Warn("Failed to moderate display name", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to moderate display name")
+	}
+
+	return &chatpb.CheckDisplayNameResponse{
+		Result:    chatpb.CheckDisplayNameResponse_OK,
+		IsAllowed: !moderationResult.Flagged,
+	}, nil
+}
+
 func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameRequest) (*chatpb.SetDisplayNameResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
@@ -887,6 +918,8 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 
 	// todo: this needs tests
 	if len(req.DisplayName) > 0 {
+		log = log.With(zap.String("display_name", req.DisplayName))
+
 		moderationResult, err := s.moderationClient.ClassifyText(req.DisplayName)
 		if err != nil {
 			log.Warn("Failed to moderate display name", zap.Error(err))

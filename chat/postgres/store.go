@@ -370,10 +370,6 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 	if md.RoomNumber != 0 {
 		return nil, errors.New("cannot create chat with room number")
 	}
-	if len(md.DisplayName) > 0 {
-		// todo: May not always be the case in the future, but true for current flows
-		return nil, errors.New("cannot create chat with display name")
-	}
 
 	encodedChatID := pg.Encode(md.ChatId.Value)
 
@@ -436,6 +432,10 @@ func (s *store) CreateChat(ctx context.Context, md *chatpb.Metadata) (*chatpb.Me
 		db.Chat.CoverCharge.Set(db.BigInt(messagingFee)),
 		db.Chat.LastActivityAt.Set(md.LastActivity.AsTime()),
 		db.Chat.IsOpen.Set(isOpen),
+	}
+
+	if len(md.DisplayName) > 0 {
+		opt = append(opt, db.Chat.DisplayName.Set(md.DisplayName))
 	}
 
 	if md.Owner != nil {
