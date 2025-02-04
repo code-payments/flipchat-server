@@ -3,6 +3,7 @@ package profile
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -13,22 +14,25 @@ import (
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/social/x"
 )
 
 type Server struct {
 	log      *zap.Logger
 	accounts account.Store
 	profiles Store
+	xClient  *x.Client
 	authz    auth.Authorizer
 
 	profilepb.UnimplementedProfileServer
 }
 
-func NewServer(log *zap.Logger, accounts account.Store, profiles Store, authz auth.Authorizer) *Server {
+func NewServer(log *zap.Logger, accounts account.Store, profiles Store, xClient *x.Client, authz auth.Authorizer) *Server {
 	return &Server{
 		log:      log,
 		accounts: accounts,
 		profiles: profiles,
+		xClient:  xClient,
 		authz:    authz,
 	}
 }
@@ -79,4 +83,42 @@ func (s *Server) SetDisplayName(ctx context.Context, req *profilepb.SetDisplayNa
 	}
 
 	return &profilepb.SetDisplayNameResponse{}, nil
+}
+
+func (s *Server) LinkXAccount(ctx context.Context, req *profilepb.LinkXAccountRequest) (*profilepb.LinkXAccountResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
+
+	xUser, err := s.xClient.GetMyUser(ctx, req.AccessToken)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "http status code: 403") {
+			return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_INVALID_ACCESS_TOKEN}, nil
+		}
+
+		log.Warn("Failed to get user from x", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to get user from x")
+	}
+
+	protoXUser := xUser.ToProto()
+
+	if err := protoXUser.Validate(); err != nil {
+		log.Warn("Failed to validate proto x profile")
+		return nil, status.Error(codes.Internal, "failed to validate proto x profile")
+	}
+
+	err = s.profiles.LinkXAccount(ctx, userID, protoXUser, req.AccessToken)
+	switch err {
+	case nil:
+	case ErrExistingSocialLink:
+		return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_EXISTING_LINK}, nil
+	default:
+		log.Warn("failed to link x account", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to link x account")
+	}
+
+	return &profilepb.LinkXAccountResponse{XProfile: protoXUser}, nil
 }

@@ -96,6 +96,7 @@ model User {
   isStaff      Boolean     @default(false)
   isRegistered Boolean     @default(false)
   publicKeys   PublicKey[]
+  xUser        XUser?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -106,6 +107,30 @@ model User {
   //addedBy Member[] @relation("addedBy")
 
   @@map("flipchat_users")
+}
+
+model XUser {
+  // Fields
+
+  id            String @id
+  username      String @unique
+  name          String
+  description   String
+  profilePicUrl String
+  followerCount Int    @default(0)
+  verifiedType  Int    @default(0) @db.SmallInt
+  accessToken   String
+
+  userId String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("flipchat_x_users")
 }
 
 model PublicKey {
@@ -343,6 +368,7 @@ func newMockClient(expectations *[]mock.Expectation) *PrismaClient {
 func newClient() *PrismaClient {
 	c := &PrismaClient{}
 	c.User = userActions{client: c}
+	c.XUser = xUserActions{client: c}
 	c.PublicKey = publicKeyActions{client: c}
 	c.Intent = intentActions{client: c}
 	c.Chat = chatActions{client: c}
@@ -377,6 +403,8 @@ type PrismaClient struct {
 
 	// User provides access to CRUD methods.
 	User userActions
+	// XUser provides access to CRUD methods.
+	XUser xUserActions
 	// PublicKey provides access to CRUD methods.
 	PublicKey publicKeyActions
 	// Intent provides access to CRUD methods.
@@ -415,6 +443,22 @@ const (
 	UserScalarFieldEnumIsRegistered UserScalarFieldEnum = "isRegistered"
 	UserScalarFieldEnumCreatedAt    UserScalarFieldEnum = "createdAt"
 	UserScalarFieldEnumUpdatedAt    UserScalarFieldEnum = "updatedAt"
+)
+
+type XUserScalarFieldEnum string
+
+const (
+	XUserScalarFieldEnumID            XUserScalarFieldEnum = "id"
+	XUserScalarFieldEnumUsername      XUserScalarFieldEnum = "username"
+	XUserScalarFieldEnumName          XUserScalarFieldEnum = "name"
+	XUserScalarFieldEnumDescription   XUserScalarFieldEnum = "description"
+	XUserScalarFieldEnumProfilePicURL XUserScalarFieldEnum = "profilePicUrl"
+	XUserScalarFieldEnumFollowerCount XUserScalarFieldEnum = "followerCount"
+	XUserScalarFieldEnumVerifiedType  XUserScalarFieldEnum = "verifiedType"
+	XUserScalarFieldEnumAccessToken   XUserScalarFieldEnum = "accessToken"
+	XUserScalarFieldEnumUserID        XUserScalarFieldEnum = "userId"
+	XUserScalarFieldEnumCreatedAt     XUserScalarFieldEnum = "createdAt"
+	XUserScalarFieldEnumUpdatedAt     XUserScalarFieldEnum = "updatedAt"
 )
 
 type PublicKeyScalarFieldEnum string
@@ -576,9 +620,37 @@ const userFieldIsRegistered userPrismaFields = "isRegistered"
 
 const userFieldPublicKeys userPrismaFields = "publicKeys"
 
+const userFieldXUser userPrismaFields = "xUser"
+
 const userFieldCreatedAt userPrismaFields = "createdAt"
 
 const userFieldUpdatedAt userPrismaFields = "updatedAt"
+
+type xUserPrismaFields = prismaFields
+
+const xUserFieldID xUserPrismaFields = "id"
+
+const xUserFieldUsername xUserPrismaFields = "username"
+
+const xUserFieldName xUserPrismaFields = "name"
+
+const xUserFieldDescription xUserPrismaFields = "description"
+
+const xUserFieldProfilePicURL xUserPrismaFields = "profilePicUrl"
+
+const xUserFieldFollowerCount xUserPrismaFields = "followerCount"
+
+const xUserFieldVerifiedType xUserPrismaFields = "verifiedType"
+
+const xUserFieldAccessToken xUserPrismaFields = "accessToken"
+
+const xUserFieldUserID xUserPrismaFields = "userId"
+
+const xUserFieldCreatedAt xUserPrismaFields = "createdAt"
+
+const xUserFieldUpdatedAt xUserPrismaFields = "updatedAt"
+
+const xUserFieldUser xUserPrismaFields = "user"
 
 type publicKeyPrismaFields = prismaFields
 
@@ -726,6 +798,10 @@ func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 		mock: m,
 	}
 
+	m.XUser = xUserMock{
+		mock: m,
+	}
+
 	m.PublicKey = publicKeyMock{
 		mock: m,
 	}
@@ -765,6 +841,8 @@ type Mock struct {
 	*mock.Mock
 
 	User userMock
+
+	XUser xUserMock
 
 	PublicKey publicKeyMock
 
@@ -819,6 +897,48 @@ func (m *userMockExec) ReturnsMany(v []UserModel) {
 }
 
 func (m *userMockExec) Errors(err error) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query:   m.query,
+		WantErr: err,
+	})
+}
+
+type xUserMock struct {
+	mock *Mock
+}
+
+type XUserMockExpectParam interface {
+	ExtractQuery() builder.Query
+	xUserModel()
+}
+
+func (m *xUserMock) Expect(query XUserMockExpectParam) *xUserMockExec {
+	return &xUserMockExec{
+		mock:  m.mock,
+		query: query.ExtractQuery(),
+	}
+}
+
+type xUserMockExec struct {
+	mock  *Mock
+	query builder.Query
+}
+
+func (m *xUserMockExec) Returns(v XUserModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *xUserMockExec) ReturnsMany(v []XUserModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *xUserMockExec) Errors(err error) {
 	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
 		Query:   m.query,
 		WantErr: err,
@@ -1192,6 +1312,7 @@ type RawUserModel struct {
 // RelationsUser holds the relation data separately
 type RelationsUser struct {
 	PublicKeys []PublicKeyModel `json:"publicKeys,omitempty"`
+	XUser      *XUserModel      `json:"xUser,omitempty"`
 }
 
 func (r UserModel) DisplayName() (value String, ok bool) {
@@ -1206,6 +1327,61 @@ func (r UserModel) PublicKeys() (value []PublicKeyModel) {
 		panic("attempted to access publicKeys but did not fetch it using the .With() syntax")
 	}
 	return r.RelationsUser.PublicKeys
+}
+
+func (r UserModel) XUser() (value *XUserModel, ok bool) {
+	if r.RelationsUser.XUser == nil {
+		return value, false
+	}
+	return r.RelationsUser.XUser, true
+}
+
+// XUserModel represents the XUser model and is a wrapper for accessing fields and methods
+type XUserModel struct {
+	InnerXUser
+	RelationsXUser
+}
+
+// InnerXUser holds the actual data
+type InnerXUser struct {
+	ID            string   `json:"id"`
+	Username      string   `json:"username"`
+	Name          string   `json:"name"`
+	Description   string   `json:"description"`
+	ProfilePicURL string   `json:"profilePicUrl"`
+	FollowerCount int      `json:"followerCount"`
+	VerifiedType  int      `json:"verifiedType"`
+	AccessToken   string   `json:"accessToken"`
+	UserID        string   `json:"userId"`
+	CreatedAt     DateTime `json:"createdAt"`
+	UpdatedAt     DateTime `json:"updatedAt"`
+}
+
+// RawXUserModel is a struct for XUser when used in raw queries
+type RawXUserModel struct {
+	ID            RawString   `json:"id"`
+	Username      RawString   `json:"username"`
+	Name          RawString   `json:"name"`
+	Description   RawString   `json:"description"`
+	ProfilePicURL RawString   `json:"profilePicUrl"`
+	FollowerCount RawInt      `json:"followerCount"`
+	VerifiedType  RawInt      `json:"verifiedType"`
+	AccessToken   RawString   `json:"accessToken"`
+	UserID        RawString   `json:"userId"`
+	CreatedAt     RawDateTime `json:"createdAt"`
+	UpdatedAt     RawDateTime `json:"updatedAt"`
+}
+
+// RelationsXUser holds the relation data separately
+type RelationsXUser struct {
+	User *UserModel `json:"user,omitempty"`
+}
+
+func (r XUserModel) User() (value *UserModel) {
+	if r.RelationsXUser.User == nil {
+		panic("attempted to access user but did not fetch it using the .With() syntax")
+	}
+	return r.RelationsXUser.User
 }
 
 // PublicKeyModel represents the PublicKey model and is a wrapper for accessing fields and methods
@@ -1543,6 +1719,8 @@ type userQuery struct {
 	IsRegistered userQueryIsRegisteredBoolean
 
 	PublicKeys userQueryPublicKeysRelations
+
+	XUser userQueryXUserRelations
 
 	// CreatedAt
 	//
@@ -2654,6 +2832,94 @@ func (r userQueryPublicKeysPublicKey) Field() userPrismaFields {
 }
 
 // base struct
+type userQueryXUserXUser struct{}
+
+type userQueryXUserRelations struct{}
+
+// User -> XUser
+//
+// @relation
+// @optional
+func (userQueryXUserRelations) Where(
+	params ...XUserWhereParam,
+) userDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "xUser",
+			Fields: []builder.Field{
+				{
+					Name:   "is",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+func (userQueryXUserRelations) Fetch() userToXUserFindUnique {
+	var v userToXUserFindUnique
+
+	v.query.Operation = "query"
+	v.query.Method = "xUser"
+	v.query.Outputs = xUserOutput
+
+	return v
+}
+
+func (r userQueryXUserRelations) Link(
+	params XUserWhereParam,
+) userSetParam {
+	var fields []builder.Field
+
+	f := params.field()
+	if f.Fields == nil && f.Value == nil {
+		return userSetParam{}
+	}
+
+	fields = append(fields, f)
+
+	return userSetParam{
+		data: builder.Field{
+			Name: "xUser",
+			Fields: []builder.Field{
+				{
+					Name:   "connect",
+					Fields: builder.TransformEquals(fields),
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryXUserRelations) Unlink() userSetParam {
+	var v userSetParam
+
+	v = userSetParam{
+		data: builder.Field{
+			Name: "xUser",
+			Fields: []builder.Field{
+				{
+					Name:  "disconnect",
+					Value: true,
+				},
+			},
+		},
+	}
+
+	return v
+}
+
+func (r userQueryXUserXUser) Field() userPrismaFields {
+	return userFieldXUser
+}
+
+// base struct
 type userQueryCreatedAtDateTime struct{}
 
 // Set the required value of CreatedAt
@@ -3273,6 +3539,4060 @@ func (r userQueryUpdatedAtDateTime) AfterEqualsIfPresent(value *DateTime) userDe
 
 func (r userQueryUpdatedAtDateTime) Field() userPrismaFields {
 	return userFieldUpdatedAt
+}
+
+// XUser acts as a namespaces to access query methods for the XUser model
+var XUser = xUserQuery{}
+
+// xUserQuery exposes query functions for the xUser model
+type xUserQuery struct {
+
+	// ID
+	//
+	// @required
+	ID xUserQueryIDString
+
+	// Username
+	//
+	// @required
+	// @unique
+	Username xUserQueryUsernameString
+
+	// Name
+	//
+	// @required
+	Name xUserQueryNameString
+
+	// Description
+	//
+	// @required
+	Description xUserQueryDescriptionString
+
+	// ProfilePicURL
+	//
+	// @required
+	ProfilePicURL xUserQueryProfilePicURLString
+
+	// FollowerCount
+	//
+	// @required
+	FollowerCount xUserQueryFollowerCountInt
+
+	// VerifiedType
+	//
+	// @required
+	VerifiedType xUserQueryVerifiedTypeInt
+
+	// AccessToken
+	//
+	// @required
+	AccessToken xUserQueryAccessTokenString
+
+	// UserID
+	//
+	// @required
+	// @unique
+	UserID xUserQueryUserIDString
+
+	// CreatedAt
+	//
+	// @required
+	CreatedAt xUserQueryCreatedAtDateTime
+
+	// UpdatedAt
+	//
+	// @required
+	UpdatedAt xUserQueryUpdatedAtDateTime
+
+	User xUserQueryUserRelations
+}
+
+func (xUserQuery) Not(params ...XUserWhereParam) xUserDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:     "NOT",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (xUserQuery) Or(params ...XUserWhereParam) xUserDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:     "OR",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (xUserQuery) And(params ...XUserWhereParam) xUserDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:     "AND",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+// base struct
+type xUserQueryIDString struct{}
+
+// Set the required value of ID
+func (r xUserQueryIDString) Set(value string) xUserWithPrismaIDSetParam {
+
+	return xUserWithPrismaIDSetParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ID dynamically
+func (r xUserQueryIDString) SetIfPresent(value *String) xUserWithPrismaIDSetParam {
+	if value == nil {
+		return xUserWithPrismaIDSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryIDString) Equals(value string) xUserWithPrismaIDEqualsUniqueParam {
+
+	return xUserWithPrismaIDEqualsUniqueParam{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) EqualsIfPresent(value *string) xUserWithPrismaIDEqualsUniqueParam {
+	if value == nil {
+		return xUserWithPrismaIDEqualsUniqueParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryIDString) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryIDString) Cursor(cursor string) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryIDString) In(value []string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) InIfPresent(value []string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryIDString) NotIn(value []string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) NotInIfPresent(value []string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryIDString) Lt(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) LtIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryIDString) Lte(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) LteIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryIDString) Gt(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) GtIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryIDString) Gte(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) GteIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryIDString) Contains(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) ContainsIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Contains(*value)
+}
+
+func (r xUserQueryIDString) StartsWith(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) StartsWithIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r xUserQueryIDString) EndsWith(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) EndsWithIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r xUserQueryIDString) Mode(value QueryMode) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) ModeIfPresent(value *QueryMode) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Mode(*value)
+}
+
+func (r xUserQueryIDString) Not(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryIDString) NotIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r xUserQueryIDString) HasPrefix(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r xUserQueryIDString) HasPrefixIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r xUserQueryIDString) HasSuffix(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r xUserQueryIDString) HasSuffixIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r xUserQueryIDString) Field() xUserPrismaFields {
+	return xUserFieldID
+}
+
+// base struct
+type xUserQueryUsernameString struct{}
+
+// Set the required value of Username
+func (r xUserQueryUsernameString) Set(value string) xUserWithPrismaUsernameSetParam {
+
+	return xUserWithPrismaUsernameSetParam{
+		data: builder.Field{
+			Name:  "username",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Username dynamically
+func (r xUserQueryUsernameString) SetIfPresent(value *String) xUserWithPrismaUsernameSetParam {
+	if value == nil {
+		return xUserWithPrismaUsernameSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryUsernameString) Equals(value string) xUserWithPrismaUsernameEqualsUniqueParam {
+
+	return xUserWithPrismaUsernameEqualsUniqueParam{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) EqualsIfPresent(value *string) xUserWithPrismaUsernameEqualsUniqueParam {
+	if value == nil {
+		return xUserWithPrismaUsernameEqualsUniqueParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryUsernameString) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "username",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) Cursor(cursor string) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "username",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) In(value []string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) InIfPresent(value []string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryUsernameString) NotIn(value []string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) NotInIfPresent(value []string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryUsernameString) Lt(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) LtIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryUsernameString) Lte(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) LteIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryUsernameString) Gt(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) GtIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryUsernameString) Gte(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) GteIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryUsernameString) Contains(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) ContainsIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Contains(*value)
+}
+
+func (r xUserQueryUsernameString) StartsWith(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) StartsWithIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r xUserQueryUsernameString) EndsWith(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) EndsWithIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r xUserQueryUsernameString) Mode(value QueryMode) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) ModeIfPresent(value *QueryMode) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Mode(*value)
+}
+
+func (r xUserQueryUsernameString) Not(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUsernameString) NotIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r xUserQueryUsernameString) HasPrefix(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r xUserQueryUsernameString) HasPrefixIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r xUserQueryUsernameString) HasSuffix(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "username",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r xUserQueryUsernameString) HasSuffixIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r xUserQueryUsernameString) Field() xUserPrismaFields {
+	return xUserFieldUsername
+}
+
+// base struct
+type xUserQueryNameString struct{}
+
+// Set the required value of Name
+func (r xUserQueryNameString) Set(value string) xUserWithPrismaNameSetParam {
+
+	return xUserWithPrismaNameSetParam{
+		data: builder.Field{
+			Name:  "name",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Name dynamically
+func (r xUserQueryNameString) SetIfPresent(value *String) xUserWithPrismaNameSetParam {
+	if value == nil {
+		return xUserWithPrismaNameSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryNameString) Equals(value string) xUserWithPrismaNameEqualsParam {
+
+	return xUserWithPrismaNameEqualsParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) EqualsIfPresent(value *string) xUserWithPrismaNameEqualsParam {
+	if value == nil {
+		return xUserWithPrismaNameEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryNameString) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "name",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryNameString) Cursor(cursor string) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "name",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryNameString) In(value []string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) InIfPresent(value []string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryNameString) NotIn(value []string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) NotInIfPresent(value []string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryNameString) Lt(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) LtIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryNameString) Lte(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) LteIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryNameString) Gt(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) GtIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryNameString) Gte(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) GteIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryNameString) Contains(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) ContainsIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r xUserQueryNameString) StartsWith(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) StartsWithIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r xUserQueryNameString) EndsWith(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) EndsWithIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r xUserQueryNameString) Mode(value QueryMode) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) ModeIfPresent(value *QueryMode) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r xUserQueryNameString) Not(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryNameString) NotIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r xUserQueryNameString) HasPrefix(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r xUserQueryNameString) HasPrefixIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r xUserQueryNameString) HasSuffix(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "name",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r xUserQueryNameString) HasSuffixIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r xUserQueryNameString) Field() xUserPrismaFields {
+	return xUserFieldName
+}
+
+// base struct
+type xUserQueryDescriptionString struct{}
+
+// Set the required value of Description
+func (r xUserQueryDescriptionString) Set(value string) xUserWithPrismaDescriptionSetParam {
+
+	return xUserWithPrismaDescriptionSetParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Description dynamically
+func (r xUserQueryDescriptionString) SetIfPresent(value *String) xUserWithPrismaDescriptionSetParam {
+	if value == nil {
+		return xUserWithPrismaDescriptionSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryDescriptionString) Equals(value string) xUserWithPrismaDescriptionEqualsParam {
+
+	return xUserWithPrismaDescriptionEqualsParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) EqualsIfPresent(value *string) xUserWithPrismaDescriptionEqualsParam {
+	if value == nil {
+		return xUserWithPrismaDescriptionEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryDescriptionString) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) Cursor(cursor string) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) In(value []string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) InIfPresent(value []string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryDescriptionString) NotIn(value []string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) NotInIfPresent(value []string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryDescriptionString) Lt(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) LtIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryDescriptionString) Lte(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) LteIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryDescriptionString) Gt(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) GtIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryDescriptionString) Gte(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) GteIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryDescriptionString) Contains(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) ContainsIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r xUserQueryDescriptionString) StartsWith(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) StartsWithIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r xUserQueryDescriptionString) EndsWith(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) EndsWithIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r xUserQueryDescriptionString) Mode(value QueryMode) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) ModeIfPresent(value *QueryMode) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r xUserQueryDescriptionString) Not(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryDescriptionString) NotIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r xUserQueryDescriptionString) HasPrefix(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r xUserQueryDescriptionString) HasPrefixIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r xUserQueryDescriptionString) HasSuffix(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r xUserQueryDescriptionString) HasSuffixIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r xUserQueryDescriptionString) Field() xUserPrismaFields {
+	return xUserFieldDescription
+}
+
+// base struct
+type xUserQueryProfilePicURLString struct{}
+
+// Set the required value of ProfilePicURL
+func (r xUserQueryProfilePicURLString) Set(value string) xUserWithPrismaProfilePicURLSetParam {
+
+	return xUserWithPrismaProfilePicURLSetParam{
+		data: builder.Field{
+			Name:  "profilePicUrl",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ProfilePicURL dynamically
+func (r xUserQueryProfilePicURLString) SetIfPresent(value *String) xUserWithPrismaProfilePicURLSetParam {
+	if value == nil {
+		return xUserWithPrismaProfilePicURLSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Equals(value string) xUserWithPrismaProfilePicURLEqualsParam {
+
+	return xUserWithPrismaProfilePicURLEqualsParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) EqualsIfPresent(value *string) xUserWithPrismaProfilePicURLEqualsParam {
+	if value == nil {
+		return xUserWithPrismaProfilePicURLEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "profilePicUrl",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) Cursor(cursor string) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "profilePicUrl",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) In(value []string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) InIfPresent(value []string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryProfilePicURLString) NotIn(value []string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) NotInIfPresent(value []string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryProfilePicURLString) Lt(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) LtIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Lte(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) LteIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Gt(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) GtIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Gte(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) GteIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Contains(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) ContainsIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r xUserQueryProfilePicURLString) StartsWith(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) StartsWithIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r xUserQueryProfilePicURLString) EndsWith(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) EndsWithIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Mode(value QueryMode) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) ModeIfPresent(value *QueryMode) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Not(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryProfilePicURLString) NotIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r xUserQueryProfilePicURLString) HasPrefix(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r xUserQueryProfilePicURLString) HasPrefixIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r xUserQueryProfilePicURLString) HasSuffix(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "profilePicUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r xUserQueryProfilePicURLString) HasSuffixIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r xUserQueryProfilePicURLString) Field() xUserPrismaFields {
+	return xUserFieldProfilePicURL
+}
+
+// base struct
+type xUserQueryFollowerCountInt struct{}
+
+// Set the required value of FollowerCount
+func (r xUserQueryFollowerCountInt) Set(value int) xUserSetParam {
+
+	return xUserSetParam{
+		data: builder.Field{
+			Name:  "followerCount",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of FollowerCount dynamically
+func (r xUserQueryFollowerCountInt) SetIfPresent(value *Int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of FollowerCount
+func (r xUserQueryFollowerCountInt) Increment(value int) xUserSetParam {
+	return xUserSetParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) IncrementIfPresent(value *int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of FollowerCount
+func (r xUserQueryFollowerCountInt) Decrement(value int) xUserSetParam {
+	return xUserSetParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) DecrementIfPresent(value *int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of FollowerCount
+func (r xUserQueryFollowerCountInt) Multiply(value int) xUserSetParam {
+	return xUserSetParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) MultiplyIfPresent(value *int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of FollowerCount
+func (r xUserQueryFollowerCountInt) Divide(value int) xUserSetParam {
+	return xUserSetParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) DivideIfPresent(value *int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r xUserQueryFollowerCountInt) Equals(value int) xUserWithPrismaFollowerCountEqualsParam {
+
+	return xUserWithPrismaFollowerCountEqualsParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) EqualsIfPresent(value *int) xUserWithPrismaFollowerCountEqualsParam {
+	if value == nil {
+		return xUserWithPrismaFollowerCountEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryFollowerCountInt) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "followerCount",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) Cursor(cursor int) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "followerCount",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) In(value []int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) InIfPresent(value []int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryFollowerCountInt) NotIn(value []int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) NotInIfPresent(value []int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryFollowerCountInt) Lt(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) LtIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryFollowerCountInt) Lte(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) LteIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryFollowerCountInt) Gt(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) GtIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryFollowerCountInt) Gte(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) GteIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryFollowerCountInt) Not(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryFollowerCountInt) NotIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r xUserQueryFollowerCountInt) LT(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r xUserQueryFollowerCountInt) LTIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r xUserQueryFollowerCountInt) LTE(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r xUserQueryFollowerCountInt) LTEIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r xUserQueryFollowerCountInt) GT(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r xUserQueryFollowerCountInt) GTIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r xUserQueryFollowerCountInt) GTE(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "followerCount",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r xUserQueryFollowerCountInt) GTEIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r xUserQueryFollowerCountInt) Field() xUserPrismaFields {
+	return xUserFieldFollowerCount
+}
+
+// base struct
+type xUserQueryVerifiedTypeInt struct{}
+
+// Set the required value of VerifiedType
+func (r xUserQueryVerifiedTypeInt) Set(value int) xUserSetParam {
+
+	return xUserSetParam{
+		data: builder.Field{
+			Name:  "verifiedType",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of VerifiedType dynamically
+func (r xUserQueryVerifiedTypeInt) SetIfPresent(value *Int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of VerifiedType
+func (r xUserQueryVerifiedTypeInt) Increment(value int) xUserSetParam {
+	return xUserSetParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) IncrementIfPresent(value *int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of VerifiedType
+func (r xUserQueryVerifiedTypeInt) Decrement(value int) xUserSetParam {
+	return xUserSetParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) DecrementIfPresent(value *int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of VerifiedType
+func (r xUserQueryVerifiedTypeInt) Multiply(value int) xUserSetParam {
+	return xUserSetParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) MultiplyIfPresent(value *int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of VerifiedType
+func (r xUserQueryVerifiedTypeInt) Divide(value int) xUserSetParam {
+	return xUserSetParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) DivideIfPresent(value *int) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r xUserQueryVerifiedTypeInt) Equals(value int) xUserWithPrismaVerifiedTypeEqualsParam {
+
+	return xUserWithPrismaVerifiedTypeEqualsParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) EqualsIfPresent(value *int) xUserWithPrismaVerifiedTypeEqualsParam {
+	if value == nil {
+		return xUserWithPrismaVerifiedTypeEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryVerifiedTypeInt) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "verifiedType",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) Cursor(cursor int) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "verifiedType",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) In(value []int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) InIfPresent(value []int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryVerifiedTypeInt) NotIn(value []int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) NotInIfPresent(value []int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryVerifiedTypeInt) Lt(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) LtIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryVerifiedTypeInt) Lte(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) LteIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryVerifiedTypeInt) Gt(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) GtIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryVerifiedTypeInt) Gte(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) GteIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryVerifiedTypeInt) Not(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryVerifiedTypeInt) NotIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r xUserQueryVerifiedTypeInt) LT(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r xUserQueryVerifiedTypeInt) LTIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r xUserQueryVerifiedTypeInt) LTE(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r xUserQueryVerifiedTypeInt) LTEIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r xUserQueryVerifiedTypeInt) GT(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r xUserQueryVerifiedTypeInt) GTIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r xUserQueryVerifiedTypeInt) GTE(value int) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "verifiedType",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r xUserQueryVerifiedTypeInt) GTEIfPresent(value *int) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r xUserQueryVerifiedTypeInt) Field() xUserPrismaFields {
+	return xUserFieldVerifiedType
+}
+
+// base struct
+type xUserQueryAccessTokenString struct{}
+
+// Set the required value of AccessToken
+func (r xUserQueryAccessTokenString) Set(value string) xUserWithPrismaAccessTokenSetParam {
+
+	return xUserWithPrismaAccessTokenSetParam{
+		data: builder.Field{
+			Name:  "accessToken",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of AccessToken dynamically
+func (r xUserQueryAccessTokenString) SetIfPresent(value *String) xUserWithPrismaAccessTokenSetParam {
+	if value == nil {
+		return xUserWithPrismaAccessTokenSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryAccessTokenString) Equals(value string) xUserWithPrismaAccessTokenEqualsParam {
+
+	return xUserWithPrismaAccessTokenEqualsParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) EqualsIfPresent(value *string) xUserWithPrismaAccessTokenEqualsParam {
+	if value == nil {
+		return xUserWithPrismaAccessTokenEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryAccessTokenString) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "accessToken",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) Cursor(cursor string) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "accessToken",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) In(value []string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) InIfPresent(value []string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryAccessTokenString) NotIn(value []string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) NotInIfPresent(value []string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryAccessTokenString) Lt(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) LtIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryAccessTokenString) Lte(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) LteIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryAccessTokenString) Gt(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) GtIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryAccessTokenString) Gte(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) GteIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryAccessTokenString) Contains(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) ContainsIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r xUserQueryAccessTokenString) StartsWith(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) StartsWithIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r xUserQueryAccessTokenString) EndsWith(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) EndsWithIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r xUserQueryAccessTokenString) Mode(value QueryMode) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) ModeIfPresent(value *QueryMode) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r xUserQueryAccessTokenString) Not(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryAccessTokenString) NotIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r xUserQueryAccessTokenString) HasPrefix(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r xUserQueryAccessTokenString) HasPrefixIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r xUserQueryAccessTokenString) HasSuffix(value string) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "accessToken",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r xUserQueryAccessTokenString) HasSuffixIfPresent(value *string) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r xUserQueryAccessTokenString) Field() xUserPrismaFields {
+	return xUserFieldAccessToken
+}
+
+// base struct
+type xUserQueryUserIDString struct{}
+
+// Set the required value of UserID
+func (r xUserQueryUserIDString) Set(value string) xUserSetParam {
+
+	return xUserSetParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of UserID dynamically
+func (r xUserQueryUserIDString) SetIfPresent(value *String) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryUserIDString) Equals(value string) xUserWithPrismaUserIDEqualsUniqueParam {
+
+	return xUserWithPrismaUserIDEqualsUniqueParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) EqualsIfPresent(value *string) xUserWithPrismaUserIDEqualsUniqueParam {
+	if value == nil {
+		return xUserWithPrismaUserIDEqualsUniqueParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryUserIDString) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) Cursor(cursor string) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) In(value []string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) InIfPresent(value []string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryUserIDString) NotIn(value []string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) NotInIfPresent(value []string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryUserIDString) Lt(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) LtIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryUserIDString) Lte(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) LteIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryUserIDString) Gt(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) GtIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryUserIDString) Gte(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) GteIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryUserIDString) Contains(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) ContainsIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Contains(*value)
+}
+
+func (r xUserQueryUserIDString) StartsWith(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) StartsWithIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r xUserQueryUserIDString) EndsWith(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) EndsWithIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r xUserQueryUserIDString) Mode(value QueryMode) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) ModeIfPresent(value *QueryMode) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Mode(*value)
+}
+
+func (r xUserQueryUserIDString) Not(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserIDString) NotIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r xUserQueryUserIDString) HasPrefix(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r xUserQueryUserIDString) HasPrefixIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r xUserQueryUserIDString) HasSuffix(value string) xUserParamUnique {
+	return xUserParamUnique{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r xUserQueryUserIDString) HasSuffixIfPresent(value *string) xUserParamUnique {
+	if value == nil {
+		return xUserParamUnique{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r xUserQueryUserIDString) Field() xUserPrismaFields {
+	return xUserFieldUserID
+}
+
+// base struct
+type xUserQueryCreatedAtDateTime struct{}
+
+// Set the required value of CreatedAt
+func (r xUserQueryCreatedAtDateTime) Set(value DateTime) xUserSetParam {
+
+	return xUserSetParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of CreatedAt dynamically
+func (r xUserQueryCreatedAtDateTime) SetIfPresent(value *DateTime) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryCreatedAtDateTime) Equals(value DateTime) xUserWithPrismaCreatedAtEqualsParam {
+
+	return xUserWithPrismaCreatedAtEqualsParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) EqualsIfPresent(value *DateTime) xUserWithPrismaCreatedAtEqualsParam {
+	if value == nil {
+		return xUserWithPrismaCreatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryCreatedAtDateTime) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) Cursor(cursor DateTime) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) In(value []DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) InIfPresent(value []DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryCreatedAtDateTime) NotIn(value []DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) NotInIfPresent(value []DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryCreatedAtDateTime) Lt(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) LtIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryCreatedAtDateTime) Lte(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) LteIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryCreatedAtDateTime) Gt(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) GtIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryCreatedAtDateTime) Gte(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) GteIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryCreatedAtDateTime) Not(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryCreatedAtDateTime) NotIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r xUserQueryCreatedAtDateTime) Before(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r xUserQueryCreatedAtDateTime) BeforeIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r xUserQueryCreatedAtDateTime) After(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r xUserQueryCreatedAtDateTime) AfterIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r xUserQueryCreatedAtDateTime) BeforeEquals(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r xUserQueryCreatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r xUserQueryCreatedAtDateTime) AfterEquals(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r xUserQueryCreatedAtDateTime) AfterEqualsIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r xUserQueryCreatedAtDateTime) Field() xUserPrismaFields {
+	return xUserFieldCreatedAt
+}
+
+// base struct
+type xUserQueryUpdatedAtDateTime struct{}
+
+// Set the required value of UpdatedAt
+func (r xUserQueryUpdatedAtDateTime) Set(value DateTime) xUserSetParam {
+
+	return xUserSetParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of UpdatedAt dynamically
+func (r xUserQueryUpdatedAtDateTime) SetIfPresent(value *DateTime) xUserSetParam {
+	if value == nil {
+		return xUserSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) Equals(value DateTime) xUserWithPrismaUpdatedAtEqualsParam {
+
+	return xUserWithPrismaUpdatedAtEqualsParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) EqualsIfPresent(value *DateTime) xUserWithPrismaUpdatedAtEqualsParam {
+	if value == nil {
+		return xUserWithPrismaUpdatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) Order(direction SortOrder) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) Cursor(cursor DateTime) xUserCursorParam {
+	return xUserCursorParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) In(value []DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) InIfPresent(value []DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) NotIn(value []DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) NotInIfPresent(value []DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) Lt(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) LtIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) Lte(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) LteIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) Gt(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) GtIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) Gte(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) GteIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) Not(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUpdatedAtDateTime) NotIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r xUserQueryUpdatedAtDateTime) Before(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r xUserQueryUpdatedAtDateTime) BeforeIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r xUserQueryUpdatedAtDateTime) After(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r xUserQueryUpdatedAtDateTime) AfterIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r xUserQueryUpdatedAtDateTime) BeforeEquals(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r xUserQueryUpdatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r xUserQueryUpdatedAtDateTime) AfterEquals(value DateTime) xUserDefaultParam {
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r xUserQueryUpdatedAtDateTime) AfterEqualsIfPresent(value *DateTime) xUserDefaultParam {
+	if value == nil {
+		return xUserDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r xUserQueryUpdatedAtDateTime) Field() xUserPrismaFields {
+	return xUserFieldUpdatedAt
+}
+
+// base struct
+type xUserQueryUserUser struct{}
+
+type xUserQueryUserRelations struct{}
+
+// XUser -> User
+//
+// @relation
+// @required
+func (xUserQueryUserRelations) Where(
+	params ...UserWhereParam,
+) xUserDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return xUserDefaultParam{
+		data: builder.Field{
+			Name: "user",
+			Fields: []builder.Field{
+				{
+					Name:   "is",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+func (xUserQueryUserRelations) Fetch() xUserToUserFindUnique {
+	var v xUserToUserFindUnique
+
+	v.query.Operation = "query"
+	v.query.Method = "user"
+	v.query.Outputs = userOutput
+
+	return v
+}
+
+func (r xUserQueryUserRelations) Link(
+	params UserWhereParam,
+) xUserWithPrismaUserSetParam {
+	var fields []builder.Field
+
+	f := params.field()
+	if f.Fields == nil && f.Value == nil {
+		return xUserWithPrismaUserSetParam{}
+	}
+
+	fields = append(fields, f)
+
+	return xUserWithPrismaUserSetParam{
+		data: builder.Field{
+			Name: "user",
+			Fields: []builder.Field{
+				{
+					Name:   "connect",
+					Fields: builder.TransformEquals(fields),
+				},
+			},
+		},
+	}
+}
+
+func (r xUserQueryUserRelations) Unlink() xUserWithPrismaUserSetParam {
+	var v xUserWithPrismaUserSetParam
+
+	v = xUserWithPrismaUserSetParam{
+		data: builder.Field{
+			Name: "user",
+			Fields: []builder.Field{
+				{
+					Name:  "disconnect",
+					Value: true,
+				},
+			},
+		},
+	}
+
+	return v
+}
+
+func (r xUserQueryUserUser) Field() xUserPrismaFields {
+	return xUserFieldUser
 }
 
 // PublicKey acts as a namespaces to access query methods for the PublicKey model
@@ -21448,6 +25768,84 @@ func (p userWithPrismaPublicKeysEqualsUniqueParam) publicKeysField() {}
 func (userWithPrismaPublicKeysEqualsUniqueParam) unique() {}
 func (userWithPrismaPublicKeysEqualsUniqueParam) equals() {}
 
+type UserWithPrismaXUserEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	xUserField()
+}
+
+type UserWithPrismaXUserSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	xUserField()
+}
+
+type userWithPrismaXUserSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaXUserSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaXUserSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaXUserSetParam) userModel() {}
+
+func (p userWithPrismaXUserSetParam) xUserField() {}
+
+type UserWithPrismaXUserWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	xUserField()
+}
+
+type userWithPrismaXUserEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaXUserEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaXUserEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaXUserEqualsParam) userModel() {}
+
+func (p userWithPrismaXUserEqualsParam) xUserField() {}
+
+func (userWithPrismaXUserSetParam) settable()  {}
+func (userWithPrismaXUserEqualsParam) equals() {}
+
+type userWithPrismaXUserEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaXUserEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaXUserEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaXUserEqualsUniqueParam) userModel()  {}
+func (p userWithPrismaXUserEqualsUniqueParam) xUserField() {}
+
+func (userWithPrismaXUserEqualsUniqueParam) unique() {}
+func (userWithPrismaXUserEqualsUniqueParam) equals() {}
+
 type UserWithPrismaCreatedAtEqualsSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
@@ -21603,6 +26001,1125 @@ func (p userWithPrismaUpdatedAtEqualsUniqueParam) updatedAtField() {}
 
 func (userWithPrismaUpdatedAtEqualsUniqueParam) unique() {}
 func (userWithPrismaUpdatedAtEqualsUniqueParam) equals() {}
+
+type xUserActions struct {
+	// client holds the prisma client
+	client *PrismaClient
+}
+
+var xUserOutput = []builder.Output{
+	{Name: "id"},
+	{Name: "username"},
+	{Name: "name"},
+	{Name: "description"},
+	{Name: "profilePicUrl"},
+	{Name: "followerCount"},
+	{Name: "verifiedType"},
+	{Name: "accessToken"},
+	{Name: "userId"},
+	{Name: "createdAt"},
+	{Name: "updatedAt"},
+}
+
+type XUserRelationWith interface {
+	getQuery() builder.Query
+	with()
+	xUserRelation()
+}
+
+type XUserWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+}
+
+type xUserDefaultParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserDefaultParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserDefaultParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserDefaultParam) xUserModel() {}
+
+type XUserOrderByParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+}
+
+type xUserOrderByParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserOrderByParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserOrderByParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserOrderByParam) xUserModel() {}
+
+type XUserCursorParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	isCursor()
+}
+
+type xUserCursorParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserCursorParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserCursorParam) isCursor() {}
+
+func (p xUserCursorParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserCursorParam) xUserModel() {}
+
+type XUserParamUnique interface {
+	field() builder.Field
+	getQuery() builder.Query
+	unique()
+	xUserModel()
+}
+
+type xUserParamUnique struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserParamUnique) xUserModel() {}
+
+func (xUserParamUnique) unique() {}
+
+func (p xUserParamUnique) field() builder.Field {
+	return p.data
+}
+
+func (p xUserParamUnique) getQuery() builder.Query {
+	return p.query
+}
+
+type XUserEqualsWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+}
+
+type xUserEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserEqualsParam) xUserModel() {}
+
+func (xUserEqualsParam) equals() {}
+
+func (p xUserEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+type XUserEqualsUniqueWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	unique()
+	xUserModel()
+}
+
+type xUserEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserEqualsUniqueParam) xUserModel() {}
+
+func (xUserEqualsUniqueParam) unique() {}
+func (xUserEqualsUniqueParam) equals() {}
+
+func (p xUserEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+type XUserSetParam interface {
+	field() builder.Field
+	settable()
+	xUserModel()
+}
+
+type xUserSetParam struct {
+	data builder.Field
+}
+
+func (xUserSetParam) settable() {}
+
+func (p xUserSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserSetParam) xUserModel() {}
+
+type XUserWithPrismaIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	idField()
+}
+
+type XUserWithPrismaIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	idField()
+}
+
+type xUserWithPrismaIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaIDSetParam) xUserModel() {}
+
+func (p xUserWithPrismaIDSetParam) idField() {}
+
+type XUserWithPrismaIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	idField()
+}
+
+type xUserWithPrismaIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaIDEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaIDEqualsParam) idField() {}
+
+func (xUserWithPrismaIDSetParam) settable()  {}
+func (xUserWithPrismaIDEqualsParam) equals() {}
+
+type xUserWithPrismaIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaIDEqualsUniqueParam) xUserModel() {}
+func (p xUserWithPrismaIDEqualsUniqueParam) idField()    {}
+
+func (xUserWithPrismaIDEqualsUniqueParam) unique() {}
+func (xUserWithPrismaIDEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaUsernameEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	usernameField()
+}
+
+type XUserWithPrismaUsernameSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	usernameField()
+}
+
+type xUserWithPrismaUsernameSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUsernameSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUsernameSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUsernameSetParam) xUserModel() {}
+
+func (p xUserWithPrismaUsernameSetParam) usernameField() {}
+
+type XUserWithPrismaUsernameWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	usernameField()
+}
+
+type xUserWithPrismaUsernameEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUsernameEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUsernameEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUsernameEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaUsernameEqualsParam) usernameField() {}
+
+func (xUserWithPrismaUsernameSetParam) settable()  {}
+func (xUserWithPrismaUsernameEqualsParam) equals() {}
+
+type xUserWithPrismaUsernameEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUsernameEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUsernameEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUsernameEqualsUniqueParam) xUserModel()    {}
+func (p xUserWithPrismaUsernameEqualsUniqueParam) usernameField() {}
+
+func (xUserWithPrismaUsernameEqualsUniqueParam) unique() {}
+func (xUserWithPrismaUsernameEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaNameEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	nameField()
+}
+
+type XUserWithPrismaNameSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	nameField()
+}
+
+type xUserWithPrismaNameSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaNameSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaNameSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaNameSetParam) xUserModel() {}
+
+func (p xUserWithPrismaNameSetParam) nameField() {}
+
+type XUserWithPrismaNameWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	nameField()
+}
+
+type xUserWithPrismaNameEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaNameEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaNameEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaNameEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaNameEqualsParam) nameField() {}
+
+func (xUserWithPrismaNameSetParam) settable()  {}
+func (xUserWithPrismaNameEqualsParam) equals() {}
+
+type xUserWithPrismaNameEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaNameEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaNameEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaNameEqualsUniqueParam) xUserModel() {}
+func (p xUserWithPrismaNameEqualsUniqueParam) nameField()  {}
+
+func (xUserWithPrismaNameEqualsUniqueParam) unique() {}
+func (xUserWithPrismaNameEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaDescriptionEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	descriptionField()
+}
+
+type XUserWithPrismaDescriptionSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	descriptionField()
+}
+
+type xUserWithPrismaDescriptionSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaDescriptionSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaDescriptionSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaDescriptionSetParam) xUserModel() {}
+
+func (p xUserWithPrismaDescriptionSetParam) descriptionField() {}
+
+type XUserWithPrismaDescriptionWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	descriptionField()
+}
+
+type xUserWithPrismaDescriptionEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaDescriptionEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaDescriptionEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaDescriptionEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaDescriptionEqualsParam) descriptionField() {}
+
+func (xUserWithPrismaDescriptionSetParam) settable()  {}
+func (xUserWithPrismaDescriptionEqualsParam) equals() {}
+
+type xUserWithPrismaDescriptionEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaDescriptionEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaDescriptionEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaDescriptionEqualsUniqueParam) xUserModel()       {}
+func (p xUserWithPrismaDescriptionEqualsUniqueParam) descriptionField() {}
+
+func (xUserWithPrismaDescriptionEqualsUniqueParam) unique() {}
+func (xUserWithPrismaDescriptionEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaProfilePicURLEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	profilePicURLField()
+}
+
+type XUserWithPrismaProfilePicURLSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	profilePicURLField()
+}
+
+type xUserWithPrismaProfilePicURLSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaProfilePicURLSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaProfilePicURLSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaProfilePicURLSetParam) xUserModel() {}
+
+func (p xUserWithPrismaProfilePicURLSetParam) profilePicURLField() {}
+
+type XUserWithPrismaProfilePicURLWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	profilePicURLField()
+}
+
+type xUserWithPrismaProfilePicURLEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaProfilePicURLEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaProfilePicURLEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaProfilePicURLEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaProfilePicURLEqualsParam) profilePicURLField() {}
+
+func (xUserWithPrismaProfilePicURLSetParam) settable()  {}
+func (xUserWithPrismaProfilePicURLEqualsParam) equals() {}
+
+type xUserWithPrismaProfilePicURLEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaProfilePicURLEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaProfilePicURLEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaProfilePicURLEqualsUniqueParam) xUserModel()         {}
+func (p xUserWithPrismaProfilePicURLEqualsUniqueParam) profilePicURLField() {}
+
+func (xUserWithPrismaProfilePicURLEqualsUniqueParam) unique() {}
+func (xUserWithPrismaProfilePicURLEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaFollowerCountEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	followerCountField()
+}
+
+type XUserWithPrismaFollowerCountSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	followerCountField()
+}
+
+type xUserWithPrismaFollowerCountSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaFollowerCountSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaFollowerCountSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaFollowerCountSetParam) xUserModel() {}
+
+func (p xUserWithPrismaFollowerCountSetParam) followerCountField() {}
+
+type XUserWithPrismaFollowerCountWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	followerCountField()
+}
+
+type xUserWithPrismaFollowerCountEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaFollowerCountEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaFollowerCountEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaFollowerCountEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaFollowerCountEqualsParam) followerCountField() {}
+
+func (xUserWithPrismaFollowerCountSetParam) settable()  {}
+func (xUserWithPrismaFollowerCountEqualsParam) equals() {}
+
+type xUserWithPrismaFollowerCountEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaFollowerCountEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaFollowerCountEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaFollowerCountEqualsUniqueParam) xUserModel()         {}
+func (p xUserWithPrismaFollowerCountEqualsUniqueParam) followerCountField() {}
+
+func (xUserWithPrismaFollowerCountEqualsUniqueParam) unique() {}
+func (xUserWithPrismaFollowerCountEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaVerifiedTypeEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	verifiedTypeField()
+}
+
+type XUserWithPrismaVerifiedTypeSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	verifiedTypeField()
+}
+
+type xUserWithPrismaVerifiedTypeSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaVerifiedTypeSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaVerifiedTypeSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaVerifiedTypeSetParam) xUserModel() {}
+
+func (p xUserWithPrismaVerifiedTypeSetParam) verifiedTypeField() {}
+
+type XUserWithPrismaVerifiedTypeWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	verifiedTypeField()
+}
+
+type xUserWithPrismaVerifiedTypeEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaVerifiedTypeEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaVerifiedTypeEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaVerifiedTypeEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaVerifiedTypeEqualsParam) verifiedTypeField() {}
+
+func (xUserWithPrismaVerifiedTypeSetParam) settable()  {}
+func (xUserWithPrismaVerifiedTypeEqualsParam) equals() {}
+
+type xUserWithPrismaVerifiedTypeEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaVerifiedTypeEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaVerifiedTypeEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaVerifiedTypeEqualsUniqueParam) xUserModel()        {}
+func (p xUserWithPrismaVerifiedTypeEqualsUniqueParam) verifiedTypeField() {}
+
+func (xUserWithPrismaVerifiedTypeEqualsUniqueParam) unique() {}
+func (xUserWithPrismaVerifiedTypeEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaAccessTokenEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	accessTokenField()
+}
+
+type XUserWithPrismaAccessTokenSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	accessTokenField()
+}
+
+type xUserWithPrismaAccessTokenSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaAccessTokenSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaAccessTokenSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaAccessTokenSetParam) xUserModel() {}
+
+func (p xUserWithPrismaAccessTokenSetParam) accessTokenField() {}
+
+type XUserWithPrismaAccessTokenWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	accessTokenField()
+}
+
+type xUserWithPrismaAccessTokenEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaAccessTokenEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaAccessTokenEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaAccessTokenEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaAccessTokenEqualsParam) accessTokenField() {}
+
+func (xUserWithPrismaAccessTokenSetParam) settable()  {}
+func (xUserWithPrismaAccessTokenEqualsParam) equals() {}
+
+type xUserWithPrismaAccessTokenEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaAccessTokenEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaAccessTokenEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaAccessTokenEqualsUniqueParam) xUserModel()       {}
+func (p xUserWithPrismaAccessTokenEqualsUniqueParam) accessTokenField() {}
+
+func (xUserWithPrismaAccessTokenEqualsUniqueParam) unique() {}
+func (xUserWithPrismaAccessTokenEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaUserIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	userIDField()
+}
+
+type XUserWithPrismaUserIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	userIDField()
+}
+
+type xUserWithPrismaUserIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUserIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUserIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUserIDSetParam) xUserModel() {}
+
+func (p xUserWithPrismaUserIDSetParam) userIDField() {}
+
+type XUserWithPrismaUserIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	userIDField()
+}
+
+type xUserWithPrismaUserIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUserIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUserIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUserIDEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaUserIDEqualsParam) userIDField() {}
+
+func (xUserWithPrismaUserIDSetParam) settable()  {}
+func (xUserWithPrismaUserIDEqualsParam) equals() {}
+
+type xUserWithPrismaUserIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUserIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUserIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUserIDEqualsUniqueParam) xUserModel()  {}
+func (p xUserWithPrismaUserIDEqualsUniqueParam) userIDField() {}
+
+func (xUserWithPrismaUserIDEqualsUniqueParam) unique() {}
+func (xUserWithPrismaUserIDEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaCreatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	createdAtField()
+}
+
+type XUserWithPrismaCreatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	createdAtField()
+}
+
+type xUserWithPrismaCreatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaCreatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaCreatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaCreatedAtSetParam) xUserModel() {}
+
+func (p xUserWithPrismaCreatedAtSetParam) createdAtField() {}
+
+type XUserWithPrismaCreatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	createdAtField()
+}
+
+type xUserWithPrismaCreatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaCreatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaCreatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaCreatedAtEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaCreatedAtEqualsParam) createdAtField() {}
+
+func (xUserWithPrismaCreatedAtSetParam) settable()  {}
+func (xUserWithPrismaCreatedAtEqualsParam) equals() {}
+
+type xUserWithPrismaCreatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaCreatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaCreatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaCreatedAtEqualsUniqueParam) xUserModel()     {}
+func (p xUserWithPrismaCreatedAtEqualsUniqueParam) createdAtField() {}
+
+func (xUserWithPrismaCreatedAtEqualsUniqueParam) unique() {}
+func (xUserWithPrismaCreatedAtEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaUpdatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	updatedAtField()
+}
+
+type XUserWithPrismaUpdatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	updatedAtField()
+}
+
+type xUserWithPrismaUpdatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUpdatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUpdatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUpdatedAtSetParam) xUserModel() {}
+
+func (p xUserWithPrismaUpdatedAtSetParam) updatedAtField() {}
+
+type XUserWithPrismaUpdatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	updatedAtField()
+}
+
+type xUserWithPrismaUpdatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUpdatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUpdatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUpdatedAtEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaUpdatedAtEqualsParam) updatedAtField() {}
+
+func (xUserWithPrismaUpdatedAtSetParam) settable()  {}
+func (xUserWithPrismaUpdatedAtEqualsParam) equals() {}
+
+type xUserWithPrismaUpdatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUpdatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUpdatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUpdatedAtEqualsUniqueParam) xUserModel()     {}
+func (p xUserWithPrismaUpdatedAtEqualsUniqueParam) updatedAtField() {}
+
+func (xUserWithPrismaUpdatedAtEqualsUniqueParam) unique() {}
+func (xUserWithPrismaUpdatedAtEqualsUniqueParam) equals() {}
+
+type XUserWithPrismaUserEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	xUserModel()
+	userField()
+}
+
+type XUserWithPrismaUserSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	userField()
+}
+
+type xUserWithPrismaUserSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUserSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUserSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUserSetParam) xUserModel() {}
+
+func (p xUserWithPrismaUserSetParam) userField() {}
+
+type XUserWithPrismaUserWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	xUserModel()
+	userField()
+}
+
+type xUserWithPrismaUserEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUserEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUserEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUserEqualsParam) xUserModel() {}
+
+func (p xUserWithPrismaUserEqualsParam) userField() {}
+
+func (xUserWithPrismaUserSetParam) settable()  {}
+func (xUserWithPrismaUserEqualsParam) equals() {}
+
+type xUserWithPrismaUserEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p xUserWithPrismaUserEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p xUserWithPrismaUserEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserWithPrismaUserEqualsUniqueParam) xUserModel() {}
+func (p xUserWithPrismaUserEqualsUniqueParam) userField()  {}
+
+func (xUserWithPrismaUserEqualsUniqueParam) unique() {}
+func (xUserWithPrismaUserEqualsUniqueParam) equals() {}
 
 type publicKeyActions struct {
 	// client holds the prisma client
@@ -27629,6 +33146,86 @@ func (r userCreateOne) Tx() UserUniqueTxResult {
 	return v
 }
 
+// Creates a single xUser.
+func (r xUserActions) CreateOne(
+	_id XUserWithPrismaIDSetParam,
+	_username XUserWithPrismaUsernameSetParam,
+	_name XUserWithPrismaNameSetParam,
+	_description XUserWithPrismaDescriptionSetParam,
+	_profilePicURL XUserWithPrismaProfilePicURLSetParam,
+	_accessToken XUserWithPrismaAccessTokenSetParam,
+	_user XUserWithPrismaUserSetParam,
+
+	optional ...XUserSetParam,
+) xUserCreateOne {
+	var v xUserCreateOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "createOne"
+	v.query.Model = "XUser"
+	v.query.Outputs = xUserOutput
+
+	var fields []builder.Field
+
+	fields = append(fields, _id.field())
+	fields = append(fields, _username.field())
+	fields = append(fields, _name.field())
+	fields = append(fields, _description.field())
+	fields = append(fields, _profilePicURL.field())
+	fields = append(fields, _accessToken.field())
+	fields = append(fields, _user.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+func (r xUserCreateOne) With(params ...XUserRelationWith) xUserCreateOne {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+type xUserCreateOne struct {
+	query builder.Query
+}
+
+func (p xUserCreateOne) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p xUserCreateOne) xUserModel() {}
+
+func (r xUserCreateOne) Exec(ctx context.Context) (*XUserModel, error) {
+	var v XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserCreateOne) Tx() XUserUniqueTxResult {
+	v := newXUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 // Creates a single publicKey.
 func (r publicKeyActions) CreateOne(
 	_key PublicKeyWithPrismaKeySetParam,
@@ -28749,6 +34346,560 @@ func (r userToPublicKeysDeleteMany) Tx() UserManyTxResult {
 	return v
 }
 
+type userToXUserFindUnique struct {
+	query builder.Query
+}
+
+func (r userToXUserFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r userToXUserFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToXUserFindUnique) with()         {}
+func (r userToXUserFindUnique) userModel()    {}
+func (r userToXUserFindUnique) userRelation() {}
+
+func (r userToXUserFindUnique) With(params ...XUserRelationWith) userToXUserFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r userToXUserFindUnique) Select(params ...userPrismaFields) userToXUserFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToXUserFindUnique) Omit(params ...userPrismaFields) userToXUserFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range userOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToXUserFindUnique) Exec(ctx context.Context) (
+	*UserModel,
+	error,
+) {
+	var v *UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r userToXUserFindUnique) ExecInner(ctx context.Context) (
+	*InnerUser,
+	error,
+) {
+	var v *InnerUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r userToXUserFindUnique) Update(params ...UserSetParam) userToXUserUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "User"
+
+	var v userToXUserUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type userToXUserUpdateUnique struct {
+	query builder.Query
+}
+
+func (r userToXUserUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToXUserUpdateUnique) userModel() {}
+
+func (r userToXUserUpdateUnique) Exec(ctx context.Context) (*UserModel, error) {
+	var v UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r userToXUserUpdateUnique) Tx() UserUniqueTxResult {
+	v := newUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r userToXUserFindUnique) Delete() userToXUserDeleteUnique {
+	var v userToXUserDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "User"
+
+	return v
+}
+
+type userToXUserDeleteUnique struct {
+	query builder.Query
+}
+
+func (r userToXUserDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p userToXUserDeleteUnique) userModel() {}
+
+func (r userToXUserDeleteUnique) Exec(ctx context.Context) (*UserModel, error) {
+	var v UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r userToXUserDeleteUnique) Tx() UserUniqueTxResult {
+	v := newUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type userToXUserFindFirst struct {
+	query builder.Query
+}
+
+func (r userToXUserFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r userToXUserFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToXUserFindFirst) with()         {}
+func (r userToXUserFindFirst) userModel()    {}
+func (r userToXUserFindFirst) userRelation() {}
+
+func (r userToXUserFindFirst) With(params ...XUserRelationWith) userToXUserFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r userToXUserFindFirst) Select(params ...userPrismaFields) userToXUserFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToXUserFindFirst) Omit(params ...userPrismaFields) userToXUserFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range userOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToXUserFindFirst) OrderBy(params ...XUserOrderByParam) userToXUserFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r userToXUserFindFirst) Skip(count int) userToXUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r userToXUserFindFirst) Take(count int) userToXUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r userToXUserFindFirst) Cursor(cursor UserCursorParam) userToXUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r userToXUserFindFirst) Exec(ctx context.Context) (
+	*UserModel,
+	error,
+) {
+	var v *UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r userToXUserFindFirst) ExecInner(ctx context.Context) (
+	*InnerUser,
+	error,
+) {
+	var v *InnerUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type userToXUserFindMany struct {
+	query builder.Query
+}
+
+func (r userToXUserFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r userToXUserFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToXUserFindMany) with()         {}
+func (r userToXUserFindMany) userModel()    {}
+func (r userToXUserFindMany) userRelation() {}
+
+func (r userToXUserFindMany) With(params ...XUserRelationWith) userToXUserFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r userToXUserFindMany) Select(params ...userPrismaFields) userToXUserFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToXUserFindMany) Omit(params ...userPrismaFields) userToXUserFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range userOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToXUserFindMany) OrderBy(params ...XUserOrderByParam) userToXUserFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r userToXUserFindMany) Skip(count int) userToXUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r userToXUserFindMany) Take(count int) userToXUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r userToXUserFindMany) Cursor(cursor UserCursorParam) userToXUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r userToXUserFindMany) Exec(ctx context.Context) (
+	[]UserModel,
+	error,
+) {
+	var v []UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r userToXUserFindMany) ExecInner(ctx context.Context) (
+	[]InnerUser,
+	error,
+) {
+	var v []InnerUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r userToXUserFindMany) Update(params ...UserSetParam) userToXUserUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "User"
+
+	r.query.Outputs = countOutput
+
+	var v userToXUserUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type userToXUserUpdateMany struct {
+	query builder.Query
+}
+
+func (r userToXUserUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToXUserUpdateMany) userModel() {}
+
+func (r userToXUserUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r userToXUserUpdateMany) Tx() UserManyTxResult {
+	v := newUserManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r userToXUserFindMany) Delete() userToXUserDeleteMany {
+	var v userToXUserDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "User"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type userToXUserDeleteMany struct {
+	query builder.Query
+}
+
+func (r userToXUserDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p userToXUserDeleteMany) userModel() {}
+
+func (r userToXUserDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r userToXUserDeleteMany) Tx() UserManyTxResult {
+	v := newUserManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 type userFindUnique struct {
 	query builder.Query
 }
@@ -29394,6 +35545,1210 @@ func (r userDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
 
 func (r userDeleteMany) Tx() UserManyTxResult {
 	v := newUserManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type xUserToUserFindUnique struct {
+	query builder.Query
+}
+
+func (r xUserToUserFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserToUserFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserToUserFindUnique) with()          {}
+func (r xUserToUserFindUnique) xUserModel()    {}
+func (r xUserToUserFindUnique) xUserRelation() {}
+
+func (r xUserToUserFindUnique) With(params ...UserRelationWith) xUserToUserFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r xUserToUserFindUnique) Select(params ...xUserPrismaFields) xUserToUserFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserToUserFindUnique) Omit(params ...xUserPrismaFields) xUserToUserFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range xUserOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserToUserFindUnique) Exec(ctx context.Context) (
+	*XUserModel,
+	error,
+) {
+	var v *XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r xUserToUserFindUnique) ExecInner(ctx context.Context) (
+	*InnerXUser,
+	error,
+) {
+	var v *InnerXUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r xUserToUserFindUnique) Update(params ...XUserSetParam) xUserToUserUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "XUser"
+
+	var v xUserToUserUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type xUserToUserUpdateUnique struct {
+	query builder.Query
+}
+
+func (r xUserToUserUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserToUserUpdateUnique) xUserModel() {}
+
+func (r xUserToUserUpdateUnique) Exec(ctx context.Context) (*XUserModel, error) {
+	var v XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserToUserUpdateUnique) Tx() XUserUniqueTxResult {
+	v := newXUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r xUserToUserFindUnique) Delete() xUserToUserDeleteUnique {
+	var v xUserToUserDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "XUser"
+
+	return v
+}
+
+type xUserToUserDeleteUnique struct {
+	query builder.Query
+}
+
+func (r xUserToUserDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p xUserToUserDeleteUnique) xUserModel() {}
+
+func (r xUserToUserDeleteUnique) Exec(ctx context.Context) (*XUserModel, error) {
+	var v XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserToUserDeleteUnique) Tx() XUserUniqueTxResult {
+	v := newXUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type xUserToUserFindFirst struct {
+	query builder.Query
+}
+
+func (r xUserToUserFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserToUserFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserToUserFindFirst) with()          {}
+func (r xUserToUserFindFirst) xUserModel()    {}
+func (r xUserToUserFindFirst) xUserRelation() {}
+
+func (r xUserToUserFindFirst) With(params ...UserRelationWith) xUserToUserFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r xUserToUserFindFirst) Select(params ...xUserPrismaFields) xUserToUserFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserToUserFindFirst) Omit(params ...xUserPrismaFields) xUserToUserFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range xUserOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserToUserFindFirst) OrderBy(params ...UserOrderByParam) xUserToUserFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r xUserToUserFindFirst) Skip(count int) xUserToUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r xUserToUserFindFirst) Take(count int) xUserToUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r xUserToUserFindFirst) Cursor(cursor XUserCursorParam) xUserToUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r xUserToUserFindFirst) Exec(ctx context.Context) (
+	*XUserModel,
+	error,
+) {
+	var v *XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r xUserToUserFindFirst) ExecInner(ctx context.Context) (
+	*InnerXUser,
+	error,
+) {
+	var v *InnerXUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type xUserToUserFindMany struct {
+	query builder.Query
+}
+
+func (r xUserToUserFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserToUserFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserToUserFindMany) with()          {}
+func (r xUserToUserFindMany) xUserModel()    {}
+func (r xUserToUserFindMany) xUserRelation() {}
+
+func (r xUserToUserFindMany) With(params ...UserRelationWith) xUserToUserFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r xUserToUserFindMany) Select(params ...xUserPrismaFields) xUserToUserFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserToUserFindMany) Omit(params ...xUserPrismaFields) xUserToUserFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range xUserOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserToUserFindMany) OrderBy(params ...UserOrderByParam) xUserToUserFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r xUserToUserFindMany) Skip(count int) xUserToUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r xUserToUserFindMany) Take(count int) xUserToUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r xUserToUserFindMany) Cursor(cursor XUserCursorParam) xUserToUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r xUserToUserFindMany) Exec(ctx context.Context) (
+	[]XUserModel,
+	error,
+) {
+	var v []XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r xUserToUserFindMany) ExecInner(ctx context.Context) (
+	[]InnerXUser,
+	error,
+) {
+	var v []InnerXUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r xUserToUserFindMany) Update(params ...XUserSetParam) xUserToUserUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "XUser"
+
+	r.query.Outputs = countOutput
+
+	var v xUserToUserUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type xUserToUserUpdateMany struct {
+	query builder.Query
+}
+
+func (r xUserToUserUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserToUserUpdateMany) xUserModel() {}
+
+func (r xUserToUserUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserToUserUpdateMany) Tx() XUserManyTxResult {
+	v := newXUserManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r xUserToUserFindMany) Delete() xUserToUserDeleteMany {
+	var v xUserToUserDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "XUser"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type xUserToUserDeleteMany struct {
+	query builder.Query
+}
+
+func (r xUserToUserDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p xUserToUserDeleteMany) xUserModel() {}
+
+func (r xUserToUserDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserToUserDeleteMany) Tx() XUserManyTxResult {
+	v := newXUserManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type xUserFindUnique struct {
+	query builder.Query
+}
+
+func (r xUserFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserFindUnique) with()          {}
+func (r xUserFindUnique) xUserModel()    {}
+func (r xUserFindUnique) xUserRelation() {}
+
+func (r xUserActions) FindUnique(
+	params XUserEqualsUniqueWhereParam,
+) xUserFindUnique {
+	var v xUserFindUnique
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findUnique"
+
+	v.query.Model = "XUser"
+	v.query.Outputs = xUserOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r xUserFindUnique) With(params ...XUserRelationWith) xUserFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r xUserFindUnique) Select(params ...xUserPrismaFields) xUserFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserFindUnique) Omit(params ...xUserPrismaFields) xUserFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range xUserOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserFindUnique) Exec(ctx context.Context) (
+	*XUserModel,
+	error,
+) {
+	var v *XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r xUserFindUnique) ExecInner(ctx context.Context) (
+	*InnerXUser,
+	error,
+) {
+	var v *InnerXUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r xUserFindUnique) Update(params ...XUserSetParam) xUserUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "XUser"
+
+	var v xUserUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type xUserUpdateUnique struct {
+	query builder.Query
+}
+
+func (r xUserUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserUpdateUnique) xUserModel() {}
+
+func (r xUserUpdateUnique) Exec(ctx context.Context) (*XUserModel, error) {
+	var v XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserUpdateUnique) Tx() XUserUniqueTxResult {
+	v := newXUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r xUserFindUnique) Delete() xUserDeleteUnique {
+	var v xUserDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "XUser"
+
+	return v
+}
+
+type xUserDeleteUnique struct {
+	query builder.Query
+}
+
+func (r xUserDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p xUserDeleteUnique) xUserModel() {}
+
+func (r xUserDeleteUnique) Exec(ctx context.Context) (*XUserModel, error) {
+	var v XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserDeleteUnique) Tx() XUserUniqueTxResult {
+	v := newXUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type xUserFindFirst struct {
+	query builder.Query
+}
+
+func (r xUserFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserFindFirst) with()          {}
+func (r xUserFindFirst) xUserModel()    {}
+func (r xUserFindFirst) xUserRelation() {}
+
+func (r xUserActions) FindFirst(
+	params ...XUserWhereParam,
+) xUserFindFirst {
+	var v xUserFindFirst
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findFirst"
+
+	v.query.Model = "XUser"
+	v.query.Outputs = xUserOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r xUserFindFirst) With(params ...XUserRelationWith) xUserFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r xUserFindFirst) Select(params ...xUserPrismaFields) xUserFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserFindFirst) Omit(params ...xUserPrismaFields) xUserFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range xUserOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserFindFirst) OrderBy(params ...XUserOrderByParam) xUserFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r xUserFindFirst) Skip(count int) xUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r xUserFindFirst) Take(count int) xUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r xUserFindFirst) Cursor(cursor XUserCursorParam) xUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r xUserFindFirst) Exec(ctx context.Context) (
+	*XUserModel,
+	error,
+) {
+	var v *XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r xUserFindFirst) ExecInner(ctx context.Context) (
+	*InnerXUser,
+	error,
+) {
+	var v *InnerXUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type xUserFindMany struct {
+	query builder.Query
+}
+
+func (r xUserFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserFindMany) with()          {}
+func (r xUserFindMany) xUserModel()    {}
+func (r xUserFindMany) xUserRelation() {}
+
+func (r xUserActions) FindMany(
+	params ...XUserWhereParam,
+) xUserFindMany {
+	var v xUserFindMany
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findMany"
+
+	v.query.Model = "XUser"
+	v.query.Outputs = xUserOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r xUserFindMany) With(params ...XUserRelationWith) xUserFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r xUserFindMany) Select(params ...xUserPrismaFields) xUserFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserFindMany) Omit(params ...xUserPrismaFields) xUserFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range xUserOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r xUserFindMany) OrderBy(params ...XUserOrderByParam) xUserFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r xUserFindMany) Skip(count int) xUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r xUserFindMany) Take(count int) xUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r xUserFindMany) Cursor(cursor XUserCursorParam) xUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r xUserFindMany) Exec(ctx context.Context) (
+	[]XUserModel,
+	error,
+) {
+	var v []XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r xUserFindMany) ExecInner(ctx context.Context) (
+	[]InnerXUser,
+	error,
+) {
+	var v []InnerXUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r xUserFindMany) Update(params ...XUserSetParam) xUserUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "XUser"
+
+	r.query.Outputs = countOutput
+
+	var v xUserUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type xUserUpdateMany struct {
+	query builder.Query
+}
+
+func (r xUserUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserUpdateMany) xUserModel() {}
+
+func (r xUserUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserUpdateMany) Tx() XUserManyTxResult {
+	v := newXUserManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r xUserFindMany) Delete() xUserDeleteMany {
+	var v xUserDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "XUser"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type xUserDeleteMany struct {
+	query builder.Query
+}
+
+func (r xUserDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p xUserDeleteMany) xUserModel() {}
+
+func (r xUserDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserDeleteMany) Tx() XUserManyTxResult {
+	v := newXUserManyTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v
@@ -36311,6 +43666,54 @@ func (r UserManyTxResult) Result() (v *BatchResult) {
 	return v
 }
 
+func newXUserUniqueTxResult() XUserUniqueTxResult {
+	return XUserUniqueTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type XUserUniqueTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p XUserUniqueTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p XUserUniqueTxResult) IsTx() {}
+
+func (r XUserUniqueTxResult) Result() (v *XUserModel) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newXUserManyTxResult() XUserManyTxResult {
+	return XUserManyTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type XUserManyTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p XUserManyTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p XUserManyTxResult) IsTx() {}
+
+func (r XUserManyTxResult) Result() (v *BatchResult) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
 func newPublicKeyUniqueTxResult() PublicKeyUniqueTxResult {
 	return PublicKeyUniqueTxResult{
 		result: &transaction.Result{},
@@ -36802,6 +44205,128 @@ func (r userUpsertOne) Exec(ctx context.Context) (*UserModel, error) {
 
 func (r userUpsertOne) Tx() UserUniqueTxResult {
 	v := newUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type xUserUpsertOne struct {
+	query builder.Query
+}
+
+func (r xUserUpsertOne) getQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserUpsertOne) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r xUserUpsertOne) with()          {}
+func (r xUserUpsertOne) xUserModel()    {}
+func (r xUserUpsertOne) xUserRelation() {}
+
+func (r xUserActions) UpsertOne(
+	params XUserEqualsUniqueWhereParam,
+) xUserUpsertOne {
+	var v xUserUpsertOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "upsertOne"
+	v.query.Model = "XUser"
+	v.query.Outputs = xUserOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r xUserUpsertOne) Create(
+
+	_id XUserWithPrismaIDSetParam,
+	_username XUserWithPrismaUsernameSetParam,
+	_name XUserWithPrismaNameSetParam,
+	_description XUserWithPrismaDescriptionSetParam,
+	_profilePicURL XUserWithPrismaProfilePicURLSetParam,
+	_accessToken XUserWithPrismaAccessTokenSetParam,
+	_user XUserWithPrismaUserSetParam,
+
+	optional ...XUserSetParam,
+) xUserUpsertOne {
+	var v xUserUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	fields = append(fields, _id.field())
+	fields = append(fields, _username.field())
+	fields = append(fields, _name.field())
+	fields = append(fields, _description.field())
+	fields = append(fields, _profilePicURL.field())
+	fields = append(fields, _accessToken.field())
+	fields = append(fields, _user.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "create",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r xUserUpsertOne) Update(
+	params ...XUserSetParam,
+) xUserUpsertOne {
+	var v xUserUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "update",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r xUserUpsertOne) Exec(ctx context.Context) (*XUserModel, error) {
+	var v XUserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r xUserUpsertOne) Tx() XUserUniqueTxResult {
+	v := newXUserUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v

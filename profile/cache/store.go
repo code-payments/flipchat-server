@@ -54,6 +54,14 @@ func (c *Cache) SetDisplayName(ctx context.Context, id *commonpb.UserId, display
 	return c.db.SetDisplayName(ctx, id, displayName)
 }
 
+func (c *Cache) LinkXAccount(ctx context.Context, userID *commonpb.UserId, xProfile *profilepb.XProfile, accessToken string) error {
+	return c.db.LinkXAccount(ctx, userID, xProfile, accessToken)
+}
+
+func (c *Cache) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error) {
+	return c.db.GetXProfile(ctx, userID)
+}
+
 func toCacheKey(id *commonpb.UserId) string {
 	return model.UserIDString(id)
 }

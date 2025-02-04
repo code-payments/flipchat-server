@@ -74,3 +74,83 @@ func (s *store) SetDisplayName(ctx context.Context, id *commonpb.UserId, display
 
 	return err
 }
+
+func (s *store) LinkXAccount(ctx context.Context, userID *commonpb.UserId, xProfile *profilepb.XProfile, accessToken string) error {
+	encodedUserID := pg.Encode(userID.Value)
+
+	existing, err := s.client.XUser.FindUnique(db.XUser.UserID.Equals(encodedUserID)).Exec(ctx)
+	if err == nil {
+		if existing.ID == xProfile.Id {
+			// todo: Upsert doesn't update fields if it's the same user
+			_, err = s.client.XUser.FindUnique(db.XUser.ID.Equals(xProfile.Id)).
+				Update(
+					db.XUser.Username.Set(xProfile.Username),
+					db.XUser.Name.Set(xProfile.Name),
+					db.XUser.Description.Set(xProfile.Description),
+					db.XUser.ProfilePicURL.Set(xProfile.ProfilePicUrl),
+					db.XUser.AccessToken.Set(accessToken),
+					db.XUser.FollowerCount.Set(int(xProfile.FollowerCount)),
+					db.XUser.VerifiedType.Set(int(xProfile.VerifiedType)),
+				).
+				Exec(ctx)
+			return err
+		}
+		return profile.ErrExistingSocialLink
+	} else if !errors.Is(err, db.ErrNotFound) {
+		return err
+	}
+
+	_, err = s.client.XUser.UpsertOne(db.XUser.ID.Equals(xProfile.Id)).
+		Create(
+			db.XUser.ID.Set(xProfile.Id),
+			db.XUser.Username.Set(xProfile.Username),
+			db.XUser.Name.Set(xProfile.Name),
+			db.XUser.Description.Set(xProfile.Description),
+			db.XUser.ProfilePicURL.Set(xProfile.ProfilePicUrl),
+			db.XUser.AccessToken.Set(accessToken),
+			db.XUser.User.Link(
+				db.User.ID.Equals(encodedUserID),
+			),
+			db.XUser.FollowerCount.Set(int(xProfile.FollowerCount)),
+			db.XUser.VerifiedType.Set(int(xProfile.VerifiedType)),
+		).
+		Update(
+			db.XUser.Username.Set(xProfile.Username),
+			db.XUser.Name.Set(xProfile.Name),
+			db.XUser.Description.Set(xProfile.Description),
+			db.XUser.ProfilePicURL.Set(xProfile.ProfilePicUrl),
+			db.XUser.AccessToken.Set(accessToken),
+			db.XUser.User.Link(
+				db.User.ID.Equals(encodedUserID),
+			),
+			db.XUser.FollowerCount.Set(int(xProfile.FollowerCount)),
+			db.XUser.VerifiedType.Set(int(xProfile.VerifiedType)),
+		).
+		Exec(ctx)
+	return err
+}
+
+func (s *store) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error) {
+	encodedUserID := pg.Encode(userID.Value)
+
+	res, err := s.client.XUser.FindUnique(db.XUser.UserID.Equals(encodedUserID)).Exec(ctx)
+	if errors.Is(err, db.ErrNotFound) {
+		return nil, profile.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+
+	return fromXUserModel(res)
+}
+
+func fromXUserModel(m *db.XUserModel) (*profilepb.XProfile, error) {
+	return &profilepb.XProfile{
+		Id:            m.ID,
+		Username:      m.Username,
+		Name:          m.Name,
+		Description:   m.Description,
+		ProfilePicUrl: m.ProfilePicURL,
+		VerifiedType:  profilepb.XProfile_VerifiedType(m.VerifiedType),
+		FollowerCount: uint32(m.FollowerCount),
+	}, nil
+}

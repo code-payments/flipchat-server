@@ -13,6 +13,7 @@ import (
 	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/model"
+	"github.com/code-payments/flipchat-server/social/x"
 
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/profile"
@@ -32,7 +33,7 @@ func RunServerTests(t *testing.T, accounts account.Store, profiles profile.Store
 func testServer(t *testing.T, accounts account.Store, profiles profile.Store) {
 	authz := account.NewAuthorizer(zap.Must(zap.NewDevelopment()), accounts, auth.NewKeyPairAuthenticator())
 
-	serv := profile.NewServer(zap.Must(zap.NewDevelopment()), accounts, profiles, authz)
+	serv := profile.NewServer(zap.Must(zap.NewDevelopment()), accounts, profiles, x.NewClient(), authz)
 	cc := testutil.RunGRPCServer(t, testutil.WithService(func(s *grpc.Server) {
 		profilepb.RegisterProfileServer(s, serv)
 	}))
