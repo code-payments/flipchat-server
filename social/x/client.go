@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	baseUrl = "https://api.twitter.com/2/"
+	baseUrl = "https://api.x.com/2/"
 )
 
 type Client struct {
