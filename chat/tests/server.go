@@ -318,93 +318,14 @@ func testServer(
 				UserId:            otherUser,
 				Identity:          &chatpb.MemberIdentity{},
 				IsSelf:            true,
-				HasSendPermission: true,
-			}
-			newExpectedMembers := protoutil.SliceClone(expectedMembers)
-			for _, m := range newExpectedMembers {
-				m.IsSelf = false
-			}
-			newExpectedMembers = append(newExpectedMembers, newExpectedMember)
-
-			joinPaymentMetadata := &chatpb.JoinChatPaymentMetadata{
-				UserId: otherUser,
-				ChatId: created.Chat.ChatId,
-			}
-			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
-
-			join := &chatpb.JoinChatRequest{
-				Identifier: &chatpb.JoinChatRequest_ChatId{
-					ChatId: created.Chat.GetChatId(),
-				},
-				PaymentIntent: joinIntentID,
-			}
-			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
-
-			joinResp, err := client.JoinChat(context.Background(), join)
-			require.NoError(t, err)
-			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
-			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
-			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
-
-			leave := &chatpb.LeaveChatRequest{
-				ChatId: created.Chat.GetChatId(),
-			}
-			require.NoError(t, otherKeyPair.Auth(leave, &leave.Auth))
-
-			leaveResp, err := client.LeaveChat(context.Background(), leave)
-			require.NoError(t, err)
-			require.Equal(t, chatpb.LeaveChatResponse_OK, leaveResp.Result)
-
-			newExpectedMembers = newExpectedMembers[:len(newExpectedMembers)-1]
-
-			getByID := &chatpb.GetChatRequest{
-				Identifier: &chatpb.GetChatRequest_ChatId{
-					ChatId: created.Chat.GetChatId(),
-				},
-			}
-			require.NoError(t, otherKeyPair.Auth(getByID, &getByID.Auth))
-			get, err = client.GetChat(context.Background(), getByID)
-			require.NoError(t, err)
-			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
-			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
-			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
-
-			newExpectedMembers = append(newExpectedMembers, newExpectedMember)
-
-			joinPaymentMetadata = &chatpb.JoinChatPaymentMetadata{
-				UserId: otherUser,
-				ChatId: created.Chat.ChatId,
-			}
-			joinIntentID = testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
-			join = &chatpb.JoinChatRequest{
-				Identifier: &chatpb.JoinChatRequest_RoomId{
-					RoomId: created.Chat.RoomNumber,
-				},
-				PaymentIntent: joinIntentID,
-			}
-			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
-			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
-			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
-			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
-		})
-
-		t.Run("Join without send permission and leave", func(t *testing.T) {
-			otherUser := model.MustGenerateUserID()
-			otherKeyPair := model.MustGenerateKeyPair()
-			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
-
-			newExpectedMembers := protoutil.SliceClone(expectedMembers)
-			for _, m := range newExpectedMembers {
-				m.IsSelf = false
-			}
-			newExpectedMembers = append(newExpectedMembers, &chatpb.Member{
-				UserId:            otherUser,
-				Identity:          &chatpb.MemberIdentity{},
-				IsSelf:            true,
 				HasSendPermission: false,
-			})
+			}
+			newExpectedMembers := protoutil.SliceClone(expectedMembers)
+			for _, m := range newExpectedMembers {
+				m.IsSelf = false
+			}
+			newExpectedMembers = append(newExpectedMembers, newExpectedMember)
 
-			// Join without send permission
 			join := &chatpb.JoinChatRequest{
 				Identifier: &chatpb.JoinChatRequest_ChatId{
 					ChatId: created.Chat.GetChatId(),
@@ -419,36 +340,6 @@ func testServer(
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
 			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
 
-			// Upgrade to a non-spectator user with send message permissions
-
-			for i, m := range newExpectedMembers {
-				if bytes.Equal(m.UserId.Value, otherUser.Value) {
-					newExpectedMembers[i].HasSendPermission = true
-					break
-				}
-			}
-
-			joinPaymentMetadata := &chatpb.JoinChatPaymentMetadata{
-				UserId: otherUser,
-				ChatId: created.Chat.ChatId,
-			}
-			joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
-
-			join = &chatpb.JoinChatRequest{
-				Identifier: &chatpb.JoinChatRequest_ChatId{
-					ChatId: created.Chat.GetChatId(),
-				},
-				PaymentIntent: joinIntentID,
-			}
-			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
-
-			joinResp, err = client.JoinChat(context.Background(), join)
-			require.NoError(t, err)
-			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
-			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
-			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
-
-			// Leave the room
 			leave := &chatpb.LeaveChatRequest{
 				ChatId: created.Chat.GetChatId(),
 			}
@@ -471,6 +362,19 @@ func testServer(
 			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
 			require.NoError(t, protoutil.ProtoEqualError(created.Chat, get.Metadata))
 			verifyExpectedProtoMembers(t, newExpectedMembers, get.Members)
+
+			newExpectedMembers = append(newExpectedMembers, newExpectedMember)
+
+			join = &chatpb.JoinChatRequest{
+				Identifier: &chatpb.JoinChatRequest_RoomId{
+					RoomId: created.Chat.RoomNumber,
+				},
+				WithoutSendPermission: true,
+			}
+			require.NoError(t, otherKeyPair.Auth(join, &join.Auth))
+			require.Equal(t, chatpb.JoinChatResponse_OK, joinResp.Result)
+			require.NoError(t, protoutil.ProtoEqualError(created.Chat, joinResp.Metadata))
+			verifyExpectedProtoMembers(t, newExpectedMembers, joinResp.Members)
 		})
 
 		t.Run("Promote and demote user", func(t *testing.T) {
@@ -889,14 +793,9 @@ func testServer(
 		startedOther, err := client.StartChat(ctx, start)
 		require.NoError(t, err)
 
-		joinPaymentMetadata := &chatpb.JoinChatPaymentMetadata{
-			UserId: streamUser,
-			ChatId: startedOther.Chat.ChatId,
-		}
-		joinIntentID := testutil.CreatePayment(t, codeData, chat.InitialMessagingFee, joinPaymentMetadata)
 		join := &chatpb.JoinChatRequest{
-			Identifier:    &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
-			PaymentIntent: joinIntentID,
+			Identifier:            &chatpb.JoinChatRequest_ChatId{ChatId: startedOther.Chat.ChatId},
+			WithoutSendPermission: true,
 		}
 		require.NoError(t, streamKeyPair.Auth(join, &join.Auth))
 
@@ -1017,24 +916,6 @@ func testServer(
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetMuted().Member, streamUser))
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetMuted().MutedBy, userID))
 
-		// Other user demotes us
-		demote := &chatpb.DemoteUserRequest{
-			ChatId:                startedOther.Chat.ChatId,
-			UserId:                streamUser,
-			DisableSendPermission: true,
-		}
-		require.NoError(t, keyPair.Auth(demote, &demote.Auth))
-		_, err = client.DemoteUser(context.Background(), demote)
-		require.NoError(t, err)
-
-		u = <-updateCh
-		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
-		require.Empty(t, u.MetadataUpdates)
-		require.Len(t, u.MemberUpdates, 1)
-		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetDemoted().Member, streamUser))
-		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetDemoted().DemotedBy, userID))
-		require.True(t, u.MemberUpdates[0].GetDemoted().SendPermissionDisabled)
-
 		// Other user promotes us
 		promote := &chatpb.PromoteUserRequest{
 			ChatId:               startedOther.Chat.ChatId,
@@ -1052,6 +933,24 @@ func testServer(
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetPromoted().Member, streamUser))
 		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetPromoted().PromotedBy, userID))
 		require.True(t, u.MemberUpdates[0].GetPromoted().SendPermissionEnabled)
+
+		// Other user demotes us
+		demote := &chatpb.DemoteUserRequest{
+			ChatId:                startedOther.Chat.ChatId,
+			UserId:                streamUser,
+			DisableSendPermission: true,
+		}
+		require.NoError(t, keyPair.Auth(demote, &demote.Auth))
+		_, err = client.DemoteUser(context.Background(), demote)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Empty(t, u.MetadataUpdates)
+		require.Len(t, u.MemberUpdates, 1)
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetDemoted().Member, streamUser))
+		require.NoError(t, protoutil.ProtoEqualError(u.MemberUpdates[0].GetDemoted().DemotedBy, userID))
+		require.True(t, u.MemberUpdates[0].GetDemoted().SendPermissionDisabled)
 
 		// Leave the chat
 		leave = &chatpb.LeaveChatRequest{ChatId: started.Chat.ChatId}
