@@ -88,13 +88,13 @@ func testServer(t *testing.T, accounts account.Store, profiles profile.Store) {
 		require.NoError(t, protoutil.ProtoEqualError(expected, get.UserProfile))
 
 		xProfile := &profilepb.XProfile{
-			Id:            "12345",
-			Username:      "username",
-			Name:          "name",
+			Id:            "123",
+			Username:      "registered_user",
+			Name:          "registered name",
 			Description:   "description",
 			ProfilePicUrl: "url",
 			VerifiedType:  profilepb.XProfile_BLUE,
-			FollowerCount: 42,
+			FollowerCount: 888,
 		}
 		// todo: Need mock X client to use the RPC
 		require.NoError(t, profiles.LinkXAccount(context.Background(), userID, xProfile, "access_token"))
