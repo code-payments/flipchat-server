@@ -71,18 +71,44 @@ func testServer(t *testing.T, accounts account.Store, profiles profile.Store) {
 		require.Equal(t, profilepb.GetProfileResponse_NOT_FOUND, get.Result)
 		require.Nil(t, get.UserProfile)
 
-		req := &profilepb.SetDisplayNameRequest{
+		setDisplayName := &profilepb.SetDisplayNameRequest{
 			DisplayName: "my name",
 		}
-		require.NoError(t, keyPair.Auth(req, &req.Auth))
-		_, err = client.SetDisplayName(context.Background(), req)
+		require.NoError(t, keyPair.Auth(setDisplayName, &setDisplayName.Auth))
+		setDisplayNameResp, err := client.SetDisplayName(context.Background(), setDisplayName)
 		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(&profilepb.SetDisplayNameResponse{Result: profilepb.SetDisplayNameResponse_OK}, setDisplayNameResp))
+
+		expected := &profilepb.UserProfile{DisplayName: "my name"}
 
 		get, err = client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
 			UserId: userID,
 		})
 		require.NoError(t, err)
-		require.NoError(t, protoutil.ProtoEqualError(&profilepb.UserProfile{DisplayName: "my name"}, get.UserProfile))
+		require.NoError(t, protoutil.ProtoEqualError(expected, get.UserProfile))
+
+		xProfile := &profilepb.XProfile{
+			Id:            "12345",
+			Username:      "username",
+			Name:          "name",
+			Description:   "description",
+			ProfilePicUrl: "url",
+			VerifiedType:  profilepb.XProfile_BLUE,
+			FollowerCount: 42,
+		}
+		// todo: Need mock X client to use the RPC
+		require.NoError(t, profiles.LinkXAccount(context.Background(), userID, xProfile, "access_token"))
+
+		expected.SocialProfiles = append(expected.SocialProfiles, &profilepb.SocialProfile{
+			Type: &profilepb.SocialProfile_X{
+				X: xProfile,
+			},
+		})
+		get, err = client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
+			UserId: userID,
+		})
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, get.UserProfile))
 	})
 
 	t.Run("Unregistered user", func(t *testing.T) {
@@ -93,13 +119,21 @@ func testServer(t *testing.T, accounts account.Store, profiles profile.Store) {
 		require.NoError(t, err)
 		require.NoError(t, accounts.SetRegistrationFlag(context.Background(), userID, false))
 
-		req := &profilepb.SetDisplayNameRequest{
+		setDisplayName := &profilepb.SetDisplayNameRequest{
 			DisplayName: "my name",
 		}
-		require.NoError(t, keypair2.Auth(req, &req.Auth))
-		set, err := client.SetDisplayName(context.Background(), req)
+		require.NoError(t, keypair2.Auth(setDisplayName, &setDisplayName.Auth))
+		setDisplayNameResp, err := client.SetDisplayName(context.Background(), setDisplayName)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.ProtoEqualError(&profilepb.SetDisplayNameResponse{Result: profilepb.SetDisplayNameResponse_DENIED}, set))
+		require.NoError(t, protoutil.ProtoEqualError(&profilepb.SetDisplayNameResponse{Result: profilepb.SetDisplayNameResponse_DENIED}, setDisplayNameResp))
+
+		linkXAccount := &profilepb.LinkXAccountRequest{
+			AccessToken: "access_token",
+		}
+		require.NoError(t, keypair2.Auth(linkXAccount, &linkXAccount.Auth))
+		linkXAccountResp, err := client.LinkXAccount(context.Background(), linkXAccount)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(&profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_DENIED}, linkXAccountResp))
 
 		get, err := client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
 			UserId: userID2,

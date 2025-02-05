@@ -50,6 +50,18 @@ func (s *Server) GetProfile(ctx context.Context, req *profilepb.GetProfileReques
 		return nil, status.Error(codes.Internal, "failed to get profile")
 	}
 
+	xProfile, err := s.profiles.GetXProfile(ctx, req.UserId)
+	if err == nil {
+		profile.SocialProfiles = append(profile.SocialProfiles, &profilepb.SocialProfile{
+			Type: &profilepb.SocialProfile_X{
+				X: xProfile,
+			},
+		})
+	} else if !errors.Is(err, ErrNotFound) {
+		log.Warn("Failed to get x profile", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to get x profile")
+	}
+
 	return &profilepb.GetProfileResponse{UserProfile: profile}, nil
 }
 
@@ -92,6 +104,14 @@ func (s *Server) LinkXAccount(ctx context.Context, req *profilepb.LinkXAccountRe
 	}
 
 	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
+
+	isRegistered, err := s.accounts.IsRegistered(ctx, userID)
+	if err != nil {
+		log.Info("Failed to get registration flag")
+		return nil, status.Errorf(codes.Internal, "failed to get registration flag")
+	} else if !isRegistered {
+		return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_DENIED}, nil
+	}
 
 	xUser, err := s.xClient.GetMyUser(ctx, req.AccessToken)
 	if err != nil {
