@@ -945,7 +945,7 @@ func (s *Server) SetMessagingFee(ctx context.Context, req *chatpb.SetMessagingFe
 			ctx,
 			s.messenger,
 			req.ChatId,
-			messaging.NewMessagingFeeChangedAnnouncementContentBuilder(req.MessagingFee.Quarks),
+			messaging.NewMessagingFeeChangedAnnouncementContentBuilder(ctx, s.profiles, userID, req.MessagingFee.Quarks),
 		); err != nil {
 			log.Warn("Failed to send announcement", zap.Error(err))
 		}
