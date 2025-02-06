@@ -223,7 +223,14 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		latestOnly = typed.LatestOnly // todo: this needs tests
 	}
 	if !latestOnly {
-		go s.flushMessages(ctx, params.ChatId, userID, resumeFrom, ss)
+		isStaff, err := s.accounts.IsStaff(ctx, userID)
+		if err != nil {
+			log.Warn("Failed to get staff flag", zap.Error(err))
+			return status.Error(codes.Internal, "failed to get staff flag")
+		}
+		if !isStaff {
+			go s.flushMessages(ctx, params.ChatId, userID, resumeFrom, ss)
+		}
 	}
 
 	for {
