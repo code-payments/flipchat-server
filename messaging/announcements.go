@@ -51,7 +51,7 @@ func NewFlipchatIsLiveAnnouncementContentBuilder(chatNumber uint64) Announcement
 		return &messagingpb.Content{
 			Type: &messagingpb.Content_ActionableAnnouncement{
 				ActionableAnnouncement: &messagingpb.ActionableAnnouncementContent{
-					KeyOrText: fmt.Sprintf("Your Flipchat is live! Tell people to join Flipchat #%d or share a link on social", chatNumber),
+					KeyOrText: fmt.Sprintf("This Flipchat is live! Tell people to join Flipchat #%d or share a link on social", chatNumber),
 					Action: &messagingpb.ActionableAnnouncementContent_Action{
 						Type: &messagingpb.ActionableAnnouncementContent_Action_ShareRoomLink_{
 							ShareRoomLink: &messagingpb.ActionableAnnouncementContent_Action_ShareRoomLink{},
@@ -92,16 +92,21 @@ func NewMessagingFeeChangedAnnouncementContentBuilder(quarks uint64) Announcemen
 		return &messagingpb.Content{
 			Type: &messagingpb.Content_LocalizedAnnouncement{
 				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
-					KeyOrText: kinAmountPrinter.Sprintf("Listener messaging fee changed to ⬢ %d Kin", codekin.FromQuarks(quarks)),
+					KeyOrText: kinAmountPrinter.Sprintf("Listener Messaging Fee changed to ⬢ %d Kin", codekin.FromQuarks(quarks)),
 				},
 			},
 		}, nil
 	}
 }
 
-func NewUserPromotedToSpeakerAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId) AnnouncementContentBuilder {
+func NewUserPromotedToSpeakerAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, promoter, promotee *commonpb.UserId) AnnouncementContentBuilder {
 	return func() (*messagingpb.Content, error) {
-		profile, err := profiles.GetProfile(ctx, userID)
+		promoterProfile, err := profiles.GetProfile(ctx, promoter)
+		if err != nil {
+			return nil, err
+		}
+
+		promoteeProfile, err := profiles.GetProfile(ctx, promotee)
 		if err != nil {
 			return nil, err
 		}
@@ -109,7 +114,7 @@ func NewUserPromotedToSpeakerAnnouncementContentBuilder(ctx context.Context, pro
 		return &messagingpb.Content{
 			Type: &messagingpb.Content_LocalizedAnnouncement{
 				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
-					KeyOrText: fmt.Sprintf("%s is now a speaker", profile.DisplayName),
+					KeyOrText: fmt.Sprintf("%s made %s a Speaker", promoterProfile.DisplayName, promoteeProfile.DisplayName),
 				},
 			},
 		}, nil

@@ -55,6 +55,7 @@ func (c *Cache) SetDisplayName(ctx context.Context, id *commonpb.UserId, display
 }
 
 func (c *Cache) LinkXAccount(ctx context.Context, userID *commonpb.UserId, xProfile *profilepb.XProfile, accessToken string) error {
+	c.cache.Remove(toCacheKey(userID))
 	return c.db.LinkXAccount(ctx, userID, xProfile, accessToken)
 }
 

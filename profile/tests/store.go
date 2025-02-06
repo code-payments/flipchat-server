@@ -54,6 +54,7 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	_, err := s.GetXProfile(ctx, userID1)
 	require.Equal(t, profile.ErrNotFound, err)
 
+	// Link an initial X account to user 1
 	expected1 := &profilepb.XProfile{
 		Id:            "1",
 		Username:      "username",
@@ -65,6 +66,7 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	}
 	require.NoError(t, s.LinkXAccount(ctx, userID1, expected1, "accessToken1"))
 
+	/// Fail to link a new X account to user 1 (the original one is maintained)
 	expected2 := &profilepb.XProfile{
 		Id:            "2",
 		Username:      "username2",
@@ -80,6 +82,11 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	require.NoError(t, err)
 	require.NoError(t, protoutil.ProtoEqualError(expected1, actual))
 
+	fullProfile, err := s.GetProfile(ctx, userID1)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected1, fullProfile.SocialProfiles[0].GetX()))
+
+	// Link the original X account to user 2, which removes the link from user 1
 	require.NoError(t, s.LinkXAccount(ctx, userID2, expected1, "accessToken3"))
 
 	_, err = s.GetXProfile(ctx, userID1)
@@ -89,6 +96,11 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	require.NoError(t, err)
 	require.NoError(t, protoutil.ProtoEqualError(expected1, actual))
 
+	fullProfile, err = s.GetProfile(ctx, userID2)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected1, fullProfile.SocialProfiles[0].GetX()))
+
+	// Relink the X account with updated user metadata, which should cause a refresh
 	expected3 := &profilepb.XProfile{
 		Id:            expected1.Id,
 		Username:      "username3",
@@ -103,4 +115,8 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	actual, err = s.GetXProfile(ctx, userID2)
 	require.NoError(t, err)
 	require.NoError(t, protoutil.ProtoEqualError(expected3, actual))
+
+	fullProfile, err = s.GetProfile(ctx, userID2)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected3, fullProfile.SocialProfiles[0].GetX()))
 }

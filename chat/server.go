@@ -1074,7 +1074,7 @@ func (s *Server) PromoteUser(ctx context.Context, req *chatpb.PromoteUserRequest
 				ctx,
 				s.messenger,
 				req.ChatId,
-				messaging.NewUserPromotedToSpeakerAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
+				messaging.NewUserPromotedToSpeakerAnnouncementContentBuilder(ctx, s.profiles, ownerID, req.UserId),
 			); err != nil {
 				log.Warn("Failed to send announcement", zap.Error(err))
 			}

@@ -36,24 +36,45 @@ func (s *store) reset() {
 func (s *store) GetProfile(ctx context.Context, id *commonpb.UserId) (*profilepb.UserProfile, error) {
 	encodedUserID := pg.Encode(id.Value)
 
-	val, err := s.client.User.FindFirst(
+	baseProfile, err := s.client.User.FindFirst(
 		db.User.ID.Equals(encodedUserID),
 	).Exec(ctx)
 
-	if errors.Is(err, db.ErrNotFound) || val == nil {
+	if errors.Is(err, db.ErrNotFound) {
 		return nil, profile.ErrNotFound
 	} else if err != nil {
 		return nil, err
 	}
 
 	// User found but the optional display name is not set
-	name, ok := val.DisplayName()
+	name, ok := baseProfile.DisplayName()
 	if !ok {
 		return nil, profile.ErrNotFound
 	}
 
+	var socialProfiles []*profilepb.SocialProfile
+
+	xProfile, err := s.client.XUser.FindFirst(
+		db.XUser.UserID.Equals(encodedUserID),
+	).Exec(ctx)
+
+	if err == nil {
+		protoXProfile, err := fromXUserModel(xProfile)
+		if err != nil {
+			return nil, err
+		}
+		socialProfiles = append(socialProfiles, &profilepb.SocialProfile{
+			Type: &profilepb.SocialProfile_X{
+				X: protoXProfile,
+			},
+		})
+	} else if !errors.Is(err, db.ErrNotFound) {
+		return nil, err
+	}
+
 	return &profilepb.UserProfile{
-		DisplayName: name,
+		DisplayName:    name,
+		SocialProfiles: socialProfiles,
 	}, nil
 }
 
