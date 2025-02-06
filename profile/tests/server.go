@@ -127,13 +127,19 @@ func testServer(t *testing.T, accounts account.Store, profiles profile.Store) {
 		require.NoError(t, err)
 		require.NoError(t, protoutil.ProtoEqualError(&profilepb.SetDisplayNameResponse{Result: profilepb.SetDisplayNameResponse_DENIED}, setDisplayNameResp))
 
-		linkXAccount := &profilepb.LinkXAccountRequest{
-			AccessToken: "access_token",
+		linkXAccount := &profilepb.LinkSocialAccountRequest{
+			LinkingToken: &profilepb.LinkSocialAccountRequest_LinkingToken{
+				Type: &profilepb.LinkSocialAccountRequest_LinkingToken_X{
+					X: &profilepb.LinkSocialAccountRequest_LinkingToken_XLinkingToken{
+						AccessToken: "access_token",
+					},
+				},
+			},
 		}
 		require.NoError(t, keypair2.Auth(linkXAccount, &linkXAccount.Auth))
-		linkXAccountResp, err := client.LinkXAccount(context.Background(), linkXAccount)
+		linkXAccountResp, err := client.LinkSocialAccount(context.Background(), linkXAccount)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.ProtoEqualError(&profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_DENIED}, linkXAccountResp))
+		require.NoError(t, protoutil.ProtoEqualError(&profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_DENIED}, linkXAccountResp))
 
 		get, err := client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
 			UserId: userID2,

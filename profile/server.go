@@ -85,7 +85,7 @@ func (s *Server) SetDisplayName(ctx context.Context, req *profilepb.SetDisplayNa
 	return &profilepb.SetDisplayNameResponse{}, nil
 }
 
-func (s *Server) LinkXAccount(ctx context.Context, req *profilepb.LinkXAccountRequest) (*profilepb.LinkXAccountResponse, error) {
+func (s *Server) LinkSocialAccount(ctx context.Context, req *profilepb.LinkSocialAccountRequest) (*profilepb.LinkSocialAccountResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
 		return nil, err
@@ -98,35 +98,46 @@ func (s *Server) LinkXAccount(ctx context.Context, req *profilepb.LinkXAccountRe
 		log.Info("Failed to get registration flag")
 		return nil, status.Errorf(codes.Internal, "failed to get registration flag")
 	} else if !isRegistered {
-		return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_DENIED}, nil
+		return &profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_DENIED}, nil
 	}
 
-	xUser, err := s.xClient.GetMyUser(ctx, req.AccessToken)
-	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "http status code: 403") {
-			return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_INVALID_ACCESS_TOKEN}, nil
+	switch typed := req.LinkingToken.Type.(type) {
+	case *profilepb.LinkSocialAccountRequest_LinkingToken_X:
+		log = log.With(zap.String("social_account_type", "x"))
+
+		xUser, err := s.xClient.GetMyUser(ctx, typed.X.AccessToken)
+		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "http status code: 403") {
+				return &profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_INVALID_LINKING_TOKEN}, nil
+			}
+
+			log.Warn("Failed to get user from x", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to get user from x")
 		}
 
-		log.Warn("Failed to get user from x", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to get user from x")
-	}
+		protoXUser := xUser.ToProto()
 
-	protoXUser := xUser.ToProto()
+		if err := protoXUser.Validate(); err != nil {
+			log.Warn("Failed to validate proto x profile")
+			return nil, status.Error(codes.Internal, "failed to validate proto x profile")
+		}
 
-	if err := protoXUser.Validate(); err != nil {
-		log.Warn("Failed to validate proto x profile")
-		return nil, status.Error(codes.Internal, "failed to validate proto x profile")
-	}
+		err = s.profiles.LinkXAccount(ctx, userID, protoXUser, typed.X.AccessToken)
+		switch err {
+		case nil:
+		case ErrExistingSocialLink:
+			return &profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_EXISTING_LINK}, nil
+		default:
+			log.Warn("failed to link x account", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to link x account")
+		}
 
-	err = s.profiles.LinkXAccount(ctx, userID, protoXUser, req.AccessToken)
-	switch err {
-	case nil:
-	case ErrExistingSocialLink:
-		return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_EXISTING_LINK}, nil
+		return &profilepb.LinkSocialAccountResponse{SocialProfile: &profilepb.SocialProfile{
+			Type: &profilepb.SocialProfile_X{
+				X: protoXUser,
+			},
+		}}, nil
 	default:
-		log.Warn("failed to link x account", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to link x account")
+		return nil, status.Error(codes.Unimplemented, "unsupported linking token type")
 	}
-
-	return &profilepb.LinkXAccountResponse{XProfile: protoXUser}, nil
 }
