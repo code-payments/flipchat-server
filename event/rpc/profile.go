@@ -15,6 +15,7 @@ import (
 	"github.com/code-payments/flipchat-server/profile"
 )
 
+// todo: this needs tests
 type ProfileEventGenerator struct {
 	log      *zap.Logger
 	chats    chat.Store
