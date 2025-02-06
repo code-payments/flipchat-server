@@ -1693,7 +1693,8 @@ func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Membe
 			return fmt.Errorf("failed to get user profile: %w", err)
 		}
 		m.Identity = &chatpb.MemberIdentity{
-			DisplayName: p.GetDisplayName(),
+			DisplayName:    p.GetDisplayName(),
+			SocialProfiles: p.GetSocialProfiles(),
 		}
 
 		if chatID == nil {

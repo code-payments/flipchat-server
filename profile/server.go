@@ -13,6 +13,7 @@ import (
 
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/social/x"
 )
@@ -22,17 +23,19 @@ type Server struct {
 	accounts account.Store
 	profiles Store
 	xClient  *x.Client
+	events   event.ProfileGenerator
 	authz    auth.Authorizer
 
 	profilepb.UnimplementedProfileServer
 }
 
-func NewServer(log *zap.Logger, accounts account.Store, profiles Store, xClient *x.Client, authz auth.Authorizer) *Server {
+func NewServer(log *zap.Logger, accounts account.Store, profiles Store, xClient *x.Client, events event.ProfileGenerator, authz auth.Authorizer) *Server {
 	return &Server{
 		log:      log,
 		accounts: accounts,
 		profiles: profiles,
 		xClient:  xClient,
+		events:   events,
 		authz:    authz,
 	}
 }
@@ -81,6 +84,8 @@ func (s *Server) SetDisplayName(ctx context.Context, req *profilepb.SetDisplayNa
 		s.log.Warn("Failed to set display name", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to set display name")
 	}
+
+	go s.events.OnProfileUpdated(context.Background(), userID)
 
 	return &profilepb.SetDisplayNameResponse{}, nil
 }
@@ -131,6 +136,9 @@ func (s *Server) LinkSocialAccount(ctx context.Context, req *profilepb.LinkSocia
 			log.Warn("failed to link x account", zap.Error(err))
 			return nil, status.Error(codes.Internal, "failed to link x account")
 		}
+
+		// todo: Also need to send an update for the user that go unlinked
+		go s.events.OnProfileUpdated(context.Background(), userID)
 
 		return &profilepb.LinkSocialAccountResponse{SocialProfile: &profilepb.SocialProfile{
 			Type: &profilepb.SocialProfile_X{
