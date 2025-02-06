@@ -111,12 +111,17 @@ func NewCoverChangedAnnouncementContentBuilder(quarks uint64) AnnouncementConten
 	}
 }
 
-func NewMessagingFeeChangedAnnouncementContentBuilder(quarks uint64) AnnouncementContentBuilder {
+func NewMessagingFeeChangedAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId, quarks uint64) AnnouncementContentBuilder {
 	return func() (*messagingpb.Content, error) {
+		profile, err := profiles.GetProfile(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
 		return &messagingpb.Content{
 			Type: &messagingpb.Content_LocalizedAnnouncement{
 				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
-					KeyOrText: kinAmountPrinter.Sprintf("Listener Messaging Fee changed to ⬢ %d Kin", codekin.FromQuarks(quarks)),
+					KeyOrText: kinAmountPrinter.Sprintf("%s changed the messaging fee to ⬢ %d Kin", profile.DisplayName, codekin.FromQuarks(quarks)),
 				},
 			},
 		}, nil
