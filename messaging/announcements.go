@@ -150,6 +150,23 @@ func NewUserPromotedToSpeakerAnnouncementContentBuilder(ctx context.Context, pro
 	}
 }
 
+func NewUserDemotedToListenerAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId) AnnouncementContentBuilder {
+	return func() (*messagingpb.Content, error) {
+		profile, err := profiles.GetProfile(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &messagingpb.Content{
+			Type: &messagingpb.Content_LocalizedAnnouncement{
+				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
+					KeyOrText: fmt.Sprintf("%s is no longer a Speaker", profile.DisplayName),
+				},
+			},
+		}, nil
+	}
+}
+
 func NewUserRemovedAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId) AnnouncementContentBuilder {
 	return func() (*messagingpb.Content, error) {
 		profile, err := profiles.GetProfile(ctx, userID)

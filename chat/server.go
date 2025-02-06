@@ -1231,7 +1231,7 @@ func (s *Server) PromoteUser(ctx context.Context, req *chatpb.PromoteUserRequest
 				},
 			}})
 			if err != nil {
-				s.log.Warn("Failed to notify member demoted", zap.Error(err))
+				s.log.Warn("Failed to notify member promoted", zap.Error(err))
 			}
 		}()
 	}
@@ -1291,7 +1291,16 @@ func (s *Server) DemoteUser(ctx context.Context, req *chatpb.DemoteUserRequest) 
 		}
 
 		go func() {
-			// todo: announcement?
+			ctx := context.Background()
+
+			if err = messaging.SendAnnouncement(
+				ctx,
+				s.messenger,
+				req.ChatId,
+				messaging.NewUserDemotedToListenerAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
+			); err != nil {
+				log.Warn("Failed to send announcement", zap.Error(err))
+			}
 
 			err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.MemberUpdate{
 				{
