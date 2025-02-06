@@ -869,9 +869,9 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 
 		var announcementContentBuilder messaging.AnnouncementContentBuilder
 		if len(req.DisplayName) > 0 {
-			announcementContentBuilder = messaging.NewFlipchatDisplayNameChangedAnnouncementContentBuilder(md.RoomNumber, req.DisplayName)
+			announcementContentBuilder = messaging.NewFlipchatDisplayNameChangedAnnouncementContentBuilder(ctx, s.profiles, userID, md.RoomNumber, req.DisplayName)
 		} else {
-			announcementContentBuilder = messaging.NewFlipchatDisplayNameRemovedAnnouncementContentBuilder()
+			announcementContentBuilder = messaging.NewFlipchatDisplayNameRemovedAnnouncementContentBuilder(ctx, s.profiles, userID)
 		}
 		if err = messaging.SendAnnouncement(
 			ctx,

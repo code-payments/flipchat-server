@@ -63,24 +63,34 @@ func NewFlipchatIsLiveAnnouncementContentBuilder(chatNumber uint64) Announcement
 	}
 }
 
-func NewFlipchatDisplayNameChangedAnnouncementContentBuilder(chatNumber uint64, displayName string) AnnouncementContentBuilder {
+func NewFlipchatDisplayNameChangedAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId, chatNumber uint64, displayName string) AnnouncementContentBuilder {
 	return func() (*messagingpb.Content, error) {
+		profile, err := profiles.GetProfile(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
 		return &messagingpb.Content{
 			Type: &messagingpb.Content_LocalizedAnnouncement{
 				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
-					KeyOrText: fmt.Sprintf("Flipchat name changed to \"#%d: %s\"", chatNumber, displayName),
+					KeyOrText: fmt.Sprintf("%s changed the Flipchat name to \"#%d: %s\"", profile.DisplayName, chatNumber, displayName),
 				},
 			},
 		}, nil
 	}
 }
 
-func NewFlipchatDisplayNameRemovedAnnouncementContentBuilder() AnnouncementContentBuilder {
+func NewFlipchatDisplayNameRemovedAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId) AnnouncementContentBuilder {
 	return func() (*messagingpb.Content, error) {
+		profile, err := profiles.GetProfile(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
 		return &messagingpb.Content{
 			Type: &messagingpb.Content_LocalizedAnnouncement{
 				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
-					KeyOrText: "Flipchat name removed",
+					KeyOrText: fmt.Sprintf("%s removed the Flipchat name", profile.DisplayName),
 				},
 			},
 		}, nil
