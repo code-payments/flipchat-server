@@ -32,12 +32,24 @@ func (m *Memory) GetProfile(_ context.Context, id *commonpb.UserId) (*profilepb.
 	m.Lock()
 	defer m.Unlock()
 
-	val, ok := m.profiles[id.String()]
+	baseProfile, ok := m.profiles[id.String()]
 	if !ok {
 		return nil, profile.ErrNotFound
 	}
 
-	return proto.Clone(val).(*profilepb.UserProfile), nil
+	clonedBaseProfile := proto.Clone(baseProfile).(*profilepb.UserProfile)
+
+	xProfile, ok := m.xProfilesByUser[id.String()]
+	if ok {
+		clonedXProfile := proto.Clone(xProfile).(*profilepb.XProfile)
+		clonedBaseProfile.SocialProfiles = append(clonedBaseProfile.SocialProfiles, &profilepb.SocialProfile{
+			Type: &profilepb.SocialProfile_X{
+				X: clonedXProfile,
+			},
+		})
+	}
+
+	return clonedBaseProfile, nil
 }
 
 func (m *Memory) SetDisplayName(_ context.Context, id *commonpb.UserId, displayName string) error {

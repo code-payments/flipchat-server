@@ -50,18 +50,6 @@ func (s *Server) GetProfile(ctx context.Context, req *profilepb.GetProfileReques
 		return nil, status.Error(codes.Internal, "failed to get profile")
 	}
 
-	xProfile, err := s.profiles.GetXProfile(ctx, req.UserId)
-	if err == nil {
-		profile.SocialProfiles = append(profile.SocialProfiles, &profilepb.SocialProfile{
-			Type: &profilepb.SocialProfile_X{
-				X: xProfile,
-			},
-		})
-	} else if !errors.Is(err, ErrNotFound) {
-		log.Warn("Failed to get x profile", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to get x profile")
-	}
-
 	return &profilepb.GetProfileResponse{UserProfile: profile}, nil
 }
 
