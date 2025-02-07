@@ -1196,6 +1196,16 @@ func (s *Server) PromoteUser(ctx context.Context, req *chatpb.PromoteUserRequest
 		return nil, status.Errorf(codes.Internal, "failed to get chat member")
 	}
 
+	// todo: this needs tests
+	isRegistered, err := s.accounts.IsRegistered(ctx, memberToPromote.UserID)
+	if err != nil {
+		log.Warn("Failed to get member registration status")
+		return nil, status.Errorf(codes.Internal, "failed to get member registration status")
+	}
+	if !isRegistered {
+		return &chatpb.PromoteUserResponse{Result: chatpb.PromoteUserResponse_DENIED}, nil
+	}
+
 	if req.EnableSendPermission {
 		if memberToPromote.HasSendPermission {
 			return &chatpb.PromoteUserResponse{}, nil

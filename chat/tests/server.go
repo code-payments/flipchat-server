@@ -81,6 +81,7 @@ func testServer(
 	userID := model.MustGenerateUserID()
 	keyPair := model.MustGenerateKeyPair()
 	_, _ = accounts.Bind(context.Background(), userID, keyPair.Proto())
+	_ = accounts.SetRegistrationFlag(context.Background(), userID, true)
 	_ = profiles.SetDisplayName(context.Background(), userID, "Self")
 	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
 		return id.Value
@@ -162,6 +163,7 @@ func testServer(
 		for i := range 5 {
 			groupUserID := model.MustGenerateUserID()
 			_, _ = accounts.Bind(context.Background(), groupUserID, model.MustGenerateKeyPair().Proto())
+			_ = accounts.SetRegistrationFlag(context.Background(), groupUserID, true)
 			require.NoError(t, profiles.SetDisplayName(context.Background(), groupUserID, fmt.Sprintf("User-%d", i)))
 			otherUsers = append(otherUsers, groupUserID)
 		}
@@ -313,6 +315,7 @@ func testServer(
 			otherUser := model.MustGenerateUserID()
 			otherKeyPair := model.MustGenerateKeyPair()
 			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
+			_ = accounts.SetRegistrationFlag(context.Background(), otherUser, true)
 
 			newExpectedMember := &chatpb.Member{
 				UserId:            otherUser,
@@ -392,6 +395,7 @@ func testServer(
 			otherUser := model.MustGenerateUserID()
 			otherKeyPair := model.MustGenerateKeyPair()
 			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
+			_ = accounts.SetRegistrationFlag(context.Background(), otherUser, true)
 
 			newExpectedMembers := protoutil.SliceClone(expectedMembers)
 			for _, m := range newExpectedMembers {
@@ -477,6 +481,7 @@ func testServer(
 			otherUser := model.MustGenerateUserID()
 			otherKeyPair := model.MustGenerateKeyPair()
 			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
+			_ = accounts.SetRegistrationFlag(context.Background(), otherUser, true)
 
 			newExpectedMembers := protoutil.SliceClone(expectedMembers)
 			for _, m := range newExpectedMembers {
@@ -580,6 +585,7 @@ func testServer(
 			otherUser := model.MustGenerateUserID()
 			otherKeyPair := model.MustGenerateKeyPair()
 			_, _ = accounts.Bind(context.Background(), otherUser, otherKeyPair.Proto())
+			_ = accounts.SetRegistrationFlag(context.Background(), otherUser, true)
 
 			join := &chatpb.JoinChatRequest{
 				Identifier:            &chatpb.JoinChatRequest_ChatId{ChatId: created.Chat.ChatId},
@@ -777,6 +783,7 @@ func testServer(
 		streamUser := model.MustGenerateUserID()
 		streamKeyPair := model.MustGenerateKeyPair()
 		_, _ = accounts.Bind(ctx, streamUser, streamKeyPair.Proto())
+		_ = accounts.SetRegistrationFlag(context.Background(), streamUser, true)
 
 		streamUserProfile := &profilepb.UserProfile{DisplayName: "Stream User"}
 		require.NoError(t, profiles.SetDisplayName(context.Background(), streamUser, streamUserProfile.DisplayName))
@@ -1072,6 +1079,7 @@ func testServer(
 		streamUser := model.MustGenerateUserID()
 		streamKeyPair := model.MustGenerateKeyPair()
 		_, _ = accounts.Bind(context.Background(), streamUser, streamKeyPair.Proto())
+		_ = accounts.SetRegistrationFlag(context.Background(), streamUser, true)
 
 		params := &chatpb.StreamChatEventsRequest_Params{
 			Ts: timestamppb.Now(),
