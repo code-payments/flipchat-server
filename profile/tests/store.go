@@ -54,6 +54,9 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	_, err := s.GetXProfile(ctx, userID1)
 	require.Equal(t, profile.ErrNotFound, err)
 
+	_, err = s.GetUserLinkedToXAccount(ctx, "1")
+	require.Equal(t, profile.ErrNotFound, err)
+
 	// Link an initial X account to user 1
 	expected1 := &profilepb.XProfile{
 		Id:            "1",
@@ -86,6 +89,10 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	require.NoError(t, err)
 	require.NoError(t, protoutil.ProtoEqualError(expected1, fullProfile.SocialProfiles[0].GetX()))
 
+	actualUserID, err := s.GetUserLinkedToXAccount(ctx, expected1.Id)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(userID1, actualUserID))
+
 	// Link the original X account to user 2, which removes the link from user 1
 	require.NoError(t, s.LinkXAccount(ctx, userID2, expected1, "accessToken3"))
 
@@ -99,6 +106,10 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	fullProfile, err = s.GetProfile(ctx, userID2)
 	require.NoError(t, err)
 	require.NoError(t, protoutil.ProtoEqualError(expected1, fullProfile.SocialProfiles[0].GetX()))
+
+	actualUserID, err = s.GetUserLinkedToXAccount(ctx, expected1.Id)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(userID2, actualUserID))
 
 	// Relink the X account with updated user metadata, which should cause a refresh
 	expected3 := &profilepb.XProfile{
@@ -119,4 +130,8 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	fullProfile, err = s.GetProfile(ctx, userID2)
 	require.NoError(t, err)
 	require.NoError(t, protoutil.ProtoEqualError(expected3, fullProfile.SocialProfiles[0].GetX()))
+
+	actualUserID, err = s.GetUserLinkedToXAccount(ctx, expected1.Id)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(userID2, actualUserID))
 }

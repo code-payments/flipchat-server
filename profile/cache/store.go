@@ -63,6 +63,10 @@ func (c *Cache) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*prof
 	return c.db.GetXProfile(ctx, userID)
 }
 
+func (c *Cache) GetUserLinkedToXAccount(ctx context.Context, xUserID string) (*commonpb.UserId, error) {
+	return c.db.GetUserLinkedToXAccount(ctx, xUserID)
+}
+
 func toCacheKey(id *commonpb.UserId) string {
 	return model.UserIDString(id)
 }

@@ -123,8 +123,14 @@ func (s *Server) LinkSocialAccount(ctx context.Context, req *profilepb.LinkSocia
 		protoXUser := xUser.ToProto()
 
 		if err := protoXUser.Validate(); err != nil {
-			log.Warn("Failed to validate proto x profile")
-			return nil, status.Error(codes.Internal, "failed to validate proto x profile")
+			log.Warn("Failed to validate proto profile")
+			return nil, status.Error(codes.Internal, "failed to validate proto profile")
+		}
+
+		previouslyLinkedUser, err := s.profiles.GetUserLinkedToXAccount(ctx, xUser.ID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			log.Warn("Failed to get previously linked user")
+			return nil, status.Error(codes.Internal, "failed to get previously linked user")
 		}
 
 		err = s.profiles.LinkXAccount(ctx, userID, protoXUser, typed.X.AccessToken)
@@ -133,12 +139,16 @@ func (s *Server) LinkSocialAccount(ctx context.Context, req *profilepb.LinkSocia
 		case ErrExistingSocialLink:
 			return &profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_EXISTING_LINK}, nil
 		default:
-			log.Warn("failed to link x account", zap.Error(err))
-			return nil, status.Error(codes.Internal, "failed to link x account")
+			log.Warn("failed to link account", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to link account")
 		}
 
-		// todo: Also need to send an update for the user that go unlinked
-		go s.events.OnProfileUpdated(context.Background(), userID)
+		go func() {
+			if previouslyLinkedUser != nil {
+				s.events.OnProfileUpdated(context.Background(), previouslyLinkedUser)
+			}
+			s.events.OnProfileUpdated(context.Background(), userID)
+		}()
 
 		return &profilepb.LinkSocialAccountResponse{SocialProfile: &profilepb.SocialProfile{
 			Type: &profilepb.SocialProfile_X{
