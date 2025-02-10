@@ -75,6 +75,8 @@ func testServer(t *testing.T, store account.Store) {
 	})
 
 	t.Run("AuthorizePublicKey", func(t *testing.T) {
+		t.Skip("RPC disabled")
+
 		for i := 1; i < 10; i++ {
 			newPair := model.MustGenerateKeyPair()
 			req := &accountpb.AuthorizePublicKeyRequest{
@@ -120,6 +122,8 @@ func testServer(t *testing.T, store account.Store) {
 	})
 
 	t.Run("Cannot Remove Another Accounts Key", func(t *testing.T) {
+		t.Skip("RPC disabled")
+
 		other := model.MustGenerateKeyPair()
 		register := &accountpb.RegisterRequest{
 			PublicKey: other.Proto(),
@@ -143,6 +147,8 @@ func testServer(t *testing.T, store account.Store) {
 	})
 
 	t.Run("Cannot Remove Another Accounts Key Indirectly", func(t *testing.T) {
+		t.Skip("RPC disabled")
+
 		other := model.MustGenerateKeyPair()
 		register := &accountpb.RegisterRequest{
 			PublicKey: other.Proto(),
@@ -174,6 +180,8 @@ func testServer(t *testing.T, store account.Store) {
 	})
 
 	t.Run("RevokePublicKey - Other", func(t *testing.T) {
+		t.Skip("RPC disabled")
+
 		remove := keys[len(keys)-1]
 		keys = keys[:len(keys)-1]
 
@@ -210,6 +218,8 @@ func testServer(t *testing.T, store account.Store) {
 	})
 
 	t.Run("RevokePublicKey - Self", func(t *testing.T) {
+		t.Skip("RPC disabled")
+
 		for len(keys) > 1 {
 			key := keys[len(keys)-1]
 			keys = keys[:len(keys)-1]
@@ -246,6 +256,8 @@ func testServer(t *testing.T, store account.Store) {
 	})
 
 	t.Run("Cannot remove last", func(t *testing.T) {
+		t.Skip("RPC disabled")
+
 		key := keys[0]
 		req := &accountpb.RevokePublicKeyRequest{
 			UserId:    userId,
