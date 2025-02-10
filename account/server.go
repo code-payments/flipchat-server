@@ -110,6 +110,10 @@ func (s *Server) Login(ctx context.Context, req *accountpb.LoginRequest) (*accou
 }
 
 func (s *Server) AuthorizePublicKey(ctx context.Context, req *accountpb.AuthorizePublicKeyRequest) (*accountpb.AuthorizePublicKeyResponse, error) {
+	if true {
+		return &accountpb.AuthorizePublicKeyResponse{Result: accountpb.AuthorizePublicKeyResponse_DENIED}, nil
+	}
+
 	pubKeys, err := s.store.GetPubKeys(ctx, req.UserId)
 	if err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "failed to lookup user")
@@ -152,6 +156,10 @@ func (s *Server) AuthorizePublicKey(ctx context.Context, req *accountpb.Authoriz
 }
 
 func (s *Server) RevokePublicKey(ctx context.Context, req *accountpb.RevokePublicKeyRequest) (*accountpb.RevokePublicKeyResponse, error) {
+	if true {
+		return &accountpb.RevokePublicKeyResponse{Result: accountpb.RevokePublicKeyResponse_DENIED}, nil
+	}
+
 	authorized, err := s.store.GetPubKeys(ctx, req.UserId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get keys")

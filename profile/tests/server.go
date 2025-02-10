@@ -10,30 +10,39 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
-	"github.com/code-payments/flipchat-server/account"
-	"github.com/code-payments/flipchat-server/model"
-	"github.com/code-payments/flipchat-server/social/x"
 
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/chat"
+	"github.com/code-payments/flipchat-server/event"
+	event_rpc "github.com/code-payments/flipchat-server/event/rpc"
+	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
+	"github.com/code-payments/flipchat-server/social/x"
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
-func RunServerTests(t *testing.T, accounts account.Store, profiles profile.Store, teardown func()) {
-	for _, tf := range []func(t *testing.T, accounts account.Store, profiles profile.Store){
+func RunServerTests(t *testing.T, accounts account.Store, chats chat.Store, profiles profile.Store, teardown func()) {
+	for _, tf := range []func(t *testing.T, accounts account.Store, chats chat.Store, profiles profile.Store){
 		testServer,
 	} {
-		tf(t, accounts, profiles)
+		tf(t, accounts, chats, profiles)
 		teardown()
 	}
 }
 
-func testServer(t *testing.T, accounts account.Store, profiles profile.Store) {
+func testServer(t *testing.T, accounts account.Store, chats chat.Store, profiles profile.Store) {
 	authz := account.NewAuthorizer(zap.Must(zap.NewDevelopment()), accounts, auth.NewKeyPairAuthenticator())
 
-	serv := profile.NewServer(zap.Must(zap.NewDevelopment()), accounts, profiles, x.NewClient(), authz)
+	bus := event.NewBus[*commonpb.ChatId, *event.ChatEvent](func(id *commonpb.ChatId) []byte {
+		return id.Value
+	})
+	eventGenerator := event_rpc.NewProfileEventGenerator(zap.Must(zap.NewDevelopment()), chats, profiles, bus)
+
+	serv := profile.NewServer(zap.Must(zap.NewDevelopment()), accounts, profiles, x.NewClient(), eventGenerator, authz)
 	cc := testutil.RunGRPCServer(t, testutil.WithService(func(s *grpc.Server) {
 		profilepb.RegisterProfileServer(s, serv)
 	}))
@@ -127,13 +136,19 @@ func testServer(t *testing.T, accounts account.Store, profiles profile.Store) {
 		require.NoError(t, err)
 		require.NoError(t, protoutil.ProtoEqualError(&profilepb.SetDisplayNameResponse{Result: profilepb.SetDisplayNameResponse_DENIED}, setDisplayNameResp))
 
-		linkXAccount := &profilepb.LinkXAccountRequest{
-			AccessToken: "access_token",
+		linkXAccount := &profilepb.LinkSocialAccountRequest{
+			LinkingToken: &profilepb.LinkSocialAccountRequest_LinkingToken{
+				Type: &profilepb.LinkSocialAccountRequest_LinkingToken_X{
+					X: &profilepb.LinkSocialAccountRequest_LinkingToken_XLinkingToken{
+						AccessToken: "access_token",
+					},
+				},
+			},
 		}
 		require.NoError(t, keypair2.Auth(linkXAccount, &linkXAccount.Auth))
-		linkXAccountResp, err := client.LinkXAccount(context.Background(), linkXAccount)
+		linkXAccountResp, err := client.LinkSocialAccount(context.Background(), linkXAccount)
 		require.NoError(t, err)
-		require.NoError(t, protoutil.ProtoEqualError(&profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_DENIED}, linkXAccountResp))
+		require.NoError(t, protoutil.ProtoEqualError(&profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_DENIED}, linkXAccountResp))
 
 		get, err := client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
 			UserId: userID2,

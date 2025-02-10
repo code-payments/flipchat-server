@@ -164,6 +164,21 @@ func (s *store) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*prof
 	return fromXUserModel(res)
 }
 
+func (s *store) GetUserLinkedToXAccount(ctx context.Context, xUserID string) (*commonpb.UserId, error) {
+	res, err := s.client.XUser.FindUnique(db.XUser.ID.Equals(xUserID)).Exec(ctx)
+	if errors.Is(err, db.ErrNotFound) {
+		return nil, profile.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+
+	decodedUserID, err := pg.Decode(res.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &commonpb.UserId{Value: decodedUserID}, nil
+}
+
 func fromXUserModel(m *db.XUserModel) (*profilepb.XProfile, error) {
 	return &profilepb.XProfile{
 		Id:            m.ID,

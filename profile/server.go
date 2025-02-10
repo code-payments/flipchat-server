@@ -13,6 +13,7 @@ import (
 
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
+	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/social/x"
 )
@@ -22,17 +23,19 @@ type Server struct {
 	accounts account.Store
 	profiles Store
 	xClient  *x.Client
+	events   event.ProfileGenerator
 	authz    auth.Authorizer
 
 	profilepb.UnimplementedProfileServer
 }
 
-func NewServer(log *zap.Logger, accounts account.Store, profiles Store, xClient *x.Client, authz auth.Authorizer) *Server {
+func NewServer(log *zap.Logger, accounts account.Store, profiles Store, xClient *x.Client, events event.ProfileGenerator, authz auth.Authorizer) *Server {
 	return &Server{
 		log:      log,
 		accounts: accounts,
 		profiles: profiles,
 		xClient:  xClient,
+		events:   events,
 		authz:    authz,
 	}
 }
@@ -82,10 +85,12 @@ func (s *Server) SetDisplayName(ctx context.Context, req *profilepb.SetDisplayNa
 		return nil, status.Error(codes.Internal, "failed to set display name")
 	}
 
+	go s.events.OnProfileUpdated(context.Background(), userID)
+
 	return &profilepb.SetDisplayNameResponse{}, nil
 }
 
-func (s *Server) LinkXAccount(ctx context.Context, req *profilepb.LinkXAccountRequest) (*profilepb.LinkXAccountResponse, error) {
+func (s *Server) LinkSocialAccount(ctx context.Context, req *profilepb.LinkSocialAccountRequest) (*profilepb.LinkSocialAccountResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
 		return nil, err
@@ -98,35 +103,59 @@ func (s *Server) LinkXAccount(ctx context.Context, req *profilepb.LinkXAccountRe
 		log.Info("Failed to get registration flag")
 		return nil, status.Errorf(codes.Internal, "failed to get registration flag")
 	} else if !isRegistered {
-		return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_DENIED}, nil
+		return &profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_DENIED}, nil
 	}
 
-	xUser, err := s.xClient.GetMyUser(ctx, req.AccessToken)
-	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "http status code: 403") {
-			return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_INVALID_ACCESS_TOKEN}, nil
+	switch typed := req.LinkingToken.Type.(type) {
+	case *profilepb.LinkSocialAccountRequest_LinkingToken_X:
+		log = log.With(zap.String("social_account_type", "x"))
+
+		xUser, err := s.xClient.GetMyUser(ctx, typed.X.AccessToken)
+		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "http status code: 403") {
+				return &profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_INVALID_LINKING_TOKEN}, nil
+			}
+
+			log.Warn("Failed to get user from x", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to get user from x")
 		}
 
-		log.Warn("Failed to get user from x", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to get user from x")
-	}
+		protoXUser := xUser.ToProto()
 
-	protoXUser := xUser.ToProto()
+		if err := protoXUser.Validate(); err != nil {
+			log.Warn("Failed to validate proto profile")
+			return nil, status.Error(codes.Internal, "failed to validate proto profile")
+		}
 
-	if err := protoXUser.Validate(); err != nil {
-		log.Warn("Failed to validate proto x profile")
-		return nil, status.Error(codes.Internal, "failed to validate proto x profile")
-	}
+		previouslyLinkedUser, err := s.profiles.GetUserLinkedToXAccount(ctx, xUser.ID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			log.Warn("Failed to get previously linked user")
+			return nil, status.Error(codes.Internal, "failed to get previously linked user")
+		}
 
-	err = s.profiles.LinkXAccount(ctx, userID, protoXUser, req.AccessToken)
-	switch err {
-	case nil:
-	case ErrExistingSocialLink:
-		return &profilepb.LinkXAccountResponse{Result: profilepb.LinkXAccountResponse_EXISTING_LINK}, nil
+		err = s.profiles.LinkXAccount(ctx, userID, protoXUser, typed.X.AccessToken)
+		switch err {
+		case nil:
+		case ErrExistingSocialLink:
+			return &profilepb.LinkSocialAccountResponse{Result: profilepb.LinkSocialAccountResponse_EXISTING_LINK}, nil
+		default:
+			log.Warn("failed to link account", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to link account")
+		}
+
+		go func() {
+			if previouslyLinkedUser != nil {
+				s.events.OnProfileUpdated(context.Background(), previouslyLinkedUser)
+			}
+			s.events.OnProfileUpdated(context.Background(), userID)
+		}()
+
+		return &profilepb.LinkSocialAccountResponse{SocialProfile: &profilepb.SocialProfile{
+			Type: &profilepb.SocialProfile_X{
+				X: protoXUser,
+			},
+		}}, nil
 	default:
-		log.Warn("failed to link x account", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to link x account")
+		return nil, status.Error(codes.Unimplemented, "unsupported linking token type")
 	}
-
-	return &profilepb.LinkXAccountResponse{XProfile: protoXUser}, nil
 }

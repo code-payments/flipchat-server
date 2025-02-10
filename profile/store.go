@@ -26,4 +26,7 @@ type Store interface {
 
 	// GetXProfile gets a user's X profile if it has been linked
 	GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error)
+
+	// GetUserLinkedToXAccount gets the user linked to X account
+	GetUserLinkedToXAccount(ctx context.Context, xUserID string) (*commonpb.UserId, error)
 }

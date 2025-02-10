@@ -1056,6 +1056,16 @@ func (s *Server) PromoteUser(ctx context.Context, req *chatpb.PromoteUserRequest
 		return nil, status.Errorf(codes.Internal, "failed to get chat member")
 	}
 
+	// todo: this needs tests
+	isRegistered, err := s.accounts.IsRegistered(ctx, memberToPromote.UserID)
+	if err != nil {
+		log.Warn("Failed to get member registration status")
+		return nil, status.Errorf(codes.Internal, "failed to get member registration status")
+	}
+	if !isRegistered {
+		return &chatpb.PromoteUserResponse{Result: chatpb.PromoteUserResponse_DENIED}, nil
+	}
+
 	if req.EnableSendPermission {
 		if memberToPromote.HasSendPermission {
 			return &chatpb.PromoteUserResponse{}, nil
@@ -1091,7 +1101,7 @@ func (s *Server) PromoteUser(ctx context.Context, req *chatpb.PromoteUserRequest
 				},
 			}})
 			if err != nil {
-				s.log.Warn("Failed to notify member demoted", zap.Error(err))
+				s.log.Warn("Failed to notify member promoted", zap.Error(err))
 			}
 		}()
 	}
@@ -1151,7 +1161,16 @@ func (s *Server) DemoteUser(ctx context.Context, req *chatpb.DemoteUserRequest) 
 		}
 
 		go func() {
-			// todo: announcement?
+			ctx := context.Background()
+
+			if err = messaging.SendAnnouncement(
+				ctx,
+				s.messenger,
+				req.ChatId,
+				messaging.NewUserDemotedToListenerAnnouncementContentBuilder(ctx, s.profiles, req.UserId),
+			); err != nil {
+				log.Warn("Failed to send announcement", zap.Error(err))
+			}
 
 			err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, MemberUpdates: []*chatpb.MemberUpdate{
 				{
@@ -1544,7 +1563,8 @@ func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Membe
 			return fmt.Errorf("failed to get user profile: %w", err)
 		}
 		m.Identity = &chatpb.MemberIdentity{
-			DisplayName: p.GetDisplayName(),
+			DisplayName:    p.GetDisplayName(),
+			SocialProfiles: p.GetSocialProfiles(),
 		}
 
 		if chatID == nil {

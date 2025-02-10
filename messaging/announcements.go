@@ -107,7 +107,7 @@ func NewMessagingFeeChangedAnnouncementContentBuilder(ctx context.Context, profi
 		return &messagingpb.Content{
 			Type: &messagingpb.Content_LocalizedAnnouncement{
 				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
-					KeyOrText: kinAmountPrinter.Sprintf("%s changed the messaging fee to ⬢ %d Kin", profile.DisplayName, codekin.FromQuarks(quarks)),
+					KeyOrText: kinAmountPrinter.Sprintf("%s changed the Listener Message fee ⬢ %d Kin", profile.DisplayName, codekin.FromQuarks(quarks)),
 				},
 			},
 		}, nil
@@ -130,6 +130,23 @@ func NewUserPromotedToSpeakerAnnouncementContentBuilder(ctx context.Context, pro
 			Type: &messagingpb.Content_LocalizedAnnouncement{
 				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
 					KeyOrText: fmt.Sprintf("%s made %s a Speaker", promoterProfile.DisplayName, promoteeProfile.DisplayName),
+				},
+			},
+		}, nil
+	}
+}
+
+func NewUserDemotedToListenerAnnouncementContentBuilder(ctx context.Context, profiles profile.Store, userID *commonpb.UserId) AnnouncementContentBuilder {
+	return func() (*messagingpb.Content, error) {
+		profile, err := profiles.GetProfile(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &messagingpb.Content{
+			Type: &messagingpb.Content_LocalizedAnnouncement{
+				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
+					KeyOrText: fmt.Sprintf("%s is no longer a Speaker", profile.DisplayName),
 				},
 			},
 		}, nil
