@@ -214,25 +214,6 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		return t.GetPong() != nil
 	})
 
-	var latestOnly bool
-	var resumeFrom *messagingpb.MessageId
-	switch typed := params.Resume.(type) {
-	case *messagingpb.StreamMessagesRequest_Params_LastKnownMessageId:
-		resumeFrom = typed.LastKnownMessageId // todo: this needs tests
-	case *messagingpb.StreamMessagesRequest_Params_LatestOnly:
-		latestOnly = typed.LatestOnly // todo: this needs tests
-	}
-	if !latestOnly {
-		isStaff, err := s.accounts.IsStaff(ctx, userID)
-		if err != nil {
-			log.Warn("Failed to get staff flag", zap.Error(err))
-			return status.Error(codes.Internal, "failed to get staff flag")
-		}
-		if !isStaff {
-			go s.flushMessages(ctx, params.ChatId, userID, resumeFrom, ss)
-		}
-	}
-
 	for {
 		select {
 		case batch, ok := <-ss.Channel():
@@ -488,39 +469,6 @@ func (s *Server) handleChatUpdates(chatID *commonpb.ChatId, event *event.ChatEve
 	for _, stream := range streams {
 		if err := stream.Notify(event, streamTimeout); err != nil {
 			s.log.Warn("Failed to notify stream", zap.Error(err), zap.String("user_id", stream.ID()))
-		}
-	}
-}
-
-func (s *Server) flushMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, resumeFrom *messagingpb.MessageId, stream event.Stream[*event.ChatEvent]) {
-	log := s.log.With(
-		zap.String("user_id", model.UserIDString(userID)),
-		zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)),
-	)
-	queryOptions := []query.Option{query.WithLimit(10240)} // todo: paged calls
-	if resumeFrom != nil {
-		queryOptions = append(queryOptions, query.WithToken(&commonpb.PagingToken{Value: resumeFrom.Value}))
-	}
-	messages, err := s.messages.GetPagedMessages(ctx, chatID, queryOptions...)
-	if err != nil {
-		log.Warn("Failed to get messages for flush", zap.Error(err))
-		return
-	}
-	var batch []*messagingpb.Message
-	for _, message := range messages {
-		batch = append(batch, message)
-		if len(batch) >= flushedMessageBatchSize {
-			if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: batch}, streamTimeout); err != nil {
-				log.Info("Failed to send message to stream", zap.Error(err))
-				return
-			}
-			batch = nil
-		}
-	}
-	if len(batch) > 0 {
-		if err = stream.Notify(&event.ChatEvent{ChatID: chatID, FlushedMessages: batch}, streamTimeout); err != nil {
-			log.Info("Failed to send message to stream", zap.Error(err))
-			return
 		}
 	}
 }
