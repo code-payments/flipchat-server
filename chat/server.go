@@ -48,7 +48,7 @@ const (
 )
 
 var (
-	InitialMessagingFee = codekin.ToQuarks(100)
+	InitialMessagingFee = codekin.ToQuarks(10)
 	MaxUnreadCount      = uint32(99)
 )
 
