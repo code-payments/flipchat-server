@@ -48,7 +48,7 @@ const (
 )
 
 var (
-	InitialMessagingFee = codekin.ToQuarks(100)
+	InitialMessagingFee = codekin.ToQuarks(5)
 	MaxUnreadCount      = uint32(99)
 )
 
@@ -531,17 +531,11 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		ctx := context.Background()
 
 		if md.Type == chatpb.Metadata_GROUP {
-			announcementContentBuilder := messaging.NewRoomIsLiveAnnouncementContentBuilder(md.RoomNumber)
-			isStaff, _ := s.accounts.IsStaff(ctx, userID)
-			if isStaff {
-				announcementContentBuilder = messaging.NewFlipchatIsLiveAnnouncementContentBuilder(md.RoomNumber)
-			}
-
 			if err := messaging.SendAnnouncement(
 				ctx,
 				s.messenger,
 				md.ChatId,
-				announcementContentBuilder,
+				messaging.NewFlipchatIsLiveAnnouncementContentBuilder(md.RoomNumber),
 			); err != nil {
 				log.Warn("Failed to send announcement", zap.Error(err))
 			}
@@ -584,30 +578,9 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 
 	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
 
-	hasPaymentIntent := req.PaymentIntent != nil
-	var paymentMetadata chatpb.JoinChatPaymentMetadata
-
-	if hasPaymentIntent {
-		if req.WithoutSendPermission {
-			log.Warn("Users should not pay for a chat they can't send messages in", zap.Error(err))
-			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-		}
-
-		isFulfilled, err := s.intents.IsFulfilled(ctx, req.PaymentIntent)
-		if err != nil {
-			log.Warn("Failed to check if intent is already fulfilled", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to check if intent is already fulfilled")
-		} else if isFulfilled {
-			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-		}
-
-		_, err = intent.LoadPaymentMetadata(ctx, s.codeData, req.PaymentIntent, &paymentMetadata)
-		if err == intent.ErrNoPaymentMetadata {
-			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-		} else if err != nil {
-			log.Warn("Failed to get payment metadata", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
-		}
+	if req.PaymentIntent != nil {
+		// Join flows through payment is deprecated
+		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	}
 
 	var chatID *commonpb.ChatId
@@ -634,16 +607,7 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 	isOwner := chatMetadata.Owner != nil && bytes.Equal(chatMetadata.Owner.Value, userID.Value)
 	isSpectator := req.WithoutSendPermission
 
-	if hasPaymentIntent {
-		// Verify the provided payment is for this user joining the specified
-		// chat.
-		if !bytes.Equal(paymentMetadata.UserId.Value, userID.Value) {
-			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-		}
-		if !bytes.Equal(paymentMetadata.ChatId.Value, chatID.Value) {
-			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-		}
-	} else if !isOwner && !isSpectator {
+	if !isOwner && !isSpectator {
 		return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
 	}
 
@@ -658,44 +622,9 @@ func (s *Server) JoinChat(ctx context.Context, req *chatpb.JoinChatRequest) (*ch
 		newMember.HasModPermission = true
 	}
 
-	// todo: put this logic in a DB transaction alongside member add
-	if hasPaymentIntent {
-		newMember.HasSendPermission = true
-
-		isMember, err := s.chats.IsMember(ctx, chatID, userID)
-		if err != nil {
-			log.Warn("Failed to check if user is already a member", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to check if user is already a member")
-		}
-
-		if isMember {
-			err := s.chats.SetSendPermission(ctx, chatID, userID, true)
-			if err != nil {
-				log.Warn("Failed to set send permission", zap.Error(err))
-				return nil, status.Errorf(codes.Internal, "failed to set send permission")
-			}
-		} else {
-			if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {
-				log.Warn("Failed to put chat member", zap.Error(err))
-				return nil, status.Errorf(codes.Internal, "failed to put chat member")
-			}
-		}
-
-		err = s.intents.MarkFulfilled(ctx, req.PaymentIntent)
-		if err == intent.ErrAlreadyFulfilled {
-			return &chatpb.JoinChatResponse{Result: chatpb.JoinChatResponse_DENIED}, nil
-		} else if err != nil {
-			s.log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
-		}
-
-	} else {
-
-		if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {
-			log.Warn("Failed to put chat spectator", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to put chat member")
-		}
-
+	if err = s.chats.AddMember(ctx, chatID, newMember); err != nil {
+		log.Warn("Failed to put chat spectator", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to put chat member")
 	}
 
 	md, members, err := s.getMetadataWithMembers(ctx, chatID, userID)
@@ -940,9 +869,9 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 
 		var announcementContentBuilder messaging.AnnouncementContentBuilder
 		if len(req.DisplayName) > 0 {
-			announcementContentBuilder = messaging.NewRoomDisplayNameChangedAnnouncementContentBuilder(md.RoomNumber, req.DisplayName)
+			announcementContentBuilder = messaging.NewFlipchatDisplayNameChangedAnnouncementContentBuilder(ctx, s.profiles, userID, md.RoomNumber, req.DisplayName)
 		} else {
-			announcementContentBuilder = messaging.NewRoomDisplayNameRemovedAnnouncementContentBuilder()
+			announcementContentBuilder = messaging.NewFlipchatDisplayNameRemovedAnnouncementContentBuilder(ctx, s.profiles, userID)
 		}
 		if err = messaging.SendAnnouncement(
 			ctx,
@@ -968,75 +897,6 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 	}()
 
 	return &chatpb.SetDisplayNameResponse{}, nil
-}
-
-// todo: Deprecate this RPC
-func (s *Server) SetCoverCharge(ctx context.Context, req *chatpb.SetCoverChargeRequest) (*chatpb.SetCoverChargeResponse, error) {
-	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
-	if err != nil {
-		return nil, err
-	}
-
-	log := s.log.With(
-		zap.String("user_id", model.UserIDString(userID)),
-		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
-	)
-
-	md, err := s.getMetadata(ctx, req.ChatId, nil)
-	if err == ErrChatNotFound {
-		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
-	} else if err != nil {
-		log.Warn("Failed to get chat", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to get chat")
-	}
-
-	if md.Type != chatpb.Metadata_GROUP {
-		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
-	}
-	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
-		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_DENIED}, nil
-	}
-	if md.MessagingFee == nil {
-		return &chatpb.SetCoverChargeResponse{Result: chatpb.SetCoverChargeResponse_CANT_SET}, nil
-	}
-
-	if md.MessagingFee.Quarks == req.CoverCharge.Quarks {
-		return &chatpb.SetCoverChargeResponse{}, nil
-	}
-
-	err = s.chats.SetMessagingFee(ctx, req.ChatId, req.CoverCharge)
-	if err != nil {
-		log.Warn("Failed to set cover charge", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to set cover charge")
-	}
-
-	go func() {
-		ctx := context.Background()
-
-		if err = messaging.SendAnnouncement(
-			ctx,
-			s.messenger,
-			req.ChatId,
-			messaging.NewCoverChangedAnnouncementContentBuilder(req.CoverCharge.Quarks),
-		); err != nil {
-			log.Warn("Failed to send announcement", zap.Error(err))
-		}
-
-		err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
-			{
-				Kind: &chatpb.MetadataUpdate_MessagingFeeChanged_{
-					MessagingFeeChanged: &chatpb.MetadataUpdate_MessagingFeeChanged{
-						NewMessagingFee: req.CoverCharge,
-					},
-				},
-			},
-		}})
-		if err != nil {
-			s.log.Warn("Failed to notify cover changed", zap.Error(err))
-		}
-	}()
-
-	return &chatpb.SetCoverChargeResponse{}, nil
 }
 
 func (s *Server) SetMessagingFee(ctx context.Context, req *chatpb.SetMessagingFeeRequest) (*chatpb.SetMessagingFeeResponse, error) {
@@ -1074,7 +934,7 @@ func (s *Server) SetMessagingFee(ctx context.Context, req *chatpb.SetMessagingFe
 
 	err = s.chats.SetMessagingFee(ctx, req.ChatId, req.MessagingFee)
 	if err != nil {
-		log.Warn("Failed to set cover charge", zap.Error(err))
+		log.Warn("Failed to set messaging fee", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to set messaging fee")
 	}
 

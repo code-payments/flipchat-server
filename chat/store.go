@@ -72,7 +72,6 @@ func (m *Member) ToProto(self *commonpb.UserId) *chatpb.Member {
 	return member
 }
 
-// todo: APIs for opening/closing a room
 type Store interface {
 	GetChatID(ctx context.Context, roomID uint64) (*commonpb.ChatId, error)
 
