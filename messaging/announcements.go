@@ -121,7 +121,7 @@ func NewMessagingFeeChangedAnnouncementContentBuilder(ctx context.Context, profi
 		return &messagingpb.Content{
 			Type: &messagingpb.Content_LocalizedAnnouncement{
 				LocalizedAnnouncement: &messagingpb.LocalizedAnnouncementContent{
-					KeyOrText: kinAmountPrinter.Sprintf("%s changed the Listener Message fee to ⬢ %d Kin", profile.DisplayName, codekin.FromQuarks(quarks)),
+					KeyOrText: kinAmountPrinter.Sprintf("%s changed the Listener Message fee to ⬢\u00A0%d\u00A0Kin", profile.DisplayName, codekin.FromQuarks(quarks)),
 				},
 			},
 		}, nil
