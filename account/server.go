@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	accountpb "github.com/code-payments/flipchat-protobuf-api/generated/go/account/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
@@ -262,10 +263,14 @@ func (s *Server) GetUserFlags(ctx context.Context, req *accountpb.GetUserFlagsRe
 	return &accountpb.GetUserFlagsResponse{
 		Result: accountpb.GetUserFlagsResponse_OK,
 		UserFlags: &accountpb.UserFlags{
-			IsStaff:             isStaff,
-			IsRegisteredAccount: isRegistered,
-			StartGroupFee:       &commonpb.PaymentAmount{Quarks: flags.StartGroupFee},
-			FeeDestination:      &commonpb.PublicKey{Value: flags.FeeDestination.PublicKey().ToBytes()},
+			IsStaff:                                isStaff,
+			IsRegisteredAccount:                    isRegistered,
+			StartGroupFee:                          &commonpb.PaymentAmount{Quarks: flags.StartGroupFee},
+			FeeDestination:                         &commonpb.PublicKey{Value: flags.FeeDestination.PublicKey().ToBytes()},
+			CanSendIsTypingNotifications:           flags.CanSendIsTypingNotifications,
+			CanSendIsTypingNotificationsAsListener: flags.CanSendIsTypingNotificationsAsListener,
+			IsTypingNotificationInterval:           durationpb.New(flags.IsTypingNotificationInterval),
+			IsTypingNotificationTimeout:            durationpb.New(flags.IsTypingNotificationTimeout),
 		},
 	}, nil
 }
