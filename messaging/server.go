@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/flags"
 	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
@@ -56,6 +58,9 @@ type Server struct {
 	streamsMu sync.RWMutex
 	streams   map[string][]event.Stream[*event.ChatEvent]
 
+	activelyTypingUsersMu sync.RWMutex
+	activelyTypingUsers   map[string]*activelyTypingUser
+
 	messagingpb.UnimplementedMessagingServer
 }
 
@@ -84,9 +89,13 @@ func NewServer(
 		eventBus: eventBus,
 
 		streams: make(map[string][]event.Stream[*event.ChatEvent]),
+
+		activelyTypingUsers: make(map[string]*activelyTypingUser),
 	}
 
 	eventBus.AddHandler(event.HandlerFunc[*commonpb.ChatId, *event.ChatEvent](s.handleChatUpdates))
+
+	go s.isTypingTimeoutWorker()
 
 	return s
 }
@@ -451,6 +460,19 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 		s.log.Warn("Failed to notify event bus", zap.Error(err))
 	}
 
+	s.activelyTypingUsersMu.Lock()
+	userTypingKey := userTypingKey(req.ChatId, userID)
+	delete(s.activelyTypingUsers, userTypingKey)
+	switch isTyping.TypingState {
+	case messagingpb.TypingState_STARTED_TYPING, messagingpb.TypingState_STILL_TYPING:
+		s.activelyTypingUsers[userTypingKey] = &activelyTypingUser{
+			chatID:   req.ChatId,
+			userID:   userID,
+			lastSeen: time.Now(),
+		}
+	}
+	s.activelyTypingUsersMu.Unlock()
+
 	return &messagingpb.NotifyIsTypingResponse{}, nil
 }
 
@@ -472,4 +494,44 @@ func (s *Server) handleChatUpdates(chatID *commonpb.ChatId, event *event.ChatEve
 			s.log.Warn("Failed to notify stream", zap.Error(err), zap.String("user_id", stream.ID()))
 		}
 	}
+}
+
+type activelyTypingUser struct {
+	chatID   *commonpb.ChatId
+	userID   *commonpb.UserId
+	lastSeen time.Time
+}
+
+func (s *Server) isTypingTimeoutWorker() {
+	for {
+		time.Sleep(time.Second / 2)
+
+		s.activelyTypingUsersMu.Lock()
+
+		var keysToDelete []string
+		for _, activelyTypingUser := range s.activelyTypingUsers {
+			if time.Since(activelyTypingUser.lastSeen) >= flags.IsTypingNotificationTimeout {
+				isTyping := &messagingpb.IsTyping{
+					UserId:      activelyTypingUser.userID,
+					TypingState: messagingpb.TypingState_TYPING_TIMED_OUT,
+				}
+
+				if err := s.eventBus.OnEvent(activelyTypingUser.chatID, &event.ChatEvent{ChatID: activelyTypingUser.chatID, IsTyping: isTyping}); err != nil {
+					s.log.Warn("Failed to notify event bus", zap.Error(err))
+				}
+
+				keysToDelete = append(keysToDelete, userTypingKey(activelyTypingUser.chatID, activelyTypingUser.userID))
+			}
+		}
+
+		for _, keyToDelete := range keysToDelete {
+			delete(s.activelyTypingUsers, keyToDelete)
+		}
+
+		s.activelyTypingUsersMu.Unlock()
+	}
+}
+
+func userTypingKey(chatID *commonpb.ChatId, userID *commonpb.UserId) string {
+	return fmt.Sprintf("%s:%s", base64.StdEncoding.EncodeToString(chatID.Value), base64.RawStdEncoding.EncodeToString(userID.Value))
 }
