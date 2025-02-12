@@ -246,7 +246,17 @@ func (a *MessagingAuthorizer) CanAdvancePointer(ctx context.Context, chatID *com
 }
 
 func (a *MessagingAuthorizer) CanNotifyIsTyping(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, string, error) {
-	return a.chatMembershipCheck(ctx, chatID, userID)
+	member, err := a.chats.GetMember(ctx, chatID, userID)
+	if err == chat.ErrMemberNotFound {
+		return false, "not a chat member", nil
+	} else if err != nil {
+		return false, "", err
+	}
+
+	if !member.HasSendPermission {
+		return false, "not a speaker", nil
+	}
+	return true, "", nil
 }
 
 func (a *MessagingAuthorizer) chatMembershipCheck(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, string, error) {

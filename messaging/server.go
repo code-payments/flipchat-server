@@ -442,8 +442,9 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 	}
 
 	isTyping := &messagingpb.IsTyping{
-		UserId:   userID,
-		IsTyping: req.IsTyping,
+		UserId:      userID,
+		IsTyping:    req.IsTyping,
+		TypingState: req.TypingState,
 	}
 
 	if err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: req.ChatId, IsTyping: isTyping}); err != nil {
