@@ -433,6 +433,12 @@ func (s *Server) Send(ctx context.Context, chatID *commonpb.ChatId, msg *messagi
 }
 
 func (s *Server) AdvancePointer(ctx context.Context, req *messagingpb.AdvancePointerRequest) (*messagingpb.AdvancePointerResponse, error) {
+	switch req.Pointer.Type {
+	case messagingpb.Pointer_DELIVERED, messagingpb.Pointer_READ:
+	default:
+		return nil, status.Error(codes.InvalidArgument, "pointer type must be one of: [DELIVERED, READ]")
+	}
+
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
 		return nil, err

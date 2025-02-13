@@ -849,7 +849,7 @@ func testServerHappy(
 	})
 
 	t.Run("Advance Pointer", func(t *testing.T) {
-		for pt := messagingpb.Pointer_SENT; pt <= messagingpb.Pointer_READ; pt++ {
+		for pt := messagingpb.Pointer_DELIVERED; pt <= messagingpb.Pointer_READ; pt++ {
 			advance := &messagingpb.AdvancePointerRequest{
 				ChatId: chatID,
 				Pointer: &messagingpb.Pointer{
