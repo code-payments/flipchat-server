@@ -169,6 +169,31 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 
 			var updates []*chatpb.StreamChatEventsResponse_ChatUpdate
 			for _, e := range events {
+				// Don't route sent or delivery pointer updates on this stream for now.
+				// We still need read pointer updates for ourself so we can update unread
+				// counts.
+				//
+				// Note: We're guaranteed that no other fields have been set
+				//
+				// todo: Is there some other system we can implement that doesn't
+				//       rely on read pointer being sent here?
+				if e.PointerUpdate != nil {
+					if e.PointerUpdate.Pointer.Type != messagingpb.Pointer_READ {
+						continue
+					}
+
+					if !bytes.Equal(e.PointerUpdate.Member.Value, userID.Value) {
+						continue
+					}
+				}
+
+				// Don't route is typing notifications on this stream for now
+				//
+				// Note: We're guaranteed that no other fields have been set
+				if e.IsTyping != nil {
+					continue
+				}
+
 				isMember, err := s.chats.IsMember(ctx, e.ChatID, userID)
 				if err != nil {
 					log.Warn("Failed to check membership for event, dropping")
@@ -186,8 +211,6 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 					MetadataUpdates: clonedEvent.MetadataUpdates,
 					MemberUpdates:   clonedEvent.MemberUpdates,
 					LastMessage:     clonedEvent.MessageUpdate,
-					Pointer:         clonedEvent.PointerUpdate,
-					IsTyping:        clonedEvent.IsTyping,
 				}
 
 				// Inject unread count updates specific to this user for a latest message or read pointer update
@@ -1404,6 +1427,36 @@ func (s *Server) ReportUser(ctx context.Context, req *chatpb.ReportUserRequest) 
 }
 
 func (s *Server) OnChatEvent(chatID *commonpb.ChatId, e *event.ChatEvent) {
+	// Don't route sent or delivery pointer updates on this stream for now. We
+	// still need to route read pointers so we can update unread counts.
+	//
+	// Note: We're guaranteed that no other fields have been set
+	if e.PointerUpdate != nil {
+		if e.PointerUpdate.Pointer.Type != messagingpb.Pointer_READ {
+			return
+		}
+
+		// We only need to notify the member for the read pointer update,
+		// so no need to do a full member fetch
+		s.streamsMu.RLock()
+		stream, exists := s.streams[string(e.PointerUpdate.Member.Value)]
+		s.streamsMu.RUnlock()
+
+		if exists {
+			if err := stream.Notify([]*event.ChatEvent{e.Clone()}, StreamTimeout); err != nil {
+				s.log.Warn("Failed to send event", zap.Error(err))
+			}
+		}
+		return
+	}
+
+	// Don't route is typing notifications on this stream for now
+	//
+	// Note: We're guaranteed that no other fields have been set
+	if e.IsTyping != nil {
+		return
+	}
+
 	clonedEvent := e.Clone()
 
 	// Every new chat message with user content advances the last activity timestamp
