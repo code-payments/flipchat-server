@@ -14,7 +14,7 @@ var (
 	StartGroupFee = codekin.ToQuarks(100)
 
 	CanSendIsTypingNotifications           = true
-	CanSendIsTypingNotificationsAsListener = false
+	CanSendIsTypingNotificationsAsListener = true
 	IsTypingNotificationInterval           = 3 * time.Second
 	IsTypingNotificationTimeout            = 5 * time.Second
 )
