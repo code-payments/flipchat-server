@@ -130,7 +130,7 @@ func testServerHappy(
 		},
 	}))
 
-	eventCh := make(chan *messagingpb.MessageBatch, 1024)
+	eventCh := make(chan *messagingpb.StreamMessagesResponse, 1024)
 	go func() {
 		defer close(eventCh)
 		for {
@@ -151,8 +151,8 @@ func testServerHappy(
 				})
 			case *messagingpb.StreamMessagesResponse_Error:
 				log.Warn("Failure in stream", zap.Any("err", t.Error))
-			case *messagingpb.StreamMessagesResponse_Messages:
-				eventCh <- t.Messages
+			case *messagingpb.StreamMessagesResponse_Messages, *messagingpb.StreamMessagesResponse_PointerUpdates, *messagingpb.StreamMessagesResponse_IsTypingNotifications:
+				eventCh <- resp
 			}
 		}
 	}()
@@ -190,7 +190,8 @@ func testServerHappy(
 			expectedTextMessages = append(expectedTextMessages, sent.Message)
 
 			notification := <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			require.NotNil(t, notification.GetMessages())
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.GetMessages().Messages[0]))
 		}
 
 		for i := range 10 {
@@ -218,7 +219,8 @@ func testServerHappy(
 			expectedReplyMessages = append(expectedReplyMessages, sent.Message)
 
 			notification := <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			require.NotNil(t, notification.GetMessages())
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.GetMessages().Messages[0]))
 		}
 
 		for _, reference := range append(expectedTextMessages, expectedReplyMessages...) {
@@ -246,7 +248,8 @@ func testServerHappy(
 			expectedReactionMessages = append(expectedReactionMessages, sent.Message)
 
 			notification := <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			require.NotNil(t, notification.GetMessages())
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.GetMessages().Messages[0]))
 		}
 
 		for i, reference := range append(expectedTextMessages, expectedReplyMessages...) {
@@ -283,7 +286,8 @@ func testServerHappy(
 			expectedTipMessages = append(expectedTipMessages, sent.Message)
 
 			notification := <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			require.NotNil(t, notification.GetMessages())
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.GetMessages().Messages[0]))
 		}
 
 		for _, reference := range append(expectedTextMessages, append(expectedReplyMessages, expectedReactionMessages...)...) {
@@ -310,7 +314,8 @@ func testServerHappy(
 			expectedDeletedMessages = append(expectedDeletedMessages, sent.Message)
 
 			notification := <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			require.NotNil(t, notification.GetMessages())
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.GetMessages().Messages[0]))
 		}
 
 		t.Run("Send message with invalid reference", func(t *testing.T) {
@@ -701,7 +706,8 @@ func testServerHappy(
 			expectedTextMessages = append(expectedTextMessages, sent.Message)
 
 			notification := <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			require.NotNil(t, notification.GetMessages())
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.GetMessages().Messages[0]))
 
 			send = &messagingpb.SendMessageRequest{
 				ChatId: chatID,
@@ -728,7 +734,8 @@ func testServerHappy(
 			expectedReplyMessages = append(expectedReplyMessages, sent.Message)
 
 			notification = <-eventCh
-			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+			require.NotNil(t, notification.GetMessages())
+			require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.GetMessages().Messages[0]))
 
 			for _, reference := range append(expectedTextMessages, expectedReplyMessages...) {
 				if reference.WasSenderOffStage {
@@ -756,7 +763,8 @@ func testServerHappy(
 					expectedReviewMessages = append(expectedReviewMessages, sent.Message)
 
 					notification := <-eventCh
-					require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.Messages[0]))
+					require.NotNil(t, notification.GetMessages())
+					require.NoError(t, protoutil.ProtoEqualError(sent.Message, notification.GetMessages().Messages[0]))
 				}
 			}
 		})
@@ -813,16 +821,30 @@ func testServerHappy(
 	})
 
 	t.Run("Notify Typing", func(t *testing.T) {
-		for _, isTyping := range []bool{true, false} {
+		for _, typingState := range []messagingpb.TypingState{
+			messagingpb.TypingState_STARTED_TYPING,
+			messagingpb.TypingState_STILL_TYPING,
+			messagingpb.TypingState_STOPPED_TYPING,
+		} {
 			notify := &messagingpb.NotifyIsTypingRequest{
-				ChatId:   chatID,
-				IsTyping: isTyping,
+				ChatId:      chatID,
+				TypingState: typingState,
 			}
 			require.NoError(t, ownerKeyPair.Auth(notify, &notify.Auth))
 
 			resp, err := client.NotifyIsTyping(ctx, notify)
 			require.NoError(t, err)
 			require.Equal(t, messagingpb.NotifyIsTypingResponse_OK, resp.Result)
+
+			notification := <-eventCh
+			require.NotNil(t, notification.GetIsTypingNotifications())
+			require.NoError(t, protoutil.ProtoEqualError(
+				&messagingpb.IsTyping{
+					UserId:      ownerUserID,
+					TypingState: notify.TypingState,
+				},
+				notification.GetIsTypingNotifications().IsTypingNotifications[0],
+			))
 		}
 	})
 
@@ -840,6 +862,16 @@ func testServerHappy(
 			resp, err := client.AdvancePointer(ctx, advance)
 			require.NoError(t, err)
 			require.Equal(t, messagingpb.AdvancePointerResponse_OK, resp.Result)
+
+			notification := <-eventCh
+			require.NotNil(t, notification.GetPointerUpdates())
+			require.NoError(t, protoutil.ProtoEqualError(
+				&messagingpb.PointerUpdate{
+					Member:  ownerUserID,
+					Pointer: advance.Pointer,
+				},
+				notification.GetPointerUpdates().PointerUpdates[0],
+			))
 		}
 	})
 

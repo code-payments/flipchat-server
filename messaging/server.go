@@ -17,7 +17,6 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
@@ -166,30 +165,56 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 		}
 	}
 
-	ss := event.NewProtoEventStream[*event.ChatEvent, *messagingpb.MessageBatch](
+	ss := event.NewProtoEventStream[*event.ChatEvent, *messagingpb.StreamMessagesResponse](
 		userKey,
 		streamBufferSize,
-		func(e *event.ChatEvent) (*messagingpb.MessageBatch, bool) {
-			var messages []*messagingpb.Message
+		func(e *event.ChatEvent) (*messagingpb.StreamMessagesResponse, bool) {
+			// Guaranteed to have at most one of messages, pointers, or is typing
+			// notifications set
+			clonedEvent := e.Clone()
 
-			// Only one of these should be not nil at a time
+			var messages []*messagingpb.Message
 			if e.MessageUpdate != nil {
-				messages = append(messages, e.MessageUpdate)
+				messages = append(messages, clonedEvent.MessageUpdate)
 			}
 			if len(e.FlushedMessages) > 0 {
-				messages = append(messages, e.FlushedMessages...)
-			}
-
-			if len(messages) == 0 {
-				return nil, false
+				messages = append(messages, clonedEvent.FlushedMessages...)
 			}
 			if len(messages) > maxMessageEventBatchSize {
 				log.Warn("Message batch size exceeds proto limit")
 				return nil, false
 			}
-			return &messagingpb.MessageBatch{
-				Messages: messages,
-			}, true
+			if len(messages) > 0 {
+				return &messagingpb.StreamMessagesResponse{
+					Type: &messagingpb.StreamMessagesResponse_Messages{
+						Messages: &messagingpb.MessageBatch{
+							Messages: messages,
+						},
+					},
+				}, true
+			}
+
+			if clonedEvent.PointerUpdate != nil {
+				return &messagingpb.StreamMessagesResponse{
+					Type: &messagingpb.StreamMessagesResponse_PointerUpdates{
+						PointerUpdates: &messagingpb.PointerUpdateBatch{
+							PointerUpdates: []*messagingpb.PointerUpdate{clonedEvent.PointerUpdate},
+						},
+					},
+				}, true
+			}
+
+			if clonedEvent.IsTyping != nil {
+				return &messagingpb.StreamMessagesResponse{
+					Type: &messagingpb.StreamMessagesResponse_IsTypingNotifications{
+						IsTypingNotifications: &messagingpb.IsTypingBatch{
+							IsTypingNotifications: []*messagingpb.IsTyping{clonedEvent.IsTyping},
+						},
+					},
+				}, true
+			}
+
+			return nil, false
 		},
 	)
 
@@ -225,21 +250,26 @@ func (s *Server) StreamMessages(stream grpc.BidiStreamingServer[messagingpb.Stre
 
 	for {
 		select {
-		case batch, ok := <-ss.Channel():
+		case resp, ok := <-ss.Channel():
 			if !ok {
 				log.Log(minLogLevel, "Stream closed; ending stream")
 				return status.Error(codes.Aborted, "stream closed")
 			}
 
-			resp := &messagingpb.StreamMessagesResponse{
-				Type: &messagingpb.StreamMessagesResponse_Messages{
-					Messages: batch,
-				},
+			switch typed := resp.Type.(type) {
+			case *messagingpb.StreamMessagesResponse_Messages:
+				log.Log(minLogLevel, "Forwarding chat messages", zap.Int("batch_size", len(typed.Messages.Messages)))
+			case *messagingpb.StreamMessagesResponse_PointerUpdates:
+				log.Log(minLogLevel, "Forwarding pointer updates", zap.Int("batch_size", len(typed.PointerUpdates.PointerUpdates)))
+			case *messagingpb.StreamMessagesResponse_IsTypingNotifications:
+				log.Log(minLogLevel, "Forwarding is typing notifications", zap.Int("batch_size", len(typed.IsTypingNotifications.IsTypingNotifications)))
+			default:
+				log.Warn("Unexpected response generated from chat event")
+				return status.Error(codes.Internal, "unexpected response generated from chat event")
 			}
 
-			log.Log(minLogLevel, "Forwarding chat messages", zap.Int("batch_size", len(batch.Messages)))
 			if err = stream.Send(resp); err != nil {
-				log.Info("Failed to forward chat message", zap.Error(err))
+				log.Info("Failed to forward resp", zap.Error(err))
 				return err
 			}
 		case <-sendPingCh:
@@ -425,7 +455,7 @@ func (s *Server) AdvancePointer(ctx context.Context, req *messagingpb.AdvancePoi
 		return &messagingpb.AdvancePointerResponse{}, nil
 	}
 
-	pointerUpdate := &chatpb.StreamChatEventsResponse_ChatUpdate_PointerUpdate{
+	pointerUpdate := &messagingpb.PointerUpdate{
 		Member:  userID,
 		Pointer: req.Pointer,
 	}
@@ -480,7 +510,7 @@ func (s *Server) handleChatUpdates(chatID *commonpb.ChatId, event *event.ChatEve
 	// Fast pass filtering to avoid excessive locking.
 	//
 	// The underlying handler may filter as well, however.
-	if event.MessageUpdate == nil {
+	if event.MessageUpdate == nil && len(event.FlushedMessages) == 0 && event.PointerUpdate == nil && event.IsTyping == nil {
 		return
 	}
 
