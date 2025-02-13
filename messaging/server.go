@@ -468,6 +468,12 @@ func (s *Server) AdvancePointer(ctx context.Context, req *messagingpb.AdvancePoi
 }
 
 func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTypingRequest) (*messagingpb.NotifyIsTypingResponse, error) {
+	switch req.TypingState {
+	case messagingpb.TypingState_STARTED_TYPING, messagingpb.TypingState_STILL_TYPING, messagingpb.TypingState_STOPPED_TYPING:
+	default:
+		return nil, status.Error(codes.InvalidArgument, "typing state must be one of: [STARTED_TYPING, STILL_TYPING, STOPPED_TYPING]")
+	}
+
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {
 		return nil, err
