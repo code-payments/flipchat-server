@@ -488,7 +488,6 @@ func (s *Server) NotifyIsTyping(ctx context.Context, req *messagingpb.NotifyIsTy
 
 	isTyping := &messagingpb.IsTyping{
 		UserId:      userID,
-		IsTyping:    req.IsTyping,
 		TypingState: req.TypingState,
 	}
 
