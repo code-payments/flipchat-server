@@ -24,6 +24,9 @@ type Store interface {
 	// LinkXAccount links a X account to a user ID
 	LinkXAccount(ctx context.Context, userID *commonpb.UserId, xProfile *profilepb.XProfile, accessToken string) error
 
+	// UnlinkXAccount removes the link to the X account
+	UnlinkXAccount(ctx context.Context, userID *commonpb.UserId, xUserID string) error
+
 	// GetXProfile gets a user's X profile if it has been linked
 	GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error)
 

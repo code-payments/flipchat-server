@@ -151,6 +151,23 @@ func (s *store) LinkXAccount(ctx context.Context, userID *commonpb.UserId, xProf
 	return err
 }
 
+func (s *store) UnlinkXAccount(ctx context.Context, userID *commonpb.UserId, xUserID string) error {
+	encodedUserID := pg.Encode(userID.Value)
+
+	res, err := s.client.XUser.FindMany(
+		db.XUser.ID.Equals(xUserID),
+		db.XUser.UserID.Equals(encodedUserID),
+	).Delete().Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	if res.Count == 0 {
+		return profile.ErrNotFound
+	}
+	return nil
+}
+
 func (s *store) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error) {
 	encodedUserID := pg.Encode(userID.Value)
 

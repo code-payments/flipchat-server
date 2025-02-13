@@ -118,6 +118,24 @@ func testServer(t *testing.T, accounts account.Store, chats chat.Store, profiles
 		})
 		require.NoError(t, err)
 		require.NoError(t, protoutil.ProtoEqualError(expected, get.UserProfile))
+
+		unlink := &profilepb.UnlinkSocialAccountRequest{
+			SocialIdentifier: &profilepb.UnlinkSocialAccountRequest_XUserId{
+				XUserId: xProfile.Id,
+			},
+		}
+		require.NoError(t, keyPair.Auth(unlink, &unlink.Auth))
+
+		unlinkResp, err := client.UnlinkSocialAccount(context.Background(), unlink)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(&profilepb.UnlinkSocialAccountResponse{}, unlinkResp))
+
+		expected.SocialProfiles = nil
+		get, err = client.GetProfile(context.Background(), &profilepb.GetProfileRequest{
+			UserId: userID,
+		})
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, get.UserProfile))
 	})
 
 	t.Run("Unregistered user", func(t *testing.T) {

@@ -59,6 +59,11 @@ func (c *Cache) LinkXAccount(ctx context.Context, userID *commonpb.UserId, xProf
 	return c.db.LinkXAccount(ctx, userID, xProfile, accessToken)
 }
 
+func (c *Cache) UnlinkXAccount(ctx context.Context, userID *commonpb.UserId, xUserID string) error {
+	c.cache.Remove(toCacheKey(userID))
+	return c.db.UnlinkXAccount(ctx, userID, xUserID)
+}
+
 func (c *Cache) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error) {
 	return c.db.GetXProfile(ctx, userID)
 }

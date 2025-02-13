@@ -134,4 +134,24 @@ func testXProfiles(t *testing.T, s profile.Store) {
 	actualUserID, err = s.GetUserLinkedToXAccount(ctx, expected1.Id)
 	require.NoError(t, err)
 	require.NoError(t, protoutil.ProtoEqualError(userID2, actualUserID))
+
+	require.Equal(t, profile.ErrNotFound, s.UnlinkXAccount(ctx, userID2, "not found"))
+	require.Equal(t, profile.ErrNotFound, s.UnlinkXAccount(ctx, userID1, expected3.Id))
+
+	actual, err = s.GetXProfile(ctx, userID2)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected3, actual))
+
+	fullProfile, err = s.GetProfile(ctx, userID2)
+	require.NoError(t, err)
+	require.NoError(t, protoutil.ProtoEqualError(expected3, fullProfile.SocialProfiles[0].GetX()))
+
+	require.NoError(t, s.UnlinkXAccount(ctx, userID2, expected3.Id))
+
+	_, err = s.GetXProfile(ctx, userID2)
+	require.Equal(t, profile.ErrNotFound, err)
+
+	fullProfile, err = s.GetProfile(ctx, userID2)
+	require.NoError(t, err)
+	require.Empty(t, fullProfile.SocialProfiles)
 }

@@ -17,14 +17,12 @@ type Memory struct {
 	sync.Mutex
 
 	profiles        map[string]*profilepb.UserProfile
-	xProfilesByID   map[string]*profilepb.XProfile
 	xProfilesByUser map[string]*profilepb.XProfile
 }
 
 func NewInMemory() profile.Store {
 	return &Memory{
 		profiles:        make(map[string]*profilepb.UserProfile),
-		xProfilesByID:   make(map[string]*profilepb.XProfile),
 		xProfilesByUser: make(map[string]*profilepb.XProfile),
 	}
 }
@@ -97,9 +95,27 @@ func (m *Memory) LinkXAccount(ctx context.Context, userID *commonpb.UserId, xPro
 
 	cloned := proto.Clone(xProfile).(*profilepb.XProfile)
 	m.xProfilesByUser[userIDCacheKey(userID)] = cloned
-	m.xProfilesByID[userIDCacheKey(userID)] = cloned
 
 	return nil
+}
+
+func (m *Memory) UnlinkXAccount(ctx context.Context, userID *commonpb.UserId, xUserID string) error {
+	m.Lock()
+	defer m.Unlock()
+
+	existingByUser, ok := m.xProfilesByUser[userIDCacheKey(userID)]
+	if !ok {
+		return profile.ErrNotFound
+	}
+
+	if existingByUser.Id != xUserID {
+		return profile.ErrNotFound
+	}
+
+	delete(m.xProfilesByUser, userIDCacheKey(userID))
+
+	return nil
+
 }
 
 func (m *Memory) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error) {

@@ -159,3 +159,31 @@ func (s *Server) LinkSocialAccount(ctx context.Context, req *profilepb.LinkSocia
 		return nil, status.Error(codes.Unimplemented, "unsupported linking token type")
 	}
 }
+
+func (s *Server) UnlinkSocialAccount(ctx context.Context, req *profilepb.UnlinkSocialAccountRequest) (*profilepb.UnlinkSocialAccountResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
+
+	switch typed := req.SocialIdentifier.(type) {
+	case *profilepb.UnlinkSocialAccountRequest_XUserId:
+		log = log.With(zap.String("x_user_id", typed.XUserId))
+
+		err = s.profiles.UnlinkXAccount(ctx, userID, typed.XUserId)
+		if err == ErrNotFound {
+			return &profilepb.UnlinkSocialAccountResponse{Result: profilepb.UnlinkSocialAccountResponse_DENIED}, nil
+		} else if err != nil {
+			log.Warn("Failed to unlink account", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to unlink account")
+		}
+
+		go s.events.OnProfileUpdated(context.Background(), userID)
+
+		return &profilepb.UnlinkSocialAccountResponse{}, nil
+	default:
+		return nil, status.Error(codes.Unimplemented, "unsupported social identifier")
+	}
+}
