@@ -1619,18 +1619,30 @@ func (s *Server) populateMemberData(ctx context.Context, members []*chatpb.Membe
 			DisplayName:    p.GetDisplayName(),
 			SocialProfiles: p.GetSocialProfiles(),
 		}
-
-		if chatID == nil {
-			continue
-		}
-
-		pointers, err := s.pointers.GetPointers(ctx, chatID, m.UserId)
-		if err != nil {
-			return fmt.Errorf("failed to get pointers: %w", err)
-		}
-
-		m.Pointers = pointers
 	}
+
+	if chatID == nil {
+		return nil
+	}
+
+	allPointers, err := s.pointers.GetAllPointers(ctx, chatID)
+	if err != nil {
+		return fmt.Errorf("failed to get all pointers: %w", err)
+	}
+
+	pointersByUser := make(map[string][]*messagingpb.Pointer)
+	for _, userPointer := range allPointers {
+		key := model.UserIDString(userPointer.UserID)
+		pointersByUser[key] = append(pointersByUser[key], userPointer.Pointer)
+	}
+	for _, m := range members {
+		key := model.UserIDString(m.UserId)
+		pointers, ok := pointersByUser[key]
+		if ok {
+			m.Pointers = pointers
+		}
+	}
+
 	return nil
 }
 
