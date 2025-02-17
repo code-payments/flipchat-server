@@ -222,7 +222,7 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 						includeUnreadCountUpdate = true
 					}
 				}
-				if update.Pointer != nil && update.Pointer.Pointer.Type == messagingpb.Pointer_READ && bytes.Equal(update.Pointer.Member.Value, userID.Value) {
+				if clonedEvent.PointerUpdate != nil && clonedEvent.PointerUpdate.Pointer.Type == messagingpb.Pointer_READ && bytes.Equal(clonedEvent.PointerUpdate.Member.Value, userID.Value) {
 					includeUnreadCountUpdate = true
 					readPtr = update.Pointer.Pointer.Value
 				}
