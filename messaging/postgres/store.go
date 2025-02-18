@@ -5,15 +5,22 @@ import (
 	"context"
 	"errors"
 
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
+
+	"github.com/code-payments/code-server/pkg/metrics"
 
 	pg "github.com/code-payments/flipchat-server/database/postgres"
 	"github.com/code-payments/flipchat-server/database/prisma/db"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/query"
+)
+
+const (
+	metricsStructName = "messaging.postgres.store"
 )
 
 type store struct {
@@ -64,290 +71,368 @@ func (s *store) reset() {
 }
 
 func (s *store) GetMessage(ctx context.Context, chatID *commonpb.ChatId, messageID *messagingpb.MessageId) (*messagingpb.Message, error) {
-	encodedChatID := pg.Encode(chatID.Value)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetMessage")
+	defer tracer.End()
 
-	message, err := s.client.Message.FindUnique(
-		db.Message.ID.Equals(messageID.Value),
-	).Exec(ctx)
+	res, err := func() (*messagingpb.Message, error) {
+		encodedChatID := pg.Encode(chatID.Value)
 
-	if errors.Is(err, db.ErrNotFound) {
-		return nil, messaging.ErrMessageNotFound
-	} else if err != nil {
-		return nil, err
-	}
+		message, err := s.client.Message.FindUnique(
+			db.Message.ID.Equals(messageID.Value),
+		).Exec(ctx)
 
-	if message.ChatID != encodedChatID {
-		return nil, messaging.ErrMessageNotFound
-	}
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, messaging.ErrMessageNotFound
+		} else if err != nil {
+			return nil, err
+		}
 
-	return fromModel(message)
+		if message.ChatID != encodedChatID {
+			return nil, messaging.ErrMessageNotFound
+		}
+
+		return fromModel(message)
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) GetBatchMessages(ctx context.Context, chatID *commonpb.ChatId, messageIDs ...*messagingpb.MessageId) ([]*messagingpb.Message, error) {
-	encodedChatID := pg.Encode(chatID.Value)
-	rawMessageIDs := make([][]byte, len(messageIDs))
-	for i, messageID := range messageIDs {
-		rawMessageIDs[i] = messageID.Value
-	}
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetBatchMessages")
+	defer tracer.End()
 
-	messages, err := s.client.Message.FindMany(
-		db.Message.ChatID.Equals(encodedChatID),
-		db.Message.ID.In(rawMessageIDs),
-	).Exec(ctx)
-	if err != nil {
-		return nil, err
-	}
+	res, err := func() ([]*messagingpb.Message, error) {
+		encodedChatID := pg.Encode(chatID.Value)
+		rawMessageIDs := make([][]byte, len(messageIDs))
+		for i, messageID := range messageIDs {
+			rawMessageIDs[i] = messageID.Value
+		}
 
-	result := make([]*messagingpb.Message, 0)
-	for _, message := range messages {
-		protoMessage, err := fromModel(&message)
+		messages, err := s.client.Message.FindMany(
+			db.Message.ChatID.Equals(encodedChatID),
+			db.Message.ID.In(rawMessageIDs),
+		).Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		result = append(result, protoMessage)
-	}
-	return result, nil
+		result := make([]*messagingpb.Message, 0)
+		for _, message := range messages {
+			protoMessage, err := fromModel(&message)
+			if err != nil {
+				return nil, err
+			}
+
+			result = append(result, protoMessage)
+		}
+		return result, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) GetPagedMessages(ctx context.Context, chatID *commonpb.ChatId, options ...query.Option) ([]*messagingpb.Message, error) {
-	encodedChatID := pg.Encode(chatID.Value)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetPagedMessages")
+	defer tracer.End()
 
-	appliedOptions := query.ApplyOptions(options...)
+	res, err := func() ([]*messagingpb.Message, error) {
+		encodedChatID := pg.Encode(chatID.Value)
 
-	findMany := s.client.Message.FindMany(
-		db.Message.ChatID.Equals(encodedChatID),
-	)
-	if appliedOptions.Token != nil {
-		findMany = findMany.Cursor(
-			db.Message.ID.Cursor(appliedOptions.Token.Value),
+		appliedOptions := query.ApplyOptions(options...)
+
+		findMany := s.client.Message.FindMany(
+			db.Message.ChatID.Equals(encodedChatID),
 		)
-	}
-	messages, err := findMany.OrderBy(
-		db.Message.ID.Order(query.ToPrismaSortOrder(appliedOptions.Order)),
-	).Take(
-		appliedOptions.Limit + 1, // Because cursor returns the row associated with the ID
-	).Exec(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if len(messages) == 0 {
-		return nil, nil
-	}
-
-	result := make([]*messagingpb.Message, 0)
-	for _, message := range messages {
-		if appliedOptions.Token != nil && bytes.Equal(appliedOptions.Token.Value, message.ID) {
-			continue
+		if appliedOptions.Token != nil {
+			findMany = findMany.Cursor(
+				db.Message.ID.Cursor(appliedOptions.Token.Value),
+			)
 		}
+		messages, err := findMany.OrderBy(
+			db.Message.ID.Order(query.ToPrismaSortOrder(appliedOptions.Order)),
+		).Take(
+			appliedOptions.Limit + 1, // Because cursor returns the row associated with the ID
+		).Exec(ctx)
 
-		protoMessage, err := fromModel(&message)
 		if err != nil {
 			return nil, err
 		}
 
-		result = append(result, protoMessage)
-	}
+		if len(messages) == 0 {
+			return nil, nil
+		}
 
-	if len(result) > appliedOptions.Limit {
-		result = result[:appliedOptions.Limit]
-	}
-	return result, nil
+		result := make([]*messagingpb.Message, 0)
+		for _, message := range messages {
+			if appliedOptions.Token != nil && bytes.Equal(appliedOptions.Token.Value, message.ID) {
+				continue
+			}
+
+			protoMessage, err := fromModel(&message)
+			if err != nil {
+				return nil, err
+			}
+
+			result = append(result, protoMessage)
+		}
+
+		if len(result) > appliedOptions.Limit {
+			result = result[:appliedOptions.Limit]
+		}
+		return result, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) PutMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {
-	if msg.MessageId != nil {
-		return nil, errors.New("cannt provide a message id")
-	}
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "PutMessage")
+	defer tracer.End()
 
-	msg = proto.Clone(msg).(*messagingpb.Message)
-	msg.MessageId = messaging.MustGenerateMessageID()
-	return s.createContentMessage(ctx, chatID, msg)
+	res, err := func() (*messagingpb.Message, error) {
+		if msg.MessageId != nil {
+			return nil, errors.New("cannt provide a message id")
+		}
+
+		msg = proto.Clone(msg).(*messagingpb.Message)
+		msg.MessageId = messaging.MustGenerateMessageID()
+		return s.createContentMessage(ctx, chatID, msg)
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) PutMessageLegacy(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {
-	if msg.MessageId != nil {
-		return nil, errors.New("cannt provide a message id")
-	}
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "PutMessageLegacy")
+	defer tracer.End()
 
-	msg = proto.Clone(msg).(*messagingpb.Message)
-	msg.MessageId = messaging.MustGenerateMessageID()
-	return s.createLegacyMessage(ctx, chatID, msg)
+	res, err := func() (*messagingpb.Message, error) {
+		if msg.MessageId != nil {
+			return nil, errors.New("cannt provide a message id")
+		}
+
+		msg = proto.Clone(msg).(*messagingpb.Message)
+		msg.MessageId = messaging.MustGenerateMessageID()
+		return s.createLegacyMessage(ctx, chatID, msg)
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) CountUnread(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, lastRead *messagingpb.MessageId, maxValue int64) (int64, error) {
-	encodedChatID := pg.Encode(chatID.Value)
-	encodedUserID := pg.Encode(userID.Value)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "CountUnread")
+	defer tracer.End()
 
-	// Query arguments
-	queryArgs := []db.MessageWhereParam{
-		db.Message.ChatID.Equals(encodedChatID),
-		db.Message.Or(
-			db.Message.SenderID.IsNull(),
-			db.Message.Not(db.Message.SenderID.Equals(encodedUserID)),
-		),
-		db.Message.ContentType.In([]int{
-			ContentTypeUnknown,
-			ContentTypeText,
-			ContentTypeReply,
-		}),
-	}
+	res, err := func() (int64, error) {
+		encodedChatID := pg.Encode(chatID.Value)
+		encodedUserID := pg.Encode(userID.Value)
 
-	if lastRead != nil {
-		queryArgs = append(queryArgs, db.Message.ID.Not(lastRead.Value))
-	}
+		// Query arguments
+		queryArgs := []db.MessageWhereParam{
+			db.Message.ChatID.Equals(encodedChatID),
+			db.Message.Or(
+				db.Message.SenderID.IsNull(),
+				db.Message.Not(db.Message.SenderID.Equals(encodedUserID)),
+			),
+			db.Message.ContentType.In([]int{
+				ContentTypeUnknown,
+				ContentTypeText,
+				ContentTypeReply,
+			}),
+		}
 
-	// Perform the query
+		if lastRead != nil {
+			queryArgs = append(queryArgs, db.Message.ID.Not(lastRead.Value))
+		}
 
-	// TODO: prisma-client-go doesn't support Count() yet, convert this to a raw
-	// query at some point. For now, we'll just fetch all the messages and count
-	// them. Using a Select() to reduce the amount of data fetched.
+		// Perform the query
 
-	findMany := s.client.Message.FindMany(
-		queryArgs...,
-	).Select(
-		db.Chat.ID.Field(),
-	)
+		// TODO: prisma-client-go doesn't support Count() yet, convert this to a raw
+		// query at some point. For now, we'll just fetch all the messages and count
+		// them. Using a Select() to reduce the amount of data fetched.
 
-	if lastRead != nil {
-		findMany = findMany.Cursor(db.Message.ID.Cursor(lastRead.Value))
-	}
+		findMany := s.client.Message.FindMany(
+			queryArgs...,
+		).Select(
+			db.Chat.ID.Field(),
+		)
 
-	if maxValue >= 0 {
-		findMany = findMany.Take(int(maxValue))
-	}
+		if lastRead != nil {
+			findMany = findMany.Cursor(db.Message.ID.Cursor(lastRead.Value))
+		}
 
-	messages, err := findMany.Exec(ctx)
+		if maxValue >= 0 {
+			findMany = findMany.Take(int(maxValue))
+		}
 
-	if err != nil {
-		return 0, err
-	}
+		messages, err := findMany.Exec(ctx)
 
-	return int64(len(messages)), nil
+		if err != nil {
+			return 0, err
+		}
+
+		return int64(len(messages)), nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) AdvancePointer(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId, pointer *messagingpb.Pointer) (bool, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "AdvancePointer")
+	defer tracer.End()
 
-	encodedChatID := pg.Encode(chatID.Value)
-	encodedUserID := pg.Encode(userID.Value)
-	encodedMessageId := pg.Encode(pointer.Value.Value)
+	res, err := func() (bool, error) {
+		encodedChatID := pg.Encode(chatID.Value)
+		encodedUserID := pg.Encode(userID.Value)
+		encodedMessageId := pg.Encode(pointer.Value.Value)
 
-	// Find the existing pointer (if any)
-	existingPointer, err := s.client.Pointer.FindUnique(
-		db.Pointer.ChatIDUserIDType(
-			db.Pointer.ChatID.Equals(encodedChatID),
-			db.Pointer.UserID.Equals(encodedUserID),
-			db.Pointer.Type.Equals(int(pointer.Type)),
-		),
-	).Exec(ctx)
-
-	if errors.Is(err, db.ErrNotFound) || existingPointer == nil {
-		// Pointer doesn't exist, create it
-
-		_, err := s.client.Pointer.CreateOne(
-			db.Pointer.ChatID.Set(encodedChatID),
-			db.Pointer.UserID.Set(encodedUserID),
-			db.Pointer.Value.Set(encodedMessageId),
-			db.Pointer.Type.Set(int(pointer.Type)),
+		// Find the existing pointer (if any)
+		existingPointer, err := s.client.Pointer.FindUnique(
+			db.Pointer.ChatIDUserIDType(
+				db.Pointer.ChatID.Equals(encodedChatID),
+				db.Pointer.UserID.Equals(encodedUserID),
+				db.Pointer.Type.Equals(int(pointer.Type)),
+			),
 		).Exec(ctx)
 
-		return true, err
-	} else if err != nil {
-		return false, err
-	}
+		if errors.Is(err, db.ErrNotFound) || existingPointer == nil {
+			// Pointer doesn't exist, create it
 
-	decodedExistingMessageId, err := pg.Decode(existingPointer.Value)
-	if err != nil {
-		return false, err
-	}
+			_, err := s.client.Pointer.CreateOne(
+				db.Pointer.ChatID.Set(encodedChatID),
+				db.Pointer.UserID.Set(encodedUserID),
+				db.Pointer.Value.Set(encodedMessageId),
+				db.Pointer.Type.Set(int(pointer.Type)),
+			).Exec(ctx)
 
-	// If the existing pointer is already ahead of the new pointer, don't update
-	if bytes.Compare(decodedExistingMessageId, pointer.Value.Value) >= 0 {
-		return false, nil
-	}
+			return true, err
+		} else if err != nil {
+			return false, err
+		}
 
-	// Update the pointer with the new value
-	s.client.Pointer.FindUnique(
-		db.Pointer.ChatIDUserIDType(
-			db.Pointer.ChatID.Equals(encodedChatID),
-			db.Pointer.UserID.Equals(encodedUserID),
-			db.Pointer.Type.Equals(int(pointer.Type)),
-		),
-	).Update(
-		db.Pointer.Value.Set(encodedMessageId),
-	).Exec(ctx)
+		decodedExistingMessageId, err := pg.Decode(existingPointer.Value)
+		if err != nil {
+			return false, err
+		}
 
-	return true, nil
+		// If the existing pointer is already ahead of the new pointer, don't update
+		if bytes.Compare(decodedExistingMessageId, pointer.Value.Value) >= 0 {
+			return false, nil
+		}
+
+		// Update the pointer with the new value
+		s.client.Pointer.FindUnique(
+			db.Pointer.ChatIDUserIDType(
+				db.Pointer.ChatID.Equals(encodedChatID),
+				db.Pointer.UserID.Equals(encodedUserID),
+				db.Pointer.Type.Equals(int(pointer.Type)),
+			),
+		).Update(
+			db.Pointer.Value.Set(encodedMessageId),
+		).Exec(ctx)
+
+		return true, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) GetPointers(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) ([]*messagingpb.Pointer, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetPointers")
+	defer tracer.End()
 
-	encodedChatID := pg.Encode(chatID.Value)
-	encodedUserID := pg.Encode(userID.Value)
+	res, err := func() ([]*messagingpb.Pointer, error) {
+		encodedChatID := pg.Encode(chatID.Value)
+		encodedUserID := pg.Encode(userID.Value)
 
-	pointers, err := s.client.Pointer.FindMany(
-		db.Pointer.ChatID.Equals(encodedChatID),
-		db.Pointer.UserID.Equals(encodedUserID),
-	).Exec(ctx)
+		pointers, err := s.client.Pointer.FindMany(
+			db.Pointer.ChatID.Equals(encodedChatID),
+			db.Pointer.UserID.Equals(encodedUserID),
+		).Exec(ctx)
 
-	if err != nil {
-		return nil, err
-	}
-
-	pgPointers := make([]*messagingpb.Pointer, len(pointers))
-
-	for i, pointer := range pointers {
-		decodedMessageId, err := pg.Decode(pointer.Value)
 		if err != nil {
 			return nil, err
 		}
 
-		pgPointers[i] = &messagingpb.Pointer{
-			Type:  messagingpb.Pointer_Type(pointer.Type),
-			Value: &messagingpb.MessageId{Value: decodedMessageId},
-		}
-	}
+		pgPointers := make([]*messagingpb.Pointer, len(pointers))
 
-	return pgPointers, nil
+		for i, pointer := range pointers {
+			decodedMessageId, err := pg.Decode(pointer.Value)
+			if err != nil {
+				return nil, err
+			}
+
+			pgPointers[i] = &messagingpb.Pointer{
+				Type:  messagingpb.Pointer_Type(pointer.Type),
+				Value: &messagingpb.MessageId{Value: decodedMessageId},
+			}
+		}
+
+		return pgPointers, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) GetAllPointers(ctx context.Context, chatID *commonpb.ChatId) ([]messaging.UserPointer, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetAllPointers")
+	defer tracer.End()
 
-	encodedChatID := pg.Encode(chatID.Value)
+	res, err := func() ([]messaging.UserPointer, error) {
+		encodedChatID := pg.Encode(chatID.Value)
 
-	pointers, err := s.client.Pointer.FindMany(
-		db.Pointer.ChatID.Equals(encodedChatID),
-	).Exec(ctx)
+		pointers, err := s.client.Pointer.FindMany(
+			db.Pointer.ChatID.Equals(encodedChatID),
+		).Exec(ctx)
 
-	if err != nil {
-		return nil, err
-	}
-
-	pgPointers := make([]messaging.UserPointer, len(pointers))
-	for i, pointer := range pointers {
-
-		decodedUserId, err := pg.Decode(pointer.UserID)
 		if err != nil {
 			return nil, err
 		}
 
-		decodedMessageId, err := pg.Decode(pointer.Value)
-		if err != nil {
-			return nil, err
+		pgPointers := make([]messaging.UserPointer, len(pointers))
+		for i, pointer := range pointers {
+
+			decodedUserId, err := pg.Decode(pointer.UserID)
+			if err != nil {
+				return nil, err
+			}
+
+			decodedMessageId, err := pg.Decode(pointer.Value)
+			if err != nil {
+				return nil, err
+			}
+
+			pgPointers[i] = messaging.UserPointer{
+				UserID: &commonpb.UserId{Value: decodedUserId},
+				Pointer: &messagingpb.Pointer{
+					Type:  messagingpb.Pointer_Type(pointer.Type),
+					Value: &messagingpb.MessageId{Value: decodedMessageId},
+				},
+			}
 		}
 
-		pgPointers[i] = messaging.UserPointer{
-			UserID: &commonpb.UserId{Value: decodedUserId},
-			Pointer: &messagingpb.Pointer{
-				Type:  messagingpb.Pointer_Type(pointer.Type),
-				Value: &messagingpb.MessageId{Value: decodedMessageId},
-			},
-		}
-	}
+		return pgPointers, nil
+	}()
 
-	return pgPointers, nil
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) createLegacyMessage(ctx context.Context, chatID *commonpb.ChatId, msg *messagingpb.Message) (*messagingpb.Message, error) {

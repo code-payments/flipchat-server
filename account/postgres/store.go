@@ -7,8 +7,14 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	pg "github.com/code-payments/flipchat-server/database/postgres"
 
+	"github.com/code-payments/code-server/pkg/metrics"
+
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/database/prisma/db"
+)
+
+const (
+	metricsStructName = "account.postgres.store"
 )
 
 type store struct {
@@ -34,187 +40,259 @@ func (s *store) reset() {
 }
 
 func (s *store) Bind(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
-	encodedUserID := pg.Encode(userID.Value)
-	encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "Bind")
+	defer tracer.End()
 
-	// Check if this pubkey is already bound to a user
-	key, err := s.client.PublicKey.FindUnique(
-		db.PublicKey.Key.Equals(encodedPubKey),
-	).Exec(ctx)
+	res, err := func() (*commonpb.UserId, error) {
+		encodedUserID := pg.Encode(userID.Value)
+		encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
 
-	if err != nil && !errors.Is(err, db.ErrNotFound) {
-		return nil, err
-	}
+		// Check if this pubkey is already bound to a user
+		key, err := s.client.PublicKey.FindUnique(
+			db.PublicKey.Key.Equals(encodedPubKey),
+		).Exec(ctx)
 
-	if key != nil {
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return nil, err
+		}
+
+		if key != nil {
+			val, err := pg.Decode(key.UserID)
+			if err != nil {
+				return nil, err
+			}
+
+			// Cannot rebind without revoking first
+			return &commonpb.UserId{Value: val}, nil
+		}
+
+		// Create a new user if it doesn't exist already
+		userTx := s.client.User.UpsertOne(
+			db.User.ID.Equals(encodedUserID),
+		).Create(
+			db.User.ID.Set(encodedUserID),
+		).Update().Tx()
+
+		// Create a new public key if it doesn't exist
+		keyTx := s.client.PublicKey.UpsertOne(
+			db.PublicKey.Key.Equals(encodedPubKey),
+		).Create(
+			db.PublicKey.Key.Set(encodedPubKey),
+			db.PublicKey.User.Link(
+				db.User.ID.Equals(encodedUserID),
+			),
+		).Update(
+			db.PublicKey.User.Link(
+				db.User.ID.Equals(encodedUserID),
+			),
+		).Tx()
+
+		err = s.client.Prisma.Transaction(
+			userTx,
+			keyTx,
+		).Exec(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return &commonpb.UserId{Value: userID.Value}, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
+}
+
+func (s *store) GetUserId(ctx context.Context, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetUserID")
+	defer tracer.End()
+
+	res, err := func() (*commonpb.UserId, error) {
+		encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
+
+		key, err := s.client.PublicKey.FindFirst(
+			db.PublicKey.Key.Equals(encodedPubKey),
+		).Exec(ctx)
+
+		if err != nil || key == nil {
+			return nil, account.ErrNotFound
+		}
+
 		val, err := pg.Decode(key.UserID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Cannot rebind without revoking first
 		return &commonpb.UserId{Value: val}, nil
-	}
+	}()
 
-	// Create a new user if it doesn't exist already
-	userTx := s.client.User.UpsertOne(
-		db.User.ID.Equals(encodedUserID),
-	).Create(
-		db.User.ID.Set(encodedUserID),
-	).Update().Tx()
+	tracer.OnError(err)
 
-	// Create a new public key if it doesn't exist
-	keyTx := s.client.PublicKey.UpsertOne(
-		db.PublicKey.Key.Equals(encodedPubKey),
-	).Create(
-		db.PublicKey.Key.Set(encodedPubKey),
-		db.PublicKey.User.Link(
-			db.User.ID.Equals(encodedUserID),
-		),
-	).Update(
-		db.PublicKey.User.Link(
-			db.User.ID.Equals(encodedUserID),
-		),
-	).Tx()
-
-	err = s.client.Prisma.Transaction(
-		userTx,
-		keyTx,
-	).Exec(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &commonpb.UserId{Value: userID.Value}, nil
-}
-
-func (s *store) GetUserId(ctx context.Context, pubKey *commonpb.PublicKey) (*commonpb.UserId, error) {
-	encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
-
-	key, err := s.client.PublicKey.FindFirst(
-		db.PublicKey.Key.Equals(encodedPubKey),
-	).Exec(ctx)
-
-	if err != nil || key == nil {
-		return nil, account.ErrNotFound
-	}
-
-	val, err := pg.Decode(key.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &commonpb.UserId{Value: val}, nil
+	return res, err
 }
 
 func (s *store) GetPubKeys(ctx context.Context, userID *commonpb.UserId) ([]*commonpb.PublicKey, error) {
-	encodedUserID := pg.Encode(userID.Value)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetPubKeys")
+	defer tracer.End()
 
-	// TODO: Add pagination
-	keys, err := s.client.PublicKey.FindMany(
-		db.PublicKey.UserID.Equals(encodedUserID),
-	).Exec(ctx)
+	res, err := func() ([]*commonpb.PublicKey, error) {
+		encodedUserID := pg.Encode(userID.Value)
 
-	if err != nil {
-		return nil, err
-	}
+		// TODO: Add pagination
+		keys, err := s.client.PublicKey.FindMany(
+			db.PublicKey.UserID.Equals(encodedUserID),
+		).Exec(ctx)
 
-	var pbKeys []*commonpb.PublicKey
-	for _, key := range keys {
-		val, err := pg.Decode(key.Key)
 		if err != nil {
 			return nil, err
 		}
 
-		pbKeys = append(pbKeys, &commonpb.PublicKey{
-			Value: val,
-		})
-	}
+		var pbKeys []*commonpb.PublicKey
+		for _, key := range keys {
+			val, err := pg.Decode(key.Key)
+			if err != nil {
+				return nil, err
+			}
 
-	return pbKeys, nil
+			pbKeys = append(pbKeys, &commonpb.PublicKey{
+				Value: val,
+			})
+		}
+
+		return pbKeys, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) RemoveKey(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) error {
-	encodedUserID := pg.Encode(userID.Value)
-	encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "RemoveKey")
+	defer tracer.End()
 
-	_, err := s.client.PublicKey.FindMany(
-		db.PublicKey.UserID.Equals(encodedUserID),
-		db.PublicKey.Key.Equals(encodedPubKey),
-	).Delete().Exec(ctx)
+	err := func() error {
+		encodedUserID := pg.Encode(userID.Value)
+		encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
+
+		_, err := s.client.PublicKey.FindMany(
+			db.PublicKey.UserID.Equals(encodedUserID),
+			db.PublicKey.Key.Equals(encodedPubKey),
+		).Delete().Exec(ctx)
+
+		return err
+	}()
+
+	tracer.OnError(err)
 
 	return err
 }
 
 func (s *store) IsAuthorized(ctx context.Context, userID *commonpb.UserId, pubKey *commonpb.PublicKey) (bool, error) {
-	encodedUserID := pg.Encode(userID.Value)
-	encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "IsAuthorized")
+	defer tracer.End()
 
-	key, err := s.client.PublicKey.FindFirst(
-		db.PublicKey.UserID.Equals(encodedUserID),
-		db.PublicKey.Key.Equals(encodedPubKey),
-	).Exec(ctx)
+	res, err := func() (bool, error) {
+		encodedUserID := pg.Encode(userID.Value)
+		encodedPubKey := pg.Encode(pubKey.Value, pg.Base58)
 
-	if errors.Is(err, db.ErrNotFound) {
-		return false, nil
-	}
+		key, err := s.client.PublicKey.FindFirst(
+			db.PublicKey.UserID.Equals(encodedUserID),
+			db.PublicKey.Key.Equals(encodedPubKey),
+		).Exec(ctx)
 
-	if err != nil {
-		return false, err
-	}
+		if errors.Is(err, db.ErrNotFound) {
+			return false, nil
+		}
 
-	return key != nil, nil
+		if err != nil {
+			return false, err
+		}
+
+		return key != nil, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) IsStaff(ctx context.Context, userID *commonpb.UserId) (bool, error) {
-	encodedUserID := pg.Encode(userID.Value)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "IsStaff")
+	defer tracer.End()
 
-	res, err := s.client.User.FindUnique(
-		db.User.ID.Equals(encodedUserID),
-	).Exec(ctx)
+	res, err := func() (bool, error) {
+		encodedUserID := pg.Encode(userID.Value)
 
-	if errors.Is(err, db.ErrNotFound) {
-		return false, nil
-	}
+		res, err := s.client.User.FindUnique(
+			db.User.ID.Equals(encodedUserID),
+		).Exec(ctx)
 
-	if err != nil {
-		return false, err
-	}
+		if errors.Is(err, db.ErrNotFound) {
+			return false, nil
+		}
 
-	return res.IsStaff, nil
+		if err != nil {
+			return false, err
+		}
+
+		return res.IsStaff, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) IsRegistered(ctx context.Context, userID *commonpb.UserId) (bool, error) {
-	encodedUserID := pg.Encode(userID.Value)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "IsRegistered")
+	defer tracer.End()
 
-	res, err := s.client.User.FindUnique(
-		db.User.ID.Equals(encodedUserID),
-	).Exec(ctx)
+	res, err := func() (bool, error) {
+		encodedUserID := pg.Encode(userID.Value)
 
-	if errors.Is(err, db.ErrNotFound) {
-		return false, nil
-	}
+		res, err := s.client.User.FindUnique(
+			db.User.ID.Equals(encodedUserID),
+		).Exec(ctx)
 
-	if err != nil {
-		return false, err
-	}
+		if errors.Is(err, db.ErrNotFound) {
+			return false, nil
+		}
 
-	return res.IsRegistered, nil
+		if err != nil {
+			return false, err
+		}
+
+		return res.IsRegistered, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId, isRegistered bool) error {
-	encodedUserID := pg.Encode(userID.Value)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "SetRegistrationFlag")
+	defer tracer.End()
 
-	_, err := s.client.User.FindUnique(
-		db.User.ID.Equals(encodedUserID),
-	).Update(
-		db.User.IsRegistered.Set(isRegistered),
-	).Exec(ctx)
+	err := func() error {
+		encodedUserID := pg.Encode(userID.Value)
 
-	if errors.Is(err, db.ErrNotFound) {
-		return account.ErrNotFound
-	}
+		_, err := s.client.User.FindUnique(
+			db.User.ID.Equals(encodedUserID),
+		).Update(
+			db.User.IsRegistered.Set(isRegistered),
+		).Exec(ctx)
+
+		if errors.Is(err, db.ErrNotFound) {
+			return account.ErrNotFound
+		}
+
+		return err
+	}()
+
+	tracer.OnError(err)
 
 	return err
 }

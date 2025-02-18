@@ -7,8 +7,14 @@ import (
 	pushpb "github.com/code-payments/flipchat-protobuf-api/generated/go/push/v1"
 	pg "github.com/code-payments/flipchat-server/database/postgres"
 
+	"github.com/code-payments/code-server/pkg/metrics"
+
 	"github.com/code-payments/flipchat-server/database/prisma/db"
 	"github.com/code-payments/flipchat-server/push"
+)
+
+const (
+	metricsStructName = "push.postgres.store"
 )
 
 type store struct {
@@ -33,98 +39,138 @@ func (s *store) reset() {
 }
 
 func (s *store) GetTokens(ctx context.Context, userID *commonpb.UserId) ([]push.Token, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetTokens")
+	defer tracer.End()
 
-	encodedUserID := pg.Encode(userID.Value)
+	res, err := func() ([]push.Token, error) {
+		encodedUserID := pg.Encode(userID.Value)
 
-	tokens, err := s.client.PushToken.FindMany(
-		db.PushToken.UserID.Equals(encodedUserID),
-	).Exec(ctx)
+		tokens, err := s.client.PushToken.FindMany(
+			db.PushToken.UserID.Equals(encodedUserID),
+		).Exec(ctx)
 
-	if err != nil {
-		return nil, err
-	}
-
-	res := make([]push.Token, len(tokens))
-	for i, token := range tokens {
-		res[i] = push.Token{
-			Type:         pushpb.TokenType(token.Type),
-			Token:        token.Token,
-			AppInstallID: token.AppInstallID,
+		if err != nil {
+			return nil, err
 		}
-	}
 
-	return res, nil
+		res := make([]push.Token, len(tokens))
+		for i, token := range tokens {
+			res[i] = push.Token{
+				Type:         pushpb.TokenType(token.Type),
+				Token:        token.Token,
+				AppInstallID: token.AppInstallID,
+			}
+		}
+
+		return res, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) GetTokensBatch(ctx context.Context, userIDs ...*commonpb.UserId) ([]push.Token, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetTokensBatch")
+	defer tracer.End()
 
-	encodedUserIDs := make([]string, len(userIDs))
-	for i, userID := range userIDs {
-		encodedUserIDs[i] = pg.Encode(userID.Value)
-	}
-
-	tokens, err := s.client.PushToken.FindMany(
-		db.PushToken.UserID.In(encodedUserIDs),
-	).Exec(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	res := make([]push.Token, len(tokens))
-	for i, token := range tokens {
-		res[i] = push.Token{
-			Type:         pushpb.TokenType(token.Type),
-			Token:        token.Token,
-			AppInstallID: token.AppInstallID,
+	res, err := func() ([]push.Token, error) {
+		encodedUserIDs := make([]string, len(userIDs))
+		for i, userID := range userIDs {
+			encodedUserIDs[i] = pg.Encode(userID.Value)
 		}
-	}
 
-	return res, nil
+		tokens, err := s.client.PushToken.FindMany(
+			db.PushToken.UserID.In(encodedUserIDs),
+		).Exec(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		res := make([]push.Token, len(tokens))
+		for i, token := range tokens {
+			res[i] = push.Token{
+				Type:         pushpb.TokenType(token.Type),
+				Token:        token.Token,
+				AppInstallID: token.AppInstallID,
+			}
+		}
+
+		return res, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (s *store) AddToken(ctx context.Context, userID *commonpb.UserId, appInstallID *commonpb.AppInstallId, tokenType pushpb.TokenType, token string) error {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "AddToken")
+	defer tracer.End()
 
-	encodedUserID := pg.Encode(userID.Value)
+	err := func() error {
+		encodedUserID := pg.Encode(userID.Value)
 
-	_, err := s.client.PushToken.UpsertOne(
-		db.PushToken.UserIDAppInstallID(
-			db.PushToken.UserID.Equals(encodedUserID),
-			db.PushToken.AppInstallID.Equals(appInstallID.Value),
-		),
-	).Create(
-		db.PushToken.UserID.Set(encodedUserID),
-		db.PushToken.AppInstallID.Set(appInstallID.Value),
-		db.PushToken.Token.Set(token),
-		db.PushToken.Type.Set(int(tokenType)),
-	).Update(
-		db.PushToken.Token.Set(token),
-	).Exec(ctx)
+		_, err := s.client.PushToken.UpsertOne(
+			db.PushToken.UserIDAppInstallID(
+				db.PushToken.UserID.Equals(encodedUserID),
+				db.PushToken.AppInstallID.Equals(appInstallID.Value),
+			),
+		).Create(
+			db.PushToken.UserID.Set(encodedUserID),
+			db.PushToken.AppInstallID.Set(appInstallID.Value),
+			db.PushToken.Token.Set(token),
+			db.PushToken.Type.Set(int(tokenType)),
+		).Update(
+			db.PushToken.Token.Set(token),
+		).Exec(ctx)
 
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
-	return nil
-}
+		return nil
+	}()
 
-func (s *store) DeleteToken(ctx context.Context, tokenType pushpb.TokenType, token string) error {
-
-	_, err := s.client.PushToken.FindMany(
-		db.PushToken.Token.Equals(token),
-		db.PushToken.Type.Equals(int(tokenType)),
-	).Delete().Exec(ctx)
+	tracer.OnError(err)
 
 	return err
 }
 
-func (s *store) ClearTokens(_ context.Context, userID *commonpb.UserId) error {
+func (s *store) DeleteToken(ctx context.Context, tokenType pushpb.TokenType, token string) error {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "DeleteToken")
+	defer tracer.End()
 
-	encodedUserID := pg.Encode(userID.Value)
+	err := func() error {
+		_, err := s.client.PushToken.FindMany(
+			db.PushToken.Token.Equals(token),
+			db.PushToken.Type.Equals(int(tokenType)),
+		).Delete().Exec(ctx)
 
-	_, err := s.client.PushToken.FindMany(
-		db.PushToken.UserID.Equals(encodedUserID),
-	).Delete().Exec(context.Background())
+		return err
+	}()
+
+	tracer.OnError(err)
+
+	return err
+}
+
+func (s *store) ClearTokens(ctx context.Context, userID *commonpb.UserId) error {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "ClearTokens")
+	defer tracer.End()
+
+	err := func() error {
+		encodedUserID := pg.Encode(userID.Value)
+
+		_, err := s.client.PushToken.FindMany(
+			db.PushToken.UserID.Equals(encodedUserID),
+		).Delete().Exec(ctx)
+
+		return err
+	}()
+
+	tracer.OnError(err)
 
 	return err
 }

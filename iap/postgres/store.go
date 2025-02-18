@@ -6,9 +6,15 @@ import (
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
+	"github.com/code-payments/code-server/pkg/metrics"
+
 	pg "github.com/code-payments/flipchat-server/database/postgres"
 	"github.com/code-payments/flipchat-server/database/prisma/db"
 	"github.com/code-payments/flipchat-server/iap"
+)
+
+const (
+	metricsStructName = "iap.postgres.store"
 )
 
 type store struct {
@@ -32,49 +38,67 @@ func NewInPostgres(client *db.PrismaClient) iap.Store {
 }
 
 func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) error {
-	if purchase.Product != iap.ProductCreateAccount {
-		return errors.New("product must be create account")
-	}
-	if purchase.State != iap.StateFulfilled {
-		return errors.New("state must be fulfilled")
-	}
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "CreatePurchase")
+	defer tracer.End()
 
-	encodedReceiptID := pg.Encode(purchase.ReceiptID)
-	encodedUserID := pg.Encode(purchase.User.Value)
+	err := func() error {
+		if purchase.Product != iap.ProductCreateAccount {
+			return errors.New("product must be create account")
+		}
+		if purchase.State != iap.StateFulfilled {
+			return errors.New("state must be fulfilled")
+		}
 
-	_, err := s.client.Iap.FindUnique(
-		db.Iap.ReceiptID.Equals(encodedReceiptID),
-	).Exec(ctx)
-	if err == nil {
-		return iap.ErrExists
-	} else if !errors.Is(err, db.ErrNotFound) {
+		encodedReceiptID := pg.Encode(purchase.ReceiptID)
+		encodedUserID := pg.Encode(purchase.User.Value)
+
+		_, err := s.client.Iap.FindUnique(
+			db.Iap.ReceiptID.Equals(encodedReceiptID),
+		).Exec(ctx)
+		if err == nil {
+			return iap.ErrExists
+		} else if !errors.Is(err, db.ErrNotFound) {
+			return err
+		}
+
+		_, err = s.client.Iap.CreateOne(
+			db.Iap.ReceiptID.Set(encodedReceiptID),
+			db.Iap.UserID.Set(encodedUserID),
+			db.Iap.Platform.Set(int(purchase.Platform)),
+			db.Iap.Product.Set(int(purchase.Product)),
+			db.Iap.State.Set(int(purchase.State)),
+		).Exec(ctx)
 		return err
-	}
+	}()
 
-	_, err = s.client.Iap.CreateOne(
-		db.Iap.ReceiptID.Set(encodedReceiptID),
-		db.Iap.UserID.Set(encodedUserID),
-		db.Iap.Platform.Set(int(purchase.Platform)),
-		db.Iap.Product.Set(int(purchase.Product)),
-		db.Iap.State.Set(int(purchase.State)),
-	).Exec(ctx)
+	tracer.OnError(err)
+
 	return err
 }
 
 func (s *store) GetPurchase(ctx context.Context, receiptID []byte) (*iap.Purchase, error) {
-	encodedReceiptID := pg.Encode(receiptID)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetPurchase")
+	defer tracer.End()
 
-	res, err := s.client.Iap.FindUnique(
-		db.Iap.ReceiptID.Equals(encodedReceiptID),
-	).Exec(ctx)
+	res, err := func() (*iap.Purchase, error) {
+		encodedReceiptID := pg.Encode(receiptID)
 
-	if errors.Is(err, db.ErrNotFound) {
-		return nil, iap.ErrNotFound
-	} else if err != nil {
-		return nil, err
-	}
+		res, err := s.client.Iap.FindUnique(
+			db.Iap.ReceiptID.Equals(encodedReceiptID),
+		).Exec(ctx)
 
-	return fromModel(res)
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, iap.ErrNotFound
+		} else if err != nil {
+			return nil, err
+		}
+
+		return fromModel(res)
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func fromModel(m *db.IapModel) (*iap.Purchase, error) {
