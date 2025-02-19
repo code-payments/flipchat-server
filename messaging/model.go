@@ -55,3 +55,11 @@ func GenerateMessageIDFromTime(t time.Time) (*messagingpb.MessageId, error) {
 
 	return &messagingpb.MessageId{Value: id[:]}, nil
 }
+
+func MessageIDString(id *messagingpb.MessageId) string {
+	uuid, err := uuid.FromBytes(id.Value)
+	if err != nil {
+		return "<invalid>"
+	}
+	return uuid.String()
+}

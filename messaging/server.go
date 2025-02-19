@@ -27,6 +27,7 @@ import (
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/flags"
 	"github.com/code-payments/flipchat-server/intent"
+	"github.com/code-payments/flipchat-server/logging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/query"
@@ -305,6 +306,12 @@ func (s *Server) GetMessage(ctx context.Context, req *messagingpb.GetMessageRequ
 		return nil, err
 	}
 
+	staffLogger := logging.NewStaffLogger(ctx, s.log, userID, s.accounts).With(
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+		zap.String("message_id", MessageIDString(req.MessageId)),
+	)
+	staffLogger.Info("GetMessage RPC started")
+
 	allow, _, err := s.rpcAuthz.CanGetMessage(ctx, req.ChatId, userID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to do rpc authz checks")
@@ -320,6 +327,8 @@ func (s *Server) GetMessage(ctx context.Context, req *messagingpb.GetMessageRequ
 		return nil, status.Error(codes.Internal, "failed to get message")
 	}
 
+	staffLogger.Info("GetMessage RPC completed")
+
 	return &messagingpb.GetMessageResponse{
 		Message: message,
 	}, nil
@@ -330,6 +339,30 @@ func (s *Server) GetMessages(ctx context.Context, req *messagingpb.GetMessagesRe
 	if err != nil {
 		return nil, err
 	}
+
+	staffLogger := logging.NewStaffLogger(ctx, s.log, userID, s.accounts).With(
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+	if req.GetMessageIds() != nil {
+		staffLogger = staffLogger.With(
+			zap.String("query_type", "batch"),
+			zap.Int("count", len(req.GetMessageIds().MessageIds)),
+		)
+	} else {
+		staffLogger = staffLogger.With(
+			zap.String("query_type", "paging"),
+			zap.String("order", req.GetOptions().Order.String()),
+		)
+		if req.GetOptions().PageSize > 0 {
+			staffLogger = staffLogger.With(zap.Int("page_size", int(req.GetOptions().PageSize)))
+		}
+		if req.GetOptions().PagingToken != nil {
+			staffLogger = staffLogger.With(zap.String("paging_token", MessageIDString(
+				&messagingpb.MessageId{Value: req.GetOptions().PagingToken.Value},
+			)))
+		}
+	}
+	staffLogger.Info("GetMessages RPC started")
 
 	allow, _, err := s.rpcAuthz.CanGetMessages(ctx, req.ChatId, userID)
 	if err != nil {
@@ -352,6 +385,8 @@ func (s *Server) GetMessages(ctx context.Context, req *messagingpb.GetMessagesRe
 			return nil, status.Error(codes.Internal, "failed to get messages")
 		}
 	}
+
+	staffLogger.Info("GetMessages RPC completed")
 
 	return &messagingpb.GetMessagesResponse{
 		Messages: messages,

@@ -30,6 +30,7 @@ import (
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/intent"
+	"github.com/code-payments/flipchat-server/logging"
 	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/moderation"
@@ -358,6 +359,9 @@ func (s *Server) GetChats(ctx context.Context, req *chatpb.GetChatsRequest) (*ch
 
 	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
 
+	staffLogger := logging.NewStaffLogger(ctx, s.log, userID, s.accounts)
+	staffLogger.Info("GetChats RPC started")
+
 	// TODO: Pagination, it's fine for now(!!)
 	chatIDs, err := s.chats.GetChatsForUser(ctx, userID)
 	if err != nil {
@@ -370,6 +374,8 @@ func (s *Server) GetChats(ctx context.Context, req *chatpb.GetChatsRequest) (*ch
 		log.Warn("Failed to get metadata", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to get metadata")
 	}
+
+	staffLogger.Info("GetChats RPC finished", zap.Int("count", len(metadata)))
 
 	return &chatpb.GetChatsResponse{
 		Chats: metadata,
@@ -395,6 +401,11 @@ func (s *Server) GetChat(ctx context.Context, req *chatpb.GetChatRequest) (*chat
 		}
 	}
 
+	staffLogger := logging.NewStaffLogger(ctx, s.log, userID, s.accounts).With(
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(chatID.Value)),
+	)
+	staffLogger.Info("GetChat RPC started")
+
 	var md *chatpb.Metadata
 	var members []*chatpb.Member
 	if req.ExcludeMembers {
@@ -414,6 +425,8 @@ func (s *Server) GetChat(ctx context.Context, req *chatpb.GetChatRequest) (*chat
 			return nil, status.Errorf(codes.Internal, "failed to get chat metadata with members")
 		}
 	}
+
+	staffLogger.Info("GetChat RPC finished")
 
 	return &chatpb.GetChatResponse{
 		Metadata: md,
