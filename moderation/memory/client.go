@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"context"
+
 	"github.com/code-payments/flipchat-server/moderation"
 )
 
@@ -14,10 +16,10 @@ func NewClient(flagged bool) *Client {
 	return &Client{flagged: flagged}
 }
 
-func (c *Client) ClassifyText(text string) (*moderation.ModerationResult, error) {
+func (c *Client) ClassifyText(_ context.Context, text string) (*moderation.ModerationResult, error) {
 	return &moderation.ModerationResult{Flagged: c.flagged}, nil
 }
 
-func (c *Client) ClassifyImage(url string) (*moderation.ModerationResult, error) {
+func (c *Client) ClassifyImage(_ context.Context, url string) (*moderation.ModerationResult, error) {
 	return &moderation.ModerationResult{Flagged: c.flagged}, nil
 }

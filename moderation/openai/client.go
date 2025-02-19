@@ -2,11 +2,14 @@ package openai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/code-payments/code-server/pkg/metrics"
 
 	"github.com/code-payments/flipchat-server/moderation"
 )
@@ -14,6 +17,8 @@ import (
 const (
 	defaultAPIURL = "https://api.openai.com/v1/moderations"
 	model         = "omni-moderation-latest"
+
+	metricsStructName = "moderation.openai.client"
 )
 
 type Client struct {
@@ -29,28 +34,46 @@ func NewClient(apiKey string, baseURL ...string) *Client {
 	return &Client{APIKey: apiKey, BaseURL: url}
 }
 
-func (c *Client) ClassifyText(text string) (*moderation.ModerationResult, error) {
-	// OpenAI's moderation API is case-insensitive, Titlecase is more likely to
-	// be "safe"
+func (c *Client) ClassifyText(ctx context.Context, text string) (*moderation.ModerationResult, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "ClassifyText")
+	defer tracer.End()
 
-	// Lowercase the text to ensure consistent results
-	text = strings.ToLower(text)
-	input := map[string]interface{}{
-		"model": model,
-		"input": []map[string]string{{"type": "text", "text": text}},
-	}
-	return c.sendRequest(input)
+	res, err := func() (*moderation.ModerationResult, error) {
+		// OpenAI's moderation API is case-insensitive, Titlecase is more likely to
+		// be "safe"
+
+		// Lowercase the text to ensure consistent results
+		text = strings.ToLower(text)
+		input := map[string]interface{}{
+			"model": model,
+			"input": []map[string]string{{"type": "text", "text": text}},
+		}
+		return c.sendRequest(ctx, input)
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
-func (c *Client) ClassifyImage(url string) (*moderation.ModerationResult, error) {
-	input := map[string]interface{}{
-		"model": model,
-		"input": []map[string]interface{}{{"type": "image_url", "image_url": map[string]string{"url": url}}},
-	}
-	return c.sendRequest(input)
+func (c *Client) ClassifyImage(ctx context.Context, url string) (*moderation.ModerationResult, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "ClassifyImage")
+	defer tracer.End()
+
+	res, err := func() (*moderation.ModerationResult, error) {
+		input := map[string]interface{}{
+			"model": model,
+			"input": []map[string]interface{}{{"type": "image_url", "image_url": map[string]string{"url": url}}},
+		}
+		return c.sendRequest(ctx, input)
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
-func (c *Client) sendRequest(input map[string]interface{}) (*moderation.ModerationResult, error) {
+func (c *Client) sendRequest(ctx context.Context, input map[string]interface{}) (*moderation.ModerationResult, error) {
 	jsonData, err := json.Marshal(input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -61,6 +84,8 @@ func (c *Client) sendRequest(input map[string]interface{}) (*moderation.Moderati
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
+	req = req.WithContext(ctx)
 
 	// Set necessary headers
 	req.Header.Set("Content-Type", "application/json")

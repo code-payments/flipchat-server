@@ -1,9 +1,11 @@
 package moderation
 
+import "context"
+
 // Interface for all moderation backends
 type ModerationClient interface {
-	ClassifyText(text string) (*ModerationResult, error)
-	ClassifyImage(url string) (*ModerationResult, error)
+	ClassifyText(ctx context.Context, text string) (*ModerationResult, error)
+	ClassifyImage(ctx context.Context, url string) (*ModerationResult, error)
 }
 
 // Shared moderation result structure

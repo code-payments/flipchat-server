@@ -478,7 +478,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 
 		if len(t.GroupChat.DisplayName) > 0 {
 			// todo: remember the display name moderation result from the check RPC
-			moderationResult, err := s.moderationClient.ClassifyText(t.GroupChat.DisplayName)
+			moderationResult, err := s.moderationClient.ClassifyText(ctx, t.GroupChat.DisplayName)
 			if err != nil {
 				s.log.Warn("Failed to moderate display name", zap.Error(err))
 				return nil, status.Errorf(codes.Internal, "failed to moderate display name")
@@ -826,7 +826,7 @@ func (s *Server) CloseChat(ctx context.Context, req *chatpb.CloseChatRequest) (*
 func (s *Server) CheckDisplayName(ctx context.Context, req *chatpb.CheckDisplayNameRequest) (*chatpb.CheckDisplayNameResponse, error) {
 	log := s.log.With(zap.String("display_name", req.DisplayName))
 
-	moderationResult, err := s.moderationClient.ClassifyText(req.DisplayName)
+	moderationResult, err := s.moderationClient.ClassifyText(ctx, req.DisplayName)
 	if err != nil {
 		log.Warn("Failed to moderate display name", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to moderate display name")
@@ -872,7 +872,7 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 	if len(req.DisplayName) > 0 {
 		log = log.With(zap.String("display_name", req.DisplayName))
 
-		moderationResult, err := s.moderationClient.ClassifyText(req.DisplayName)
+		moderationResult, err := s.moderationClient.ClassifyText(ctx, req.DisplayName)
 		if err != nil {
 			log.Warn("Failed to moderate display name", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to moderate display name")

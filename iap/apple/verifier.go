@@ -6,7 +6,13 @@ import (
 	"github.com/devsisters/go-applereceipt"
 	"github.com/devsisters/go-applereceipt/applepki"
 
+	"github.com/code-payments/code-server/pkg/metrics"
+
 	"github.com/code-payments/flipchat-server/iap"
+)
+
+const (
+	metricsStructName = "iap.apple.verifier"
 )
 
 type AppleVerifier struct {
@@ -25,41 +31,57 @@ func NewAppleVerifier(pkgName string, product string) iap.Verifier {
 }
 
 func (m *AppleVerifier) VerifyReceipt(ctx context.Context, encodedReceipt string) (bool, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "VerifyReceipt")
+	defer tracer.End()
 
-	receipt, err := applereceipt.DecodeBase64(encodedReceipt, applepki.CertPool())
-	if err != nil {
-		return false, err
-	}
+	res, err := func() (bool, error) {
+		receipt, err := applereceipt.DecodeBase64(encodedReceipt, applepki.CertPool())
+		if err != nil {
+			return false, err
+		}
 
-	// Verify the bundle ID.
-	if receipt.BundleIdentifier != m.packageName {
-		return false, nil
-	}
+		// Verify the bundle ID.
+		if receipt.BundleIdentifier != m.packageName {
+			return false, nil
+		}
 
-	// NOTE: this is omitted because Apple may not provide it as part of the envelope.
-	// See https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html
+		// NOTE: this is omitted because Apple may not provide it as part of the envelope.
+		// See https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html
 
-	// Verify the that the receipt is for the correct product.
-	// if receipt.InAppPurchaseReceipts[0].ProductIdentifier != m.productName {
-	// return false, nil
-	// }
+		// Verify the that the receipt is for the correct product.
+		// if receipt.InAppPurchaseReceipts[0].ProductIdentifier != m.productName {
+		// return false, nil
+		// }
 
-	// TODO: verify the AppVersion field in the receipt?
-	// receipt.AppVersion
+		// TODO: verify the AppVersion field in the receipt?
+		// receipt.AppVersion
 
-	return true, nil
+		return true, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }
 
 func (m *AppleVerifier) GetReceiptIdentifier(ctx context.Context, encodedReceipt string) ([]byte, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetReceiptIdentifier")
+	defer tracer.End()
 
-	// TODO: adjust this so that verification and getting the identifier don't
-	// require decoding the receipt twice. Once we know how to decode an Android
-	// receipt we can do this.
+	res, err := func() ([]byte, error) {
+		// TODO: adjust this so that verification and getting the identifier don't
+		// require decoding the receipt twice. Once we know how to decode an Android
+		// receipt we can do this.
 
-	receipt, err := applereceipt.DecodeBase64(encodedReceipt, applepki.CertPool())
-	if err != nil {
-		return nil, err
-	}
+		receipt, err := applereceipt.DecodeBase64(encodedReceipt, applepki.CertPool())
+		if err != nil {
+			return nil, err
+		}
 
-	return receipt.SHA1Hash, nil
+		return receipt.SHA1Hash, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }

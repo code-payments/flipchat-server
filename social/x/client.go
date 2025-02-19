@@ -7,12 +7,17 @@ import (
 	"io"
 	"net/http"
 
-	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
 	"github.com/pkg/errors"
+
+	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
+
+	"github.com/code-payments/code-server/pkg/metrics"
 )
 
 const (
 	baseUrl = "https://api.x.com/2/"
+
+	metricsStructName = "social.x.client"
 )
 
 type Client struct {
@@ -47,7 +52,12 @@ type PublicMetrics struct {
 
 // GetMyUser gets the X user associated with the provided access token
 func (c *Client) GetMyUser(ctx context.Context, accessToken string) (*User, error) {
-	return c.getUser(ctx, baseUrl+"users/me", accessToken)
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetMyUser")
+	defer tracer.End()
+
+	res, err := c.getUser(ctx, baseUrl+"users/me", accessToken)
+	tracer.OnError(err)
+	return res, err
 }
 
 func (c *Client) getUser(ctx context.Context, fromUrl string, accessToken string) (*User, error) {

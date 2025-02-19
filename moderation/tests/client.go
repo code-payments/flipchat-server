@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"testing"
 
 	"github.com/code-payments/flipchat-server/moderation"
@@ -28,7 +29,7 @@ func RunUnflaggedModerationTests(t *testing.T, client moderation.ModerationClien
 
 func testFlaggedTextClassification(t *testing.T, client moderation.ModerationClient) {
 	t.Run("Flagged text", func(t *testing.T) {
-		result, err := client.ClassifyText("This is a violent text.")
+		result, err := client.ClassifyText(context.Background(), "This is a violent text.")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -41,7 +42,7 @@ func testFlaggedTextClassification(t *testing.T, client moderation.ModerationCli
 
 func testUnflaggedTextClassification(t *testing.T, client moderation.ModerationClient) {
 	t.Run("Non-flagged text", func(t *testing.T) {
-		result, err := client.ClassifyText("This is a friendly text.")
+		result, err := client.ClassifyText(context.Background(), "This is a friendly text.")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -58,7 +59,7 @@ func testFlaggedImageClassification(t *testing.T, client moderation.ModerationCl
 		// as a test image for violence
 		// https://en.wikipedia.org/wiki/Violence
 
-		result, err := client.ClassifyImage("https://upload.wikimedia.org/wikipedia/commons/5/51/Peter_Paul_Rubens_-_Cain_slaying_Abel_%28Courtauld_Institute%29.jpg")
+		result, err := client.ClassifyImage(context.Background(), "https://upload.wikimedia.org/wikipedia/commons/5/51/Peter_Paul_Rubens_-_Cain_slaying_Abel_%28Courtauld_Institute%29.jpg")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -74,7 +75,7 @@ func testUnflaggedImageClassification(t *testing.T, client moderation.Moderation
 		// Using the "standard" test image "Lenna"
 		// https://en.wikipedia.org/wiki/Lenna
 
-		result, err := client.ClassifyImage("https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png")
+		result, err := client.ClassifyImage(context.Background(), "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
