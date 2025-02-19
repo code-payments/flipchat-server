@@ -34,17 +34,23 @@ func (c *Cache) GetProfile(ctx context.Context, id *commonpb.UserId) (*profilepb
 	cached, ok := c.cache.Get(cacheKey)
 
 	if !ok {
-		profile, err := c.db.GetProfile(ctx, id)
-		if err != nil {
+		fromDB, err := c.db.GetProfile(ctx, id)
+		if err == profile.ErrNotFound {
+			c.cache.Set(cacheKey, nil)
+			return nil, err
+		} else if err != nil {
 			return nil, err
 		}
 
-		copied := proto.Clone(profile).(*profilepb.UserProfile)
+		copied := proto.Clone(fromDB).(*profilepb.UserProfile)
 		c.cache.Set(cacheKey, copied)
 
-		return profile, nil
+		return fromDB, nil
 	}
 
+	if cached == nil {
+		return nil, profile.ErrNotFound
+	}
 	copied := proto.Clone(cached.(*profilepb.UserProfile)).(*profilepb.UserProfile)
 	return copied, nil
 }
