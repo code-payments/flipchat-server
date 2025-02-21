@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"errors"
+	"time"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 )
@@ -37,4 +38,11 @@ type Store interface {
 
 	// SetRegistrationFlag sets wether a userID is a registered account
 	SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId, isRegistered bool) error
+
+	// ExtendAirdropEligibility extends airdrop eligibility for a user until the
+	// specified time
+	ExtendAirdropEligibility(ctx context.Context, userID *commonpb.UserId, until time.Time) error
+
+	// GetAirdropEligibilityTimestamp gets the airdrop eligibility timestamp for a user
+	GetAirdropEligibilityTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error)
 }

@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -19,6 +20,7 @@ func RunStoreTests(t *testing.T, s account.Store, teardown func()) {
 	for _, tf := range []func(t *testing.T, s account.Store){
 		testStore_keyManagement,
 		testStore_registrationStatus,
+		testStore_airdropEligiblityTimestamp,
 	} {
 		tf(t, s)
 		teardown()
@@ -103,4 +105,27 @@ func testStore_registrationStatus(t *testing.T, s account.Store) {
 	isRegistered, err = s.IsRegistered(ctx, user)
 	require.Nil(t, err)
 	require.False(t, isRegistered)
+}
+
+func testStore_airdropEligiblityTimestamp(t *testing.T, s account.Store) {
+	ctx := context.Background()
+
+	user := model.MustGenerateUserID()
+
+	err := s.ExtendAirdropEligibility(ctx, user, time.Now())
+	require.Equal(t, err, account.ErrNotFound)
+
+	_, err = s.GetAirdropEligibilityTimestamp(ctx, user)
+	require.Equal(t, err, account.ErrNotFound)
+
+	user, err = s.Bind(ctx, user, model.MustGenerateKeyPair().Proto())
+	require.NoError(t, err)
+
+	expected := time.Unix(1740146105, 0).UTC()
+
+	require.NoError(t, s.ExtendAirdropEligibility(ctx, user, expected))
+
+	actual, err := s.GetAirdropEligibilityTimestamp(ctx, user)
+	require.NoError(t, err)
+	require.Equal(t, expected, actual)
 }

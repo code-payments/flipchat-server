@@ -49,8 +49,9 @@ const (
 )
 
 var (
-	InitialMessagingFee = codekin.ToQuarks(5)
-	MaxUnreadCount      = uint32(99)
+	InitialMessagingFee          = codekin.ToQuarks(5)
+	MaxUnreadCount               = uint32(99)
+	AirdropEligibilityTimeWindow = 3 * 4 * 24 * time.Hour // 3 months
 )
 
 type Server struct {
@@ -305,6 +306,11 @@ func (s *Server) StreamChatEvents(stream grpc.BidiStreamingServer[chatpb.StreamC
 	})
 
 	go s.flushInitialState(ctx, userID, ss)
+
+	err = s.accounts.ExtendAirdropEligibility(ctx, userID, time.Now().Add(AirdropEligibilityTimeWindow))
+	if err != nil {
+		log.Warn("failed to extend airdrop eligibility for user")
+	}
 
 	for {
 		select {

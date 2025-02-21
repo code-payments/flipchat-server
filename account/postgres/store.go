@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	pg "github.com/code-payments/flipchat-server/database/postgres"
@@ -295,4 +296,54 @@ func (s *store) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId
 	tracer.OnError(err)
 
 	return err
+}
+
+func (s *store) ExtendAirdropEligibility(ctx context.Context, userID *commonpb.UserId, until time.Time) error {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "ExtendAirdropEligibility")
+	defer tracer.End()
+
+	err := func() error {
+		encodedUserID := pg.Encode(userID.Value)
+
+		_, err := s.client.User.FindUnique(
+			db.User.ID.Equals(encodedUserID),
+		).Update(
+			db.User.ElibigibleForAirdropsUntil.Set(until),
+		).Exec(ctx)
+
+		if errors.Is(err, db.ErrNotFound) {
+			return account.ErrNotFound
+		}
+
+		return err
+	}()
+
+	tracer.OnError(err)
+
+	return err
+}
+
+func (s *store) GetAirdropEligibilityTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetAirdropEligibilityTimestamp")
+	defer tracer.End()
+
+	res, err := func() (time.Time, error) {
+		encodedUserID := pg.Encode(userID.Value)
+
+		res, err := s.client.User.FindUnique(
+			db.User.ID.Equals(encodedUserID),
+		).Exec(ctx)
+
+		if errors.Is(err, db.ErrNotFound) {
+			return time.Time{}, account.ErrNotFound
+		} else if err != nil {
+			return time.Time{}, err
+		}
+
+		return res.ElibigibleForAirdropsUntil, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
 }

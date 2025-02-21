@@ -98,8 +98,9 @@ model User {
   publicKeys   PublicKey[]
   xUser        XUser?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  elibigibleForAirdropsUntil DateTime @default(now())
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
   // Relations
 
@@ -437,12 +438,13 @@ const (
 type UserScalarFieldEnum string
 
 const (
-	UserScalarFieldEnumID           UserScalarFieldEnum = "id"
-	UserScalarFieldEnumDisplayName  UserScalarFieldEnum = "displayName"
-	UserScalarFieldEnumIsStaff      UserScalarFieldEnum = "isStaff"
-	UserScalarFieldEnumIsRegistered UserScalarFieldEnum = "isRegistered"
-	UserScalarFieldEnumCreatedAt    UserScalarFieldEnum = "createdAt"
-	UserScalarFieldEnumUpdatedAt    UserScalarFieldEnum = "updatedAt"
+	UserScalarFieldEnumID                         UserScalarFieldEnum = "id"
+	UserScalarFieldEnumDisplayName                UserScalarFieldEnum = "displayName"
+	UserScalarFieldEnumIsStaff                    UserScalarFieldEnum = "isStaff"
+	UserScalarFieldEnumIsRegistered               UserScalarFieldEnum = "isRegistered"
+	UserScalarFieldEnumElibigibleForAirdropsUntil UserScalarFieldEnum = "elibigibleForAirdropsUntil"
+	UserScalarFieldEnumCreatedAt                  UserScalarFieldEnum = "createdAt"
+	UserScalarFieldEnumUpdatedAt                  UserScalarFieldEnum = "updatedAt"
 )
 
 type XUserScalarFieldEnum string
@@ -621,6 +623,8 @@ const userFieldIsRegistered userPrismaFields = "isRegistered"
 const userFieldPublicKeys userPrismaFields = "publicKeys"
 
 const userFieldXUser userPrismaFields = "xUser"
+
+const userFieldElibigibleForAirdropsUntil userPrismaFields = "elibigibleForAirdropsUntil"
 
 const userFieldCreatedAt userPrismaFields = "createdAt"
 
@@ -1291,22 +1295,24 @@ type UserModel struct {
 
 // InnerUser holds the actual data
 type InnerUser struct {
-	ID           string   `json:"id"`
-	DisplayName  *string  `json:"displayName,omitempty"`
-	IsStaff      bool     `json:"isStaff"`
-	IsRegistered bool     `json:"isRegistered"`
-	CreatedAt    DateTime `json:"createdAt"`
-	UpdatedAt    DateTime `json:"updatedAt"`
+	ID                         string   `json:"id"`
+	DisplayName                *string  `json:"displayName,omitempty"`
+	IsStaff                    bool     `json:"isStaff"`
+	IsRegistered               bool     `json:"isRegistered"`
+	ElibigibleForAirdropsUntil DateTime `json:"elibigibleForAirdropsUntil"`
+	CreatedAt                  DateTime `json:"createdAt"`
+	UpdatedAt                  DateTime `json:"updatedAt"`
 }
 
 // RawUserModel is a struct for User when used in raw queries
 type RawUserModel struct {
-	ID           RawString   `json:"id"`
-	DisplayName  *RawString  `json:"displayName,omitempty"`
-	IsStaff      RawBoolean  `json:"isStaff"`
-	IsRegistered RawBoolean  `json:"isRegistered"`
-	CreatedAt    RawDateTime `json:"createdAt"`
-	UpdatedAt    RawDateTime `json:"updatedAt"`
+	ID                         RawString   `json:"id"`
+	DisplayName                *RawString  `json:"displayName,omitempty"`
+	IsStaff                    RawBoolean  `json:"isStaff"`
+	IsRegistered               RawBoolean  `json:"isRegistered"`
+	ElibigibleForAirdropsUntil RawDateTime `json:"elibigibleForAirdropsUntil"`
+	CreatedAt                  RawDateTime `json:"createdAt"`
+	UpdatedAt                  RawDateTime `json:"updatedAt"`
 }
 
 // RelationsUser holds the relation data separately
@@ -1721,6 +1727,11 @@ type userQuery struct {
 	PublicKeys userQueryPublicKeysRelations
 
 	XUser userQueryXUserRelations
+
+	// ElibigibleForAirdropsUntil
+	//
+	// @required
+	ElibigibleForAirdropsUntil userQueryElibigibleForAirdropsUntilDateTime
 
 	// CreatedAt
 	//
@@ -2917,6 +2928,317 @@ func (r userQueryXUserRelations) Unlink() userSetParam {
 
 func (r userQueryXUserXUser) Field() userPrismaFields {
 	return userFieldXUser
+}
+
+// base struct
+type userQueryElibigibleForAirdropsUntilDateTime struct{}
+
+// Set the required value of ElibigibleForAirdropsUntil
+func (r userQueryElibigibleForAirdropsUntilDateTime) Set(value DateTime) userSetParam {
+
+	return userSetParam{
+		data: builder.Field{
+			Name:  "elibigibleForAirdropsUntil",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ElibigibleForAirdropsUntil dynamically
+func (r userQueryElibigibleForAirdropsUntilDateTime) SetIfPresent(value *DateTime) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Equals(value DateTime) userWithPrismaElibigibleForAirdropsUntilEqualsParam {
+
+	return userWithPrismaElibigibleForAirdropsUntilEqualsParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) EqualsIfPresent(value *DateTime) userWithPrismaElibigibleForAirdropsUntilEqualsParam {
+	if value == nil {
+		return userWithPrismaElibigibleForAirdropsUntilEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Order(direction SortOrder) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name:  "elibigibleForAirdropsUntil",
+			Value: direction,
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Cursor(cursor DateTime) userCursorParam {
+	return userCursorParam{
+		data: builder.Field{
+			Name:  "elibigibleForAirdropsUntil",
+			Value: cursor,
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) In(value []DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) InIfPresent(value []DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) NotIn(value []DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) NotInIfPresent(value []DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Lt(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) LtIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Lte(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) LteIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Gt(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) GtIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Gte(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) GteIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Not(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) NotIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Before(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r userQueryElibigibleForAirdropsUntilDateTime) BeforeIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) After(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r userQueryElibigibleForAirdropsUntilDateTime) AfterIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) BeforeEquals(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r userQueryElibigibleForAirdropsUntilDateTime) BeforeEqualsIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) AfterEquals(value DateTime) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "elibigibleForAirdropsUntil",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r userQueryElibigibleForAirdropsUntilDateTime) AfterEqualsIfPresent(value *DateTime) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r userQueryElibigibleForAirdropsUntilDateTime) Field() userPrismaFields {
+	return userFieldElibigibleForAirdropsUntil
 }
 
 // base struct
@@ -25210,6 +25532,7 @@ var userOutput = []builder.Output{
 	{Name: "displayName"},
 	{Name: "isStaff"},
 	{Name: "isRegistered"},
+	{Name: "elibigibleForAirdropsUntil"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -25845,6 +26168,85 @@ func (p userWithPrismaXUserEqualsUniqueParam) xUserField() {}
 
 func (userWithPrismaXUserEqualsUniqueParam) unique() {}
 func (userWithPrismaXUserEqualsUniqueParam) equals() {}
+
+type UserWithPrismaElibigibleForAirdropsUntilEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	elibigibleForAirdropsUntilField()
+}
+
+type UserWithPrismaElibigibleForAirdropsUntilSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	elibigibleForAirdropsUntilField()
+}
+
+type userWithPrismaElibigibleForAirdropsUntilSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilSetParam) userModel() {}
+
+func (p userWithPrismaElibigibleForAirdropsUntilSetParam) elibigibleForAirdropsUntilField() {}
+
+type UserWithPrismaElibigibleForAirdropsUntilWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	elibigibleForAirdropsUntilField()
+}
+
+type userWithPrismaElibigibleForAirdropsUntilEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilEqualsParam) userModel() {}
+
+func (p userWithPrismaElibigibleForAirdropsUntilEqualsParam) elibigibleForAirdropsUntilField() {}
+
+func (userWithPrismaElibigibleForAirdropsUntilSetParam) settable()  {}
+func (userWithPrismaElibigibleForAirdropsUntilEqualsParam) equals() {}
+
+type userWithPrismaElibigibleForAirdropsUntilEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaElibigibleForAirdropsUntilEqualsUniqueParam) userModel() {}
+func (p userWithPrismaElibigibleForAirdropsUntilEqualsUniqueParam) elibigibleForAirdropsUntilField() {
+}
+
+func (userWithPrismaElibigibleForAirdropsUntilEqualsUniqueParam) unique() {}
+func (userWithPrismaElibigibleForAirdropsUntilEqualsUniqueParam) equals() {}
 
 type UserWithPrismaCreatedAtEqualsSetParam interface {
 	field() builder.Field

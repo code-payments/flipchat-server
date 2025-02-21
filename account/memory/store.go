@@ -5,6 +5,7 @@ import (
 	"context"
 	"slices"
 	"sync"
+	"time"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
@@ -22,15 +23,19 @@ type memory struct {
 	// maps a publicKey (string representation) to a userID (also stored as a string). This allows quick lookups of the user by their public key.
 	keys map[string]string
 
+	// maps a userID to an airdrop elibigility timestamp
+	airdropEligibility map[string]time.Time
+
 	// set of registered users
 	registeredUsers map[string]any
 }
 
 func NewInMemory() account.Store {
 	return &memory{
-		users:           make(map[string][]string),
-		keys:            make(map[string]string),
-		registeredUsers: make(map[string]any),
+		users:              make(map[string][]string),
+		keys:               make(map[string]string),
+		airdropEligibility: make(map[string]time.Time),
+		registeredUsers:    make(map[string]any),
 	}
 }
 
@@ -55,6 +60,9 @@ func (m *memory) Bind(_ context.Context, userID *commonpb.UserId, pubKey *common
 	m.users[string(userID.Value)] = keys
 
 	m.keys[string(pubKey.Value)] = string(userID.Value)
+
+	m.airdropEligibility[string(userID.Value)] = time.Now()
+
 	return proto.Clone(userID).(*commonpb.UserId), nil
 }
 
@@ -146,4 +154,30 @@ func (m *memory) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserI
 		delete(m.registeredUsers, string(userID.Value))
 	}
 	return nil
+}
+
+func (m *memory) ExtendAirdropEligibility(ctx context.Context, userID *commonpb.UserId, until time.Time) error {
+	m.Lock()
+	defer m.Unlock()
+
+	_, ok := m.users[string(userID.Value)]
+	if !ok {
+		return account.ErrNotFound
+	}
+
+	m.airdropEligibility[string(userID.Value)] = until
+
+	return nil
+}
+
+func (m *memory) GetAirdropEligibilityTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	_, ok := m.users[string(userID.Value)]
+	if !ok {
+		return time.Time{}, account.ErrNotFound
+	}
+
+	return m.airdropEligibility[string(userID.Value)], nil
 }
