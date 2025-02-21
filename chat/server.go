@@ -51,7 +51,7 @@ const (
 var (
 	InitialMessagingFee          = codekin.ToQuarks(5)
 	MaxUnreadCount               = uint32(99)
-	AirdropEligibilityTimeWindow = 3 * 4 * 24 * time.Hour // 3 months
+	AirdropEligibilityTimeWindow = 3 * 4 * 7 * 24 * time.Hour // 3 months
 )
 
 type Server struct {
