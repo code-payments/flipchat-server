@@ -108,7 +108,8 @@ model Chat {
 
   // Relations
 
-  members Member[]
+  members      Member[]
+  PromotedChat PromotedChat[]
 
   @@map("flipchat_chats")
 }
@@ -222,4 +223,24 @@ model Iap {
   // Constraints
 
   @@map("flipchat_iap")
+}
+
+model PromotedChat {
+  // Fields
+
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id])
+
+  topic String
+
+  score Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  // Constraints
+  @@id([chatId, topic])
+  @@map("flipchat_promotedchats")
 }

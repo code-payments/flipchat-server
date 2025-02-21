@@ -182,7 +182,8 @@ model Chat {
 
   // Relations
 
-  members Member[]
+  members      Member[]
+  PromotedChat PromotedChat[]
 
   @@map("flipchat_chats")
 }
@@ -297,6 +298,26 @@ model Iap {
 
   @@map("flipchat_iap")
 }
+
+model PromotedChat {
+  // Fields
+
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id])
+
+  topic String
+
+  score Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  // Constraints
+  @@id([chatId, topic])
+  @@map("flipchat_promotedchats")
+}
 `
 const schemaDatasourceURL = ""
 const schemaEnvVarName = "DATABASE_URL"
@@ -378,6 +399,7 @@ func newClient() *PrismaClient {
 	c.Pointer = pointerActions{client: c}
 	c.PushToken = pushTokenActions{client: c}
 	c.Iap = iapActions{client: c}
+	c.PromotedChat = promotedChatActions{client: c}
 
 	c.Prisma = &PrismaActions{
 		Raw: &raw.Raw{Engine: c},
@@ -422,6 +444,8 @@ type PrismaClient struct {
 	PushToken pushTokenActions
 	// Iap provides access to CRUD methods.
 	Iap iapActions
+	// PromotedChat provides access to CRUD methods.
+	PromotedChat promotedChatActions
 }
 
 // --- template enums.gotpl ---
@@ -556,6 +580,16 @@ const (
 	IapScalarFieldEnumProduct   IapScalarFieldEnum = "product"
 	IapScalarFieldEnumState     IapScalarFieldEnum = "state"
 	IapScalarFieldEnumCreatedAt IapScalarFieldEnum = "createdAt"
+)
+
+type PromotedChatScalarFieldEnum string
+
+const (
+	PromotedChatScalarFieldEnumChatID    PromotedChatScalarFieldEnum = "chatId"
+	PromotedChatScalarFieldEnumTopic     PromotedChatScalarFieldEnum = "topic"
+	PromotedChatScalarFieldEnumScore     PromotedChatScalarFieldEnum = "score"
+	PromotedChatScalarFieldEnumCreatedAt PromotedChatScalarFieldEnum = "createdAt"
+	PromotedChatScalarFieldEnumUpdatedAt PromotedChatScalarFieldEnum = "updatedAt"
 )
 
 type SortOrder string
@@ -702,6 +736,8 @@ const chatFieldLastActivityAt chatPrismaFields = "lastActivityAt"
 
 const chatFieldMembers chatPrismaFields = "members"
 
+const chatFieldPromotedChat chatPrismaFields = "PromotedChat"
+
 type memberPrismaFields = prismaFields
 
 const memberFieldChatID memberPrismaFields = "chatId"
@@ -788,6 +824,20 @@ const iapFieldState iapPrismaFields = "state"
 
 const iapFieldCreatedAt iapPrismaFields = "createdAt"
 
+type promotedChatPrismaFields = prismaFields
+
+const promotedChatFieldChatID promotedChatPrismaFields = "chatId"
+
+const promotedChatFieldChat promotedChatPrismaFields = "chat"
+
+const promotedChatFieldTopic promotedChatPrismaFields = "topic"
+
+const promotedChatFieldScore promotedChatPrismaFields = "score"
+
+const promotedChatFieldCreatedAt promotedChatPrismaFields = "createdAt"
+
+const promotedChatFieldUpdatedAt promotedChatPrismaFields = "updatedAt"
+
 // --- template mock.gotpl ---
 func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 	expectations := new([]mock.Expectation)
@@ -838,6 +888,10 @@ func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 		mock: m,
 	}
 
+	m.PromotedChat = promotedChatMock{
+		mock: m,
+	}
+
 	return pc, m, m.Ensure
 }
 
@@ -863,6 +917,8 @@ type Mock struct {
 	PushToken pushTokenMock
 
 	Iap iapMock
+
+	PromotedChat promotedChatMock
 }
 
 type userMock struct {
@@ -1285,6 +1341,48 @@ func (m *iapMockExec) Errors(err error) {
 	})
 }
 
+type promotedChatMock struct {
+	mock *Mock
+}
+
+type PromotedChatMockExpectParam interface {
+	ExtractQuery() builder.Query
+	promotedChatModel()
+}
+
+func (m *promotedChatMock) Expect(query PromotedChatMockExpectParam) *promotedChatMockExec {
+	return &promotedChatMockExec{
+		mock:  m.mock,
+		query: query.ExtractQuery(),
+	}
+}
+
+type promotedChatMockExec struct {
+	mock  *Mock
+	query builder.Query
+}
+
+func (m *promotedChatMockExec) Returns(v PromotedChatModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *promotedChatMockExec) ReturnsMany(v []PromotedChatModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *promotedChatMockExec) Errors(err error) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query:   m.query,
+		WantErr: err,
+	})
+}
+
 // --- template models.gotpl ---
 
 // UserModel represents the User model and is a wrapper for accessing fields and methods
@@ -1486,7 +1584,8 @@ type RawChatModel struct {
 
 // RelationsChat holds the relation data separately
 type RelationsChat struct {
-	Members []MemberModel `json:"members,omitempty"`
+	Members      []MemberModel       `json:"members,omitempty"`
+	PromotedChat []PromotedChatModel `json:"PromotedChat,omitempty"`
 }
 
 func (r ChatModel) DisplayName() (value String, ok bool) {
@@ -1508,6 +1607,13 @@ func (r ChatModel) Members() (value []MemberModel) {
 		panic("attempted to access members but did not fetch it using the .With() syntax")
 	}
 	return r.RelationsChat.Members
+}
+
+func (r ChatModel) PromotedChat() (value []PromotedChatModel) {
+	if r.RelationsChat.PromotedChat == nil {
+		panic("attempted to access promotedChat but did not fetch it using the .With() syntax")
+	}
+	return r.RelationsChat.PromotedChat
 }
 
 // MemberModel represents the Member model and is a wrapper for accessing fields and methods
@@ -1694,6 +1800,42 @@ type RawIapModel struct {
 
 // RelationsIap holds the relation data separately
 type RelationsIap struct {
+}
+
+// PromotedChatModel represents the PromotedChat model and is a wrapper for accessing fields and methods
+type PromotedChatModel struct {
+	InnerPromotedChat
+	RelationsPromotedChat
+}
+
+// InnerPromotedChat holds the actual data
+type InnerPromotedChat struct {
+	ChatID    string   `json:"chatId"`
+	Topic     string   `json:"topic"`
+	Score     int      `json:"score"`
+	CreatedAt DateTime `json:"createdAt"`
+	UpdatedAt DateTime `json:"updatedAt"`
+}
+
+// RawPromotedChatModel is a struct for PromotedChat when used in raw queries
+type RawPromotedChatModel struct {
+	ChatID    RawString   `json:"chatId"`
+	Topic     RawString   `json:"topic"`
+	Score     RawInt      `json:"score"`
+	CreatedAt RawDateTime `json:"createdAt"`
+	UpdatedAt RawDateTime `json:"updatedAt"`
+}
+
+// RelationsPromotedChat holds the relation data separately
+type RelationsPromotedChat struct {
+	Chat *ChatModel `json:"chat,omitempty"`
+}
+
+func (r PromotedChatModel) Chat() (value *ChatModel) {
+	if r.RelationsPromotedChat.Chat == nil {
+		panic("attempted to access chat but did not fetch it using the .With() syntax")
+	}
+	return r.RelationsPromotedChat.Chat
 }
 
 // --- template query.gotpl ---
@@ -10574,6 +10716,8 @@ type chatQuery struct {
 	LastActivityAt chatQueryLastActivityAtDateTime
 
 	Members chatQueryMembersRelations
+
+	PromotedChat chatQueryPromotedChatRelations
 }
 
 func (chatQuery) Not(params ...ChatWhereParam) chatDefaultParam {
@@ -14030,6 +14174,178 @@ func (r chatQueryMembersRelations) Unlink(
 
 func (r chatQueryMembersMember) Field() chatPrismaFields {
 	return chatFieldMembers
+}
+
+// base struct
+type chatQueryPromotedChatPromotedChat struct{}
+
+type chatQueryPromotedChatRelations struct{}
+
+// Chat -> PromotedChat
+//
+// @relation
+// @required
+func (chatQueryPromotedChatRelations) Some(
+	params ...PromotedChatWhereParam,
+) chatDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "PromotedChat",
+			Fields: []builder.Field{
+				{
+					Name:   "some",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+// Chat -> PromotedChat
+//
+// @relation
+// @required
+func (chatQueryPromotedChatRelations) Every(
+	params ...PromotedChatWhereParam,
+) chatDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "PromotedChat",
+			Fields: []builder.Field{
+				{
+					Name:   "every",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+// Chat -> PromotedChat
+//
+// @relation
+// @required
+func (chatQueryPromotedChatRelations) None(
+	params ...PromotedChatWhereParam,
+) chatDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return chatDefaultParam{
+		data: builder.Field{
+			Name: "PromotedChat",
+			Fields: []builder.Field{
+				{
+					Name:   "none",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+func (chatQueryPromotedChatRelations) Fetch(
+
+	params ...PromotedChatWhereParam,
+
+) chatToPromotedChatFindMany {
+	var v chatToPromotedChatFindMany
+
+	v.query.Operation = "query"
+	v.query.Method = "PromotedChat"
+	v.query.Outputs = promotedChatOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r chatQueryPromotedChatRelations) Link(
+	params ...PromotedChatWhereParam,
+) chatSetParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return chatSetParam{
+		data: builder.Field{
+			Name: "PromotedChat",
+			Fields: []builder.Field{
+				{
+					Name:   "connect",
+					Fields: builder.TransformEquals(fields),
+
+					List:     true,
+					WrapList: true,
+				},
+			},
+		},
+	}
+}
+
+func (r chatQueryPromotedChatRelations) Unlink(
+	params ...PromotedChatWhereParam,
+) chatSetParam {
+	var v chatSetParam
+
+	var fields []builder.Field
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+	v = chatSetParam{
+		data: builder.Field{
+			Name: "PromotedChat",
+			Fields: []builder.Field{
+				{
+					Name:     "disconnect",
+					List:     true,
+					WrapList: true,
+					Fields:   builder.TransformEquals(fields),
+				},
+			},
+		},
+	}
+
+	return v
+}
+
+func (r chatQueryPromotedChatPromotedChat) Field() chatPrismaFields {
+	return chatFieldPromotedChat
 }
 
 // Member acts as a namespaces to access query methods for the Member model
@@ -25517,6 +25833,1912 @@ func (r iapQueryCreatedAtDateTime) Field() iapPrismaFields {
 	return iapFieldCreatedAt
 }
 
+// PromotedChat acts as a namespaces to access query methods for the PromotedChat model
+var PromotedChat = promotedChatQuery{}
+
+// promotedChatQuery exposes query functions for the promotedChat model
+type promotedChatQuery struct {
+
+	// ChatID
+	//
+	// @required
+	ChatID promotedChatQueryChatIDString
+
+	Chat promotedChatQueryChatRelations
+
+	// Topic
+	//
+	// @required
+	Topic promotedChatQueryTopicString
+
+	// Score
+	//
+	// @required
+	Score promotedChatQueryScoreInt
+
+	// CreatedAt
+	//
+	// @required
+	CreatedAt promotedChatQueryCreatedAtDateTime
+
+	// UpdatedAt
+	//
+	// @required
+	UpdatedAt promotedChatQueryUpdatedAtDateTime
+}
+
+func (promotedChatQuery) Not(params ...PromotedChatWhereParam) promotedChatDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name:     "NOT",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (promotedChatQuery) Or(params ...PromotedChatWhereParam) promotedChatDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name:     "OR",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (promotedChatQuery) And(params ...PromotedChatWhereParam) promotedChatDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name:     "AND",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (promotedChatQuery) ChatIDTopic(
+	_chatID PromotedChatWithPrismaChatIDWhereParam,
+
+	_topic PromotedChatWithPrismaTopicWhereParam,
+) PromotedChatEqualsUniqueWhereParam {
+	var fields []builder.Field
+
+	fields = append(fields, _chatID.field())
+	fields = append(fields, _topic.field())
+
+	return promotedChatEqualsUniqueParam{
+		data: builder.Field{
+			Name:   "chatId_topic",
+			Fields: builder.TransformEquals(fields),
+		},
+	}
+}
+
+// base struct
+type promotedChatQueryChatIDString struct{}
+
+// Set the required value of ChatID
+func (r promotedChatQueryChatIDString) Set(value string) promotedChatSetParam {
+
+	return promotedChatSetParam{
+		data: builder.Field{
+			Name:  "chatId",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ChatID dynamically
+func (r promotedChatQueryChatIDString) SetIfPresent(value *String) promotedChatSetParam {
+	if value == nil {
+		return promotedChatSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r promotedChatQueryChatIDString) Equals(value string) promotedChatWithPrismaChatIDEqualsParam {
+
+	return promotedChatWithPrismaChatIDEqualsParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) EqualsIfPresent(value *string) promotedChatWithPrismaChatIDEqualsParam {
+	if value == nil {
+		return promotedChatWithPrismaChatIDEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r promotedChatQueryChatIDString) Order(direction SortOrder) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name:  "chatId",
+			Value: direction,
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) Cursor(cursor string) promotedChatCursorParam {
+	return promotedChatCursorParam{
+		data: builder.Field{
+			Name:  "chatId",
+			Value: cursor,
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) In(value []string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) InIfPresent(value []string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r promotedChatQueryChatIDString) NotIn(value []string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) NotInIfPresent(value []string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r promotedChatQueryChatIDString) Lt(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) LtIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r promotedChatQueryChatIDString) Lte(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) LteIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r promotedChatQueryChatIDString) Gt(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) GtIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r promotedChatQueryChatIDString) Gte(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) GteIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r promotedChatQueryChatIDString) Contains(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) ContainsIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r promotedChatQueryChatIDString) StartsWith(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) StartsWithIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r promotedChatQueryChatIDString) EndsWith(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) EndsWithIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r promotedChatQueryChatIDString) Mode(value QueryMode) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) ModeIfPresent(value *QueryMode) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r promotedChatQueryChatIDString) Not(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatIDString) NotIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r promotedChatQueryChatIDString) HasPrefix(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r promotedChatQueryChatIDString) HasPrefixIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r promotedChatQueryChatIDString) HasSuffix(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chatId",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r promotedChatQueryChatIDString) HasSuffixIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r promotedChatQueryChatIDString) Field() promotedChatPrismaFields {
+	return promotedChatFieldChatID
+}
+
+// base struct
+type promotedChatQueryChatChat struct{}
+
+type promotedChatQueryChatRelations struct{}
+
+// PromotedChat -> Chat
+//
+// @relation
+// @required
+func (promotedChatQueryChatRelations) Where(
+	params ...ChatWhereParam,
+) promotedChatDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "chat",
+			Fields: []builder.Field{
+				{
+					Name:   "is",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+func (promotedChatQueryChatRelations) Fetch() promotedChatToChatFindUnique {
+	var v promotedChatToChatFindUnique
+
+	v.query.Operation = "query"
+	v.query.Method = "chat"
+	v.query.Outputs = chatOutput
+
+	return v
+}
+
+func (r promotedChatQueryChatRelations) Link(
+	params ChatWhereParam,
+) promotedChatWithPrismaChatSetParam {
+	var fields []builder.Field
+
+	f := params.field()
+	if f.Fields == nil && f.Value == nil {
+		return promotedChatWithPrismaChatSetParam{}
+	}
+
+	fields = append(fields, f)
+
+	return promotedChatWithPrismaChatSetParam{
+		data: builder.Field{
+			Name: "chat",
+			Fields: []builder.Field{
+				{
+					Name:   "connect",
+					Fields: builder.TransformEquals(fields),
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryChatRelations) Unlink() promotedChatWithPrismaChatSetParam {
+	var v promotedChatWithPrismaChatSetParam
+
+	v = promotedChatWithPrismaChatSetParam{
+		data: builder.Field{
+			Name: "chat",
+			Fields: []builder.Field{
+				{
+					Name:  "disconnect",
+					Value: true,
+				},
+			},
+		},
+	}
+
+	return v
+}
+
+func (r promotedChatQueryChatChat) Field() promotedChatPrismaFields {
+	return promotedChatFieldChat
+}
+
+// base struct
+type promotedChatQueryTopicString struct{}
+
+// Set the required value of Topic
+func (r promotedChatQueryTopicString) Set(value string) promotedChatWithPrismaTopicSetParam {
+
+	return promotedChatWithPrismaTopicSetParam{
+		data: builder.Field{
+			Name:  "topic",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Topic dynamically
+func (r promotedChatQueryTopicString) SetIfPresent(value *String) promotedChatWithPrismaTopicSetParam {
+	if value == nil {
+		return promotedChatWithPrismaTopicSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r promotedChatQueryTopicString) Equals(value string) promotedChatWithPrismaTopicEqualsParam {
+
+	return promotedChatWithPrismaTopicEqualsParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) EqualsIfPresent(value *string) promotedChatWithPrismaTopicEqualsParam {
+	if value == nil {
+		return promotedChatWithPrismaTopicEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r promotedChatQueryTopicString) Order(direction SortOrder) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name:  "topic",
+			Value: direction,
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) Cursor(cursor string) promotedChatCursorParam {
+	return promotedChatCursorParam{
+		data: builder.Field{
+			Name:  "topic",
+			Value: cursor,
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) In(value []string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) InIfPresent(value []string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r promotedChatQueryTopicString) NotIn(value []string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) NotInIfPresent(value []string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r promotedChatQueryTopicString) Lt(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) LtIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r promotedChatQueryTopicString) Lte(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) LteIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r promotedChatQueryTopicString) Gt(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) GtIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r promotedChatQueryTopicString) Gte(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) GteIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r promotedChatQueryTopicString) Contains(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) ContainsIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r promotedChatQueryTopicString) StartsWith(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) StartsWithIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r promotedChatQueryTopicString) EndsWith(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) EndsWithIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r promotedChatQueryTopicString) Mode(value QueryMode) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) ModeIfPresent(value *QueryMode) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r promotedChatQueryTopicString) Not(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryTopicString) NotIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r promotedChatQueryTopicString) HasPrefix(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r promotedChatQueryTopicString) HasPrefixIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r promotedChatQueryTopicString) HasSuffix(value string) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "topic",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r promotedChatQueryTopicString) HasSuffixIfPresent(value *string) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r promotedChatQueryTopicString) Field() promotedChatPrismaFields {
+	return promotedChatFieldTopic
+}
+
+// base struct
+type promotedChatQueryScoreInt struct{}
+
+// Set the required value of Score
+func (r promotedChatQueryScoreInt) Set(value int) promotedChatSetParam {
+
+	return promotedChatSetParam{
+		data: builder.Field{
+			Name:  "score",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Score dynamically
+func (r promotedChatQueryScoreInt) SetIfPresent(value *Int) promotedChatSetParam {
+	if value == nil {
+		return promotedChatSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of Score
+func (r promotedChatQueryScoreInt) Increment(value int) promotedChatSetParam {
+	return promotedChatSetParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) IncrementIfPresent(value *int) promotedChatSetParam {
+	if value == nil {
+		return promotedChatSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of Score
+func (r promotedChatQueryScoreInt) Decrement(value int) promotedChatSetParam {
+	return promotedChatSetParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) DecrementIfPresent(value *int) promotedChatSetParam {
+	if value == nil {
+		return promotedChatSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of Score
+func (r promotedChatQueryScoreInt) Multiply(value int) promotedChatSetParam {
+	return promotedChatSetParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) MultiplyIfPresent(value *int) promotedChatSetParam {
+	if value == nil {
+		return promotedChatSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of Score
+func (r promotedChatQueryScoreInt) Divide(value int) promotedChatSetParam {
+	return promotedChatSetParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) DivideIfPresent(value *int) promotedChatSetParam {
+	if value == nil {
+		return promotedChatSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r promotedChatQueryScoreInt) Equals(value int) promotedChatWithPrismaScoreEqualsParam {
+
+	return promotedChatWithPrismaScoreEqualsParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) EqualsIfPresent(value *int) promotedChatWithPrismaScoreEqualsParam {
+	if value == nil {
+		return promotedChatWithPrismaScoreEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r promotedChatQueryScoreInt) Order(direction SortOrder) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name:  "score",
+			Value: direction,
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) Cursor(cursor int) promotedChatCursorParam {
+	return promotedChatCursorParam{
+		data: builder.Field{
+			Name:  "score",
+			Value: cursor,
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) In(value []int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) InIfPresent(value []int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r promotedChatQueryScoreInt) NotIn(value []int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) NotInIfPresent(value []int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r promotedChatQueryScoreInt) Lt(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) LtIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r promotedChatQueryScoreInt) Lte(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) LteIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r promotedChatQueryScoreInt) Gt(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) GtIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r promotedChatQueryScoreInt) Gte(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) GteIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r promotedChatQueryScoreInt) Not(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryScoreInt) NotIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r promotedChatQueryScoreInt) LT(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r promotedChatQueryScoreInt) LTIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r promotedChatQueryScoreInt) LTE(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r promotedChatQueryScoreInt) LTEIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r promotedChatQueryScoreInt) GT(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r promotedChatQueryScoreInt) GTIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r promotedChatQueryScoreInt) GTE(value int) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "score",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r promotedChatQueryScoreInt) GTEIfPresent(value *int) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r promotedChatQueryScoreInt) Field() promotedChatPrismaFields {
+	return promotedChatFieldScore
+}
+
+// base struct
+type promotedChatQueryCreatedAtDateTime struct{}
+
+// Set the required value of CreatedAt
+func (r promotedChatQueryCreatedAtDateTime) Set(value DateTime) promotedChatSetParam {
+
+	return promotedChatSetParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of CreatedAt dynamically
+func (r promotedChatQueryCreatedAtDateTime) SetIfPresent(value *DateTime) promotedChatSetParam {
+	if value == nil {
+		return promotedChatSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Equals(value DateTime) promotedChatWithPrismaCreatedAtEqualsParam {
+
+	return promotedChatWithPrismaCreatedAtEqualsParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) EqualsIfPresent(value *DateTime) promotedChatWithPrismaCreatedAtEqualsParam {
+	if value == nil {
+		return promotedChatWithPrismaCreatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Order(direction SortOrder) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Cursor(cursor DateTime) promotedChatCursorParam {
+	return promotedChatCursorParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) In(value []DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) InIfPresent(value []DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) NotIn(value []DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) NotInIfPresent(value []DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Lt(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) LtIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Lte(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) LteIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Gt(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) GtIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Gte(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) GteIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Not(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryCreatedAtDateTime) NotIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r promotedChatQueryCreatedAtDateTime) Before(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r promotedChatQueryCreatedAtDateTime) BeforeIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r promotedChatQueryCreatedAtDateTime) After(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r promotedChatQueryCreatedAtDateTime) AfterIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r promotedChatQueryCreatedAtDateTime) BeforeEquals(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r promotedChatQueryCreatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r promotedChatQueryCreatedAtDateTime) AfterEquals(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r promotedChatQueryCreatedAtDateTime) AfterEqualsIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r promotedChatQueryCreatedAtDateTime) Field() promotedChatPrismaFields {
+	return promotedChatFieldCreatedAt
+}
+
+// base struct
+type promotedChatQueryUpdatedAtDateTime struct{}
+
+// Set the required value of UpdatedAt
+func (r promotedChatQueryUpdatedAtDateTime) Set(value DateTime) promotedChatSetParam {
+
+	return promotedChatSetParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of UpdatedAt dynamically
+func (r promotedChatQueryUpdatedAtDateTime) SetIfPresent(value *DateTime) promotedChatSetParam {
+	if value == nil {
+		return promotedChatSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Equals(value DateTime) promotedChatWithPrismaUpdatedAtEqualsParam {
+
+	return promotedChatWithPrismaUpdatedAtEqualsParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) EqualsIfPresent(value *DateTime) promotedChatWithPrismaUpdatedAtEqualsParam {
+	if value == nil {
+		return promotedChatWithPrismaUpdatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Order(direction SortOrder) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Cursor(cursor DateTime) promotedChatCursorParam {
+	return promotedChatCursorParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) In(value []DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) InIfPresent(value []DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) NotIn(value []DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) NotInIfPresent(value []DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Lt(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) LtIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Lte(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) LteIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Gt(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) GtIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Gte(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) GteIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Not(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) NotIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r promotedChatQueryUpdatedAtDateTime) Before(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r promotedChatQueryUpdatedAtDateTime) BeforeIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r promotedChatQueryUpdatedAtDateTime) After(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r promotedChatQueryUpdatedAtDateTime) AfterIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r promotedChatQueryUpdatedAtDateTime) BeforeEquals(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r promotedChatQueryUpdatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r promotedChatQueryUpdatedAtDateTime) AfterEquals(value DateTime) promotedChatDefaultParam {
+	return promotedChatDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r promotedChatQueryUpdatedAtDateTime) AfterEqualsIfPresent(value *DateTime) promotedChatDefaultParam {
+	if value == nil {
+		return promotedChatDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r promotedChatQueryUpdatedAtDateTime) Field() promotedChatPrismaFields {
+	return promotedChatFieldUpdatedAt
+}
+
 // --- template actions.gotpl ---
 var countOutput = []builder.Output{
 	{Name: "count"},
@@ -29617,6 +31839,84 @@ func (p chatWithPrismaMembersEqualsUniqueParam) membersField() {}
 func (chatWithPrismaMembersEqualsUniqueParam) unique() {}
 func (chatWithPrismaMembersEqualsUniqueParam) equals() {}
 
+type ChatWithPrismaPromotedChatEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	chatModel()
+	promotedChatField()
+}
+
+type ChatWithPrismaPromotedChatSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	chatModel()
+	promotedChatField()
+}
+
+type chatWithPrismaPromotedChatSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaPromotedChatSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaPromotedChatSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaPromotedChatSetParam) chatModel() {}
+
+func (p chatWithPrismaPromotedChatSetParam) promotedChatField() {}
+
+type ChatWithPrismaPromotedChatWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	chatModel()
+	promotedChatField()
+}
+
+type chatWithPrismaPromotedChatEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaPromotedChatEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaPromotedChatEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaPromotedChatEqualsParam) chatModel() {}
+
+func (p chatWithPrismaPromotedChatEqualsParam) promotedChatField() {}
+
+func (chatWithPrismaPromotedChatSetParam) settable()  {}
+func (chatWithPrismaPromotedChatEqualsParam) equals() {}
+
+type chatWithPrismaPromotedChatEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p chatWithPrismaPromotedChatEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p chatWithPrismaPromotedChatEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p chatWithPrismaPromotedChatEqualsUniqueParam) chatModel()         {}
+func (p chatWithPrismaPromotedChatEqualsUniqueParam) promotedChatField() {}
+
+func (chatWithPrismaPromotedChatEqualsUniqueParam) unique() {}
+func (chatWithPrismaPromotedChatEqualsUniqueParam) equals() {}
+
 type memberActions struct {
 	// client holds the prisma client
 	client *PrismaClient
@@ -33478,6 +35778,651 @@ func (p iapWithPrismaCreatedAtEqualsUniqueParam) createdAtField() {}
 func (iapWithPrismaCreatedAtEqualsUniqueParam) unique() {}
 func (iapWithPrismaCreatedAtEqualsUniqueParam) equals() {}
 
+type promotedChatActions struct {
+	// client holds the prisma client
+	client *PrismaClient
+}
+
+var promotedChatOutput = []builder.Output{
+	{Name: "chatId"},
+	{Name: "topic"},
+	{Name: "score"},
+	{Name: "createdAt"},
+	{Name: "updatedAt"},
+}
+
+type PromotedChatRelationWith interface {
+	getQuery() builder.Query
+	with()
+	promotedChatRelation()
+}
+
+type PromotedChatWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+}
+
+type promotedChatDefaultParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatDefaultParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatDefaultParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatDefaultParam) promotedChatModel() {}
+
+type PromotedChatOrderByParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+}
+
+type promotedChatOrderByParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatOrderByParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatOrderByParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatOrderByParam) promotedChatModel() {}
+
+type PromotedChatCursorParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	isCursor()
+}
+
+type promotedChatCursorParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatCursorParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatCursorParam) isCursor() {}
+
+func (p promotedChatCursorParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatCursorParam) promotedChatModel() {}
+
+type PromotedChatParamUnique interface {
+	field() builder.Field
+	getQuery() builder.Query
+	unique()
+	promotedChatModel()
+}
+
+type promotedChatParamUnique struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatParamUnique) promotedChatModel() {}
+
+func (promotedChatParamUnique) unique() {}
+
+func (p promotedChatParamUnique) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatParamUnique) getQuery() builder.Query {
+	return p.query
+}
+
+type PromotedChatEqualsWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	promotedChatModel()
+}
+
+type promotedChatEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatEqualsParam) promotedChatModel() {}
+
+func (promotedChatEqualsParam) equals() {}
+
+func (p promotedChatEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+type PromotedChatEqualsUniqueWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	unique()
+	promotedChatModel()
+}
+
+type promotedChatEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatEqualsUniqueParam) promotedChatModel() {}
+
+func (promotedChatEqualsUniqueParam) unique() {}
+func (promotedChatEqualsUniqueParam) equals() {}
+
+func (p promotedChatEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+type PromotedChatSetParam interface {
+	field() builder.Field
+	settable()
+	promotedChatModel()
+}
+
+type promotedChatSetParam struct {
+	data builder.Field
+}
+
+func (promotedChatSetParam) settable() {}
+
+func (p promotedChatSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatSetParam) promotedChatModel() {}
+
+type PromotedChatWithPrismaChatIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	promotedChatModel()
+	chatIDField()
+}
+
+type PromotedChatWithPrismaChatIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	chatIDField()
+}
+
+type promotedChatWithPrismaChatIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaChatIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaChatIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaChatIDSetParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaChatIDSetParam) chatIDField() {}
+
+type PromotedChatWithPrismaChatIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	chatIDField()
+}
+
+type promotedChatWithPrismaChatIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaChatIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaChatIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaChatIDEqualsParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaChatIDEqualsParam) chatIDField() {}
+
+func (promotedChatWithPrismaChatIDSetParam) settable()  {}
+func (promotedChatWithPrismaChatIDEqualsParam) equals() {}
+
+type promotedChatWithPrismaChatIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaChatIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaChatIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaChatIDEqualsUniqueParam) promotedChatModel() {}
+func (p promotedChatWithPrismaChatIDEqualsUniqueParam) chatIDField()       {}
+
+func (promotedChatWithPrismaChatIDEqualsUniqueParam) unique() {}
+func (promotedChatWithPrismaChatIDEqualsUniqueParam) equals() {}
+
+type PromotedChatWithPrismaChatEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	promotedChatModel()
+	chatField()
+}
+
+type PromotedChatWithPrismaChatSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	chatField()
+}
+
+type promotedChatWithPrismaChatSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaChatSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaChatSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaChatSetParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaChatSetParam) chatField() {}
+
+type PromotedChatWithPrismaChatWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	chatField()
+}
+
+type promotedChatWithPrismaChatEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaChatEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaChatEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaChatEqualsParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaChatEqualsParam) chatField() {}
+
+func (promotedChatWithPrismaChatSetParam) settable()  {}
+func (promotedChatWithPrismaChatEqualsParam) equals() {}
+
+type promotedChatWithPrismaChatEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaChatEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaChatEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaChatEqualsUniqueParam) promotedChatModel() {}
+func (p promotedChatWithPrismaChatEqualsUniqueParam) chatField()         {}
+
+func (promotedChatWithPrismaChatEqualsUniqueParam) unique() {}
+func (promotedChatWithPrismaChatEqualsUniqueParam) equals() {}
+
+type PromotedChatWithPrismaTopicEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	promotedChatModel()
+	topicField()
+}
+
+type PromotedChatWithPrismaTopicSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	topicField()
+}
+
+type promotedChatWithPrismaTopicSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaTopicSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaTopicSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaTopicSetParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaTopicSetParam) topicField() {}
+
+type PromotedChatWithPrismaTopicWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	topicField()
+}
+
+type promotedChatWithPrismaTopicEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaTopicEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaTopicEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaTopicEqualsParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaTopicEqualsParam) topicField() {}
+
+func (promotedChatWithPrismaTopicSetParam) settable()  {}
+func (promotedChatWithPrismaTopicEqualsParam) equals() {}
+
+type promotedChatWithPrismaTopicEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaTopicEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaTopicEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaTopicEqualsUniqueParam) promotedChatModel() {}
+func (p promotedChatWithPrismaTopicEqualsUniqueParam) topicField()        {}
+
+func (promotedChatWithPrismaTopicEqualsUniqueParam) unique() {}
+func (promotedChatWithPrismaTopicEqualsUniqueParam) equals() {}
+
+type PromotedChatWithPrismaScoreEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	promotedChatModel()
+	scoreField()
+}
+
+type PromotedChatWithPrismaScoreSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	scoreField()
+}
+
+type promotedChatWithPrismaScoreSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaScoreSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaScoreSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaScoreSetParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaScoreSetParam) scoreField() {}
+
+type PromotedChatWithPrismaScoreWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	scoreField()
+}
+
+type promotedChatWithPrismaScoreEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaScoreEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaScoreEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaScoreEqualsParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaScoreEqualsParam) scoreField() {}
+
+func (promotedChatWithPrismaScoreSetParam) settable()  {}
+func (promotedChatWithPrismaScoreEqualsParam) equals() {}
+
+type promotedChatWithPrismaScoreEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaScoreEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaScoreEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaScoreEqualsUniqueParam) promotedChatModel() {}
+func (p promotedChatWithPrismaScoreEqualsUniqueParam) scoreField()        {}
+
+func (promotedChatWithPrismaScoreEqualsUniqueParam) unique() {}
+func (promotedChatWithPrismaScoreEqualsUniqueParam) equals() {}
+
+type PromotedChatWithPrismaCreatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	promotedChatModel()
+	createdAtField()
+}
+
+type PromotedChatWithPrismaCreatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	createdAtField()
+}
+
+type promotedChatWithPrismaCreatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaCreatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaCreatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaCreatedAtSetParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaCreatedAtSetParam) createdAtField() {}
+
+type PromotedChatWithPrismaCreatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	createdAtField()
+}
+
+type promotedChatWithPrismaCreatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaCreatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaCreatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaCreatedAtEqualsParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaCreatedAtEqualsParam) createdAtField() {}
+
+func (promotedChatWithPrismaCreatedAtSetParam) settable()  {}
+func (promotedChatWithPrismaCreatedAtEqualsParam) equals() {}
+
+type promotedChatWithPrismaCreatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaCreatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaCreatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaCreatedAtEqualsUniqueParam) promotedChatModel() {}
+func (p promotedChatWithPrismaCreatedAtEqualsUniqueParam) createdAtField()    {}
+
+func (promotedChatWithPrismaCreatedAtEqualsUniqueParam) unique() {}
+func (promotedChatWithPrismaCreatedAtEqualsUniqueParam) equals() {}
+
+type PromotedChatWithPrismaUpdatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	promotedChatModel()
+	updatedAtField()
+}
+
+type PromotedChatWithPrismaUpdatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	updatedAtField()
+}
+
+type promotedChatWithPrismaUpdatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaUpdatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaUpdatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaUpdatedAtSetParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaUpdatedAtSetParam) updatedAtField() {}
+
+type PromotedChatWithPrismaUpdatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	promotedChatModel()
+	updatedAtField()
+}
+
+type promotedChatWithPrismaUpdatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaUpdatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaUpdatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaUpdatedAtEqualsParam) promotedChatModel() {}
+
+func (p promotedChatWithPrismaUpdatedAtEqualsParam) updatedAtField() {}
+
+func (promotedChatWithPrismaUpdatedAtSetParam) settable()  {}
+func (promotedChatWithPrismaUpdatedAtEqualsParam) equals() {}
+
+type promotedChatWithPrismaUpdatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p promotedChatWithPrismaUpdatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p promotedChatWithPrismaUpdatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatWithPrismaUpdatedAtEqualsUniqueParam) promotedChatModel() {}
+func (p promotedChatWithPrismaUpdatedAtEqualsUniqueParam) updatedAtField()    {}
+
+func (promotedChatWithPrismaUpdatedAtEqualsUniqueParam) unique() {}
+func (promotedChatWithPrismaUpdatedAtEqualsUniqueParam) equals() {}
+
 // --- template create.gotpl ---
 
 // Creates a single user.
@@ -34187,6 +37132,76 @@ func (r iapCreateOne) Exec(ctx context.Context) (*IapModel, error) {
 
 func (r iapCreateOne) Tx() IapUniqueTxResult {
 	v := newIapUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+// Creates a single promotedChat.
+func (r promotedChatActions) CreateOne(
+	_chat PromotedChatWithPrismaChatSetParam,
+	_topic PromotedChatWithPrismaTopicSetParam,
+
+	optional ...PromotedChatSetParam,
+) promotedChatCreateOne {
+	var v promotedChatCreateOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "createOne"
+	v.query.Model = "PromotedChat"
+	v.query.Outputs = promotedChatOutput
+
+	var fields []builder.Field
+
+	fields = append(fields, _chat.field())
+	fields = append(fields, _topic.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+func (r promotedChatCreateOne) With(params ...PromotedChatRelationWith) promotedChatCreateOne {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+type promotedChatCreateOne struct {
+	query builder.Query
+}
+
+func (p promotedChatCreateOne) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p promotedChatCreateOne) promotedChatModel() {}
+
+func (r promotedChatCreateOne) Exec(ctx context.Context) (*PromotedChatModel, error) {
+	var v PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatCreateOne) Tx() PromotedChatUniqueTxResult {
+	v := newPromotedChatUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v
@@ -39564,6 +42579,560 @@ func (r chatToMembersDeleteMany) Tx() ChatManyTxResult {
 	return v
 }
 
+type chatToPromotedChatFindUnique struct {
+	query builder.Query
+}
+
+func (r chatToPromotedChatFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r chatToPromotedChatFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r chatToPromotedChatFindUnique) with()         {}
+func (r chatToPromotedChatFindUnique) chatModel()    {}
+func (r chatToPromotedChatFindUnique) chatRelation() {}
+
+func (r chatToPromotedChatFindUnique) With(params ...PromotedChatRelationWith) chatToPromotedChatFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r chatToPromotedChatFindUnique) Select(params ...chatPrismaFields) chatToPromotedChatFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r chatToPromotedChatFindUnique) Omit(params ...chatPrismaFields) chatToPromotedChatFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range chatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r chatToPromotedChatFindUnique) Exec(ctx context.Context) (
+	*ChatModel,
+	error,
+) {
+	var v *ChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r chatToPromotedChatFindUnique) ExecInner(ctx context.Context) (
+	*InnerChat,
+	error,
+) {
+	var v *InnerChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r chatToPromotedChatFindUnique) Update(params ...ChatSetParam) chatToPromotedChatUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "Chat"
+
+	var v chatToPromotedChatUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type chatToPromotedChatUpdateUnique struct {
+	query builder.Query
+}
+
+func (r chatToPromotedChatUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r chatToPromotedChatUpdateUnique) chatModel() {}
+
+func (r chatToPromotedChatUpdateUnique) Exec(ctx context.Context) (*ChatModel, error) {
+	var v ChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r chatToPromotedChatUpdateUnique) Tx() ChatUniqueTxResult {
+	v := newChatUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r chatToPromotedChatFindUnique) Delete() chatToPromotedChatDeleteUnique {
+	var v chatToPromotedChatDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "Chat"
+
+	return v
+}
+
+type chatToPromotedChatDeleteUnique struct {
+	query builder.Query
+}
+
+func (r chatToPromotedChatDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p chatToPromotedChatDeleteUnique) chatModel() {}
+
+func (r chatToPromotedChatDeleteUnique) Exec(ctx context.Context) (*ChatModel, error) {
+	var v ChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r chatToPromotedChatDeleteUnique) Tx() ChatUniqueTxResult {
+	v := newChatUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type chatToPromotedChatFindFirst struct {
+	query builder.Query
+}
+
+func (r chatToPromotedChatFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r chatToPromotedChatFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r chatToPromotedChatFindFirst) with()         {}
+func (r chatToPromotedChatFindFirst) chatModel()    {}
+func (r chatToPromotedChatFindFirst) chatRelation() {}
+
+func (r chatToPromotedChatFindFirst) With(params ...PromotedChatRelationWith) chatToPromotedChatFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r chatToPromotedChatFindFirst) Select(params ...chatPrismaFields) chatToPromotedChatFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r chatToPromotedChatFindFirst) Omit(params ...chatPrismaFields) chatToPromotedChatFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range chatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r chatToPromotedChatFindFirst) OrderBy(params ...PromotedChatOrderByParam) chatToPromotedChatFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r chatToPromotedChatFindFirst) Skip(count int) chatToPromotedChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r chatToPromotedChatFindFirst) Take(count int) chatToPromotedChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r chatToPromotedChatFindFirst) Cursor(cursor ChatCursorParam) chatToPromotedChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r chatToPromotedChatFindFirst) Exec(ctx context.Context) (
+	*ChatModel,
+	error,
+) {
+	var v *ChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r chatToPromotedChatFindFirst) ExecInner(ctx context.Context) (
+	*InnerChat,
+	error,
+) {
+	var v *InnerChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type chatToPromotedChatFindMany struct {
+	query builder.Query
+}
+
+func (r chatToPromotedChatFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r chatToPromotedChatFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r chatToPromotedChatFindMany) with()         {}
+func (r chatToPromotedChatFindMany) chatModel()    {}
+func (r chatToPromotedChatFindMany) chatRelation() {}
+
+func (r chatToPromotedChatFindMany) With(params ...PromotedChatRelationWith) chatToPromotedChatFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r chatToPromotedChatFindMany) Select(params ...chatPrismaFields) chatToPromotedChatFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r chatToPromotedChatFindMany) Omit(params ...chatPrismaFields) chatToPromotedChatFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range chatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r chatToPromotedChatFindMany) OrderBy(params ...PromotedChatOrderByParam) chatToPromotedChatFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r chatToPromotedChatFindMany) Skip(count int) chatToPromotedChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r chatToPromotedChatFindMany) Take(count int) chatToPromotedChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r chatToPromotedChatFindMany) Cursor(cursor ChatCursorParam) chatToPromotedChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r chatToPromotedChatFindMany) Exec(ctx context.Context) (
+	[]ChatModel,
+	error,
+) {
+	var v []ChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r chatToPromotedChatFindMany) ExecInner(ctx context.Context) (
+	[]InnerChat,
+	error,
+) {
+	var v []InnerChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r chatToPromotedChatFindMany) Update(params ...ChatSetParam) chatToPromotedChatUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "Chat"
+
+	r.query.Outputs = countOutput
+
+	var v chatToPromotedChatUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type chatToPromotedChatUpdateMany struct {
+	query builder.Query
+}
+
+func (r chatToPromotedChatUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r chatToPromotedChatUpdateMany) chatModel() {}
+
+func (r chatToPromotedChatUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r chatToPromotedChatUpdateMany) Tx() ChatManyTxResult {
+	v := newChatManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r chatToPromotedChatFindMany) Delete() chatToPromotedChatDeleteMany {
+	var v chatToPromotedChatDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "Chat"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type chatToPromotedChatDeleteMany struct {
+	query builder.Query
+}
+
+func (r chatToPromotedChatDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p chatToPromotedChatDeleteMany) chatModel() {}
+
+func (r chatToPromotedChatDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r chatToPromotedChatDeleteMany) Tx() ChatManyTxResult {
+	v := newChatManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 type chatFindUnique struct {
 	query builder.Query
 }
@@ -44018,6 +47587,1210 @@ func (r iapDeleteMany) Tx() IapManyTxResult {
 	return v
 }
 
+type promotedChatToChatFindUnique struct {
+	query builder.Query
+}
+
+func (r promotedChatToChatFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatToChatFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatToChatFindUnique) with()                 {}
+func (r promotedChatToChatFindUnique) promotedChatModel()    {}
+func (r promotedChatToChatFindUnique) promotedChatRelation() {}
+
+func (r promotedChatToChatFindUnique) With(params ...ChatRelationWith) promotedChatToChatFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r promotedChatToChatFindUnique) Select(params ...promotedChatPrismaFields) promotedChatToChatFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatToChatFindUnique) Omit(params ...promotedChatPrismaFields) promotedChatToChatFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range promotedChatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatToChatFindUnique) Exec(ctx context.Context) (
+	*PromotedChatModel,
+	error,
+) {
+	var v *PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r promotedChatToChatFindUnique) ExecInner(ctx context.Context) (
+	*InnerPromotedChat,
+	error,
+) {
+	var v *InnerPromotedChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r promotedChatToChatFindUnique) Update(params ...PromotedChatSetParam) promotedChatToChatUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "PromotedChat"
+
+	var v promotedChatToChatUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type promotedChatToChatUpdateUnique struct {
+	query builder.Query
+}
+
+func (r promotedChatToChatUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatToChatUpdateUnique) promotedChatModel() {}
+
+func (r promotedChatToChatUpdateUnique) Exec(ctx context.Context) (*PromotedChatModel, error) {
+	var v PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatToChatUpdateUnique) Tx() PromotedChatUniqueTxResult {
+	v := newPromotedChatUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r promotedChatToChatFindUnique) Delete() promotedChatToChatDeleteUnique {
+	var v promotedChatToChatDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "PromotedChat"
+
+	return v
+}
+
+type promotedChatToChatDeleteUnique struct {
+	query builder.Query
+}
+
+func (r promotedChatToChatDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p promotedChatToChatDeleteUnique) promotedChatModel() {}
+
+func (r promotedChatToChatDeleteUnique) Exec(ctx context.Context) (*PromotedChatModel, error) {
+	var v PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatToChatDeleteUnique) Tx() PromotedChatUniqueTxResult {
+	v := newPromotedChatUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type promotedChatToChatFindFirst struct {
+	query builder.Query
+}
+
+func (r promotedChatToChatFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatToChatFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatToChatFindFirst) with()                 {}
+func (r promotedChatToChatFindFirst) promotedChatModel()    {}
+func (r promotedChatToChatFindFirst) promotedChatRelation() {}
+
+func (r promotedChatToChatFindFirst) With(params ...ChatRelationWith) promotedChatToChatFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r promotedChatToChatFindFirst) Select(params ...promotedChatPrismaFields) promotedChatToChatFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatToChatFindFirst) Omit(params ...promotedChatPrismaFields) promotedChatToChatFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range promotedChatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatToChatFindFirst) OrderBy(params ...ChatOrderByParam) promotedChatToChatFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r promotedChatToChatFindFirst) Skip(count int) promotedChatToChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r promotedChatToChatFindFirst) Take(count int) promotedChatToChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r promotedChatToChatFindFirst) Cursor(cursor PromotedChatCursorParam) promotedChatToChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r promotedChatToChatFindFirst) Exec(ctx context.Context) (
+	*PromotedChatModel,
+	error,
+) {
+	var v *PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r promotedChatToChatFindFirst) ExecInner(ctx context.Context) (
+	*InnerPromotedChat,
+	error,
+) {
+	var v *InnerPromotedChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type promotedChatToChatFindMany struct {
+	query builder.Query
+}
+
+func (r promotedChatToChatFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatToChatFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatToChatFindMany) with()                 {}
+func (r promotedChatToChatFindMany) promotedChatModel()    {}
+func (r promotedChatToChatFindMany) promotedChatRelation() {}
+
+func (r promotedChatToChatFindMany) With(params ...ChatRelationWith) promotedChatToChatFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r promotedChatToChatFindMany) Select(params ...promotedChatPrismaFields) promotedChatToChatFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatToChatFindMany) Omit(params ...promotedChatPrismaFields) promotedChatToChatFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range promotedChatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatToChatFindMany) OrderBy(params ...ChatOrderByParam) promotedChatToChatFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r promotedChatToChatFindMany) Skip(count int) promotedChatToChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r promotedChatToChatFindMany) Take(count int) promotedChatToChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r promotedChatToChatFindMany) Cursor(cursor PromotedChatCursorParam) promotedChatToChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r promotedChatToChatFindMany) Exec(ctx context.Context) (
+	[]PromotedChatModel,
+	error,
+) {
+	var v []PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r promotedChatToChatFindMany) ExecInner(ctx context.Context) (
+	[]InnerPromotedChat,
+	error,
+) {
+	var v []InnerPromotedChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r promotedChatToChatFindMany) Update(params ...PromotedChatSetParam) promotedChatToChatUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "PromotedChat"
+
+	r.query.Outputs = countOutput
+
+	var v promotedChatToChatUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type promotedChatToChatUpdateMany struct {
+	query builder.Query
+}
+
+func (r promotedChatToChatUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatToChatUpdateMany) promotedChatModel() {}
+
+func (r promotedChatToChatUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatToChatUpdateMany) Tx() PromotedChatManyTxResult {
+	v := newPromotedChatManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r promotedChatToChatFindMany) Delete() promotedChatToChatDeleteMany {
+	var v promotedChatToChatDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "PromotedChat"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type promotedChatToChatDeleteMany struct {
+	query builder.Query
+}
+
+func (r promotedChatToChatDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p promotedChatToChatDeleteMany) promotedChatModel() {}
+
+func (r promotedChatToChatDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatToChatDeleteMany) Tx() PromotedChatManyTxResult {
+	v := newPromotedChatManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type promotedChatFindUnique struct {
+	query builder.Query
+}
+
+func (r promotedChatFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatFindUnique) with()                 {}
+func (r promotedChatFindUnique) promotedChatModel()    {}
+func (r promotedChatFindUnique) promotedChatRelation() {}
+
+func (r promotedChatActions) FindUnique(
+	params PromotedChatEqualsUniqueWhereParam,
+) promotedChatFindUnique {
+	var v promotedChatFindUnique
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findUnique"
+
+	v.query.Model = "PromotedChat"
+	v.query.Outputs = promotedChatOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r promotedChatFindUnique) With(params ...PromotedChatRelationWith) promotedChatFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r promotedChatFindUnique) Select(params ...promotedChatPrismaFields) promotedChatFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatFindUnique) Omit(params ...promotedChatPrismaFields) promotedChatFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range promotedChatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatFindUnique) Exec(ctx context.Context) (
+	*PromotedChatModel,
+	error,
+) {
+	var v *PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r promotedChatFindUnique) ExecInner(ctx context.Context) (
+	*InnerPromotedChat,
+	error,
+) {
+	var v *InnerPromotedChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r promotedChatFindUnique) Update(params ...PromotedChatSetParam) promotedChatUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "PromotedChat"
+
+	var v promotedChatUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type promotedChatUpdateUnique struct {
+	query builder.Query
+}
+
+func (r promotedChatUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatUpdateUnique) promotedChatModel() {}
+
+func (r promotedChatUpdateUnique) Exec(ctx context.Context) (*PromotedChatModel, error) {
+	var v PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatUpdateUnique) Tx() PromotedChatUniqueTxResult {
+	v := newPromotedChatUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r promotedChatFindUnique) Delete() promotedChatDeleteUnique {
+	var v promotedChatDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "PromotedChat"
+
+	return v
+}
+
+type promotedChatDeleteUnique struct {
+	query builder.Query
+}
+
+func (r promotedChatDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p promotedChatDeleteUnique) promotedChatModel() {}
+
+func (r promotedChatDeleteUnique) Exec(ctx context.Context) (*PromotedChatModel, error) {
+	var v PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatDeleteUnique) Tx() PromotedChatUniqueTxResult {
+	v := newPromotedChatUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type promotedChatFindFirst struct {
+	query builder.Query
+}
+
+func (r promotedChatFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatFindFirst) with()                 {}
+func (r promotedChatFindFirst) promotedChatModel()    {}
+func (r promotedChatFindFirst) promotedChatRelation() {}
+
+func (r promotedChatActions) FindFirst(
+	params ...PromotedChatWhereParam,
+) promotedChatFindFirst {
+	var v promotedChatFindFirst
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findFirst"
+
+	v.query.Model = "PromotedChat"
+	v.query.Outputs = promotedChatOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r promotedChatFindFirst) With(params ...PromotedChatRelationWith) promotedChatFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r promotedChatFindFirst) Select(params ...promotedChatPrismaFields) promotedChatFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatFindFirst) Omit(params ...promotedChatPrismaFields) promotedChatFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range promotedChatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatFindFirst) OrderBy(params ...PromotedChatOrderByParam) promotedChatFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r promotedChatFindFirst) Skip(count int) promotedChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r promotedChatFindFirst) Take(count int) promotedChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r promotedChatFindFirst) Cursor(cursor PromotedChatCursorParam) promotedChatFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r promotedChatFindFirst) Exec(ctx context.Context) (
+	*PromotedChatModel,
+	error,
+) {
+	var v *PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r promotedChatFindFirst) ExecInner(ctx context.Context) (
+	*InnerPromotedChat,
+	error,
+) {
+	var v *InnerPromotedChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type promotedChatFindMany struct {
+	query builder.Query
+}
+
+func (r promotedChatFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatFindMany) with()                 {}
+func (r promotedChatFindMany) promotedChatModel()    {}
+func (r promotedChatFindMany) promotedChatRelation() {}
+
+func (r promotedChatActions) FindMany(
+	params ...PromotedChatWhereParam,
+) promotedChatFindMany {
+	var v promotedChatFindMany
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findMany"
+
+	v.query.Model = "PromotedChat"
+	v.query.Outputs = promotedChatOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r promotedChatFindMany) With(params ...PromotedChatRelationWith) promotedChatFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r promotedChatFindMany) Select(params ...promotedChatPrismaFields) promotedChatFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatFindMany) Omit(params ...promotedChatPrismaFields) promotedChatFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range promotedChatOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r promotedChatFindMany) OrderBy(params ...PromotedChatOrderByParam) promotedChatFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r promotedChatFindMany) Skip(count int) promotedChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r promotedChatFindMany) Take(count int) promotedChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r promotedChatFindMany) Cursor(cursor PromotedChatCursorParam) promotedChatFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r promotedChatFindMany) Exec(ctx context.Context) (
+	[]PromotedChatModel,
+	error,
+) {
+	var v []PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r promotedChatFindMany) ExecInner(ctx context.Context) (
+	[]InnerPromotedChat,
+	error,
+) {
+	var v []InnerPromotedChat
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r promotedChatFindMany) Update(params ...PromotedChatSetParam) promotedChatUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "PromotedChat"
+
+	r.query.Outputs = countOutput
+
+	var v promotedChatUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type promotedChatUpdateMany struct {
+	query builder.Query
+}
+
+func (r promotedChatUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatUpdateMany) promotedChatModel() {}
+
+func (r promotedChatUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatUpdateMany) Tx() PromotedChatManyTxResult {
+	v := newPromotedChatManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r promotedChatFindMany) Delete() promotedChatDeleteMany {
+	var v promotedChatDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "PromotedChat"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type promotedChatDeleteMany struct {
+	query builder.Query
+}
+
+func (r promotedChatDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p promotedChatDeleteMany) promotedChatModel() {}
+
+func (r promotedChatDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatDeleteMany) Tx() PromotedChatManyTxResult {
+	v := newPromotedChatManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 // --- template transaction.gotpl ---
 
 func newUserUniqueTxResult() UserUniqueTxResult {
@@ -44494,6 +49267,54 @@ func (p IapManyTxResult) ExtractQuery() builder.Query {
 func (p IapManyTxResult) IsTx() {}
 
 func (r IapManyTxResult) Result() (v *BatchResult) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newPromotedChatUniqueTxResult() PromotedChatUniqueTxResult {
+	return PromotedChatUniqueTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type PromotedChatUniqueTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p PromotedChatUniqueTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p PromotedChatUniqueTxResult) IsTx() {}
+
+func (r PromotedChatUniqueTxResult) Result() (v *PromotedChatModel) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newPromotedChatManyTxResult() PromotedChatManyTxResult {
+	return PromotedChatManyTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type PromotedChatManyTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p PromotedChatManyTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p PromotedChatManyTxResult) IsTx() {}
+
+func (r PromotedChatManyTxResult) Result() (v *BatchResult) {
 	if err := r.result.Get(r.query.TxResult, &v); err != nil {
 		panic(err)
 	}
@@ -45629,6 +50450,118 @@ func (r iapUpsertOne) Exec(ctx context.Context) (*IapModel, error) {
 
 func (r iapUpsertOne) Tx() IapUniqueTxResult {
 	v := newIapUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type promotedChatUpsertOne struct {
+	query builder.Query
+}
+
+func (r promotedChatUpsertOne) getQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatUpsertOne) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r promotedChatUpsertOne) with()                 {}
+func (r promotedChatUpsertOne) promotedChatModel()    {}
+func (r promotedChatUpsertOne) promotedChatRelation() {}
+
+func (r promotedChatActions) UpsertOne(
+	params PromotedChatEqualsUniqueWhereParam,
+) promotedChatUpsertOne {
+	var v promotedChatUpsertOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "upsertOne"
+	v.query.Model = "PromotedChat"
+	v.query.Outputs = promotedChatOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r promotedChatUpsertOne) Create(
+
+	_chat PromotedChatWithPrismaChatSetParam,
+	_topic PromotedChatWithPrismaTopicSetParam,
+
+	optional ...PromotedChatSetParam,
+) promotedChatUpsertOne {
+	var v promotedChatUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	fields = append(fields, _chat.field())
+	fields = append(fields, _topic.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "create",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r promotedChatUpsertOne) Update(
+	params ...PromotedChatSetParam,
+) promotedChatUpsertOne {
+	var v promotedChatUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "update",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r promotedChatUpsertOne) Exec(ctx context.Context) (*PromotedChatModel, error) {
+	var v PromotedChatModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r promotedChatUpsertOne) Tx() PromotedChatUniqueTxResult {
+	v := newPromotedChatUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v
