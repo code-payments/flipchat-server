@@ -16,5 +16,5 @@ var (
 	CanSendIsTypingNotifications           = true
 	CanSendIsTypingNotificationsAsListener = true
 	IsTypingNotificationInterval           = 3 * time.Second
-	IsTypingNotificationTimeout            = 5 * time.Second
+	IsTypingNotificationTimeout            = 60 * time.Second
 )
