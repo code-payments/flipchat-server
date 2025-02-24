@@ -123,13 +123,13 @@ func (s *Server) LinkSocialAccount(ctx context.Context, req *profilepb.LinkSocia
 		protoXUser := xUser.ToProto()
 
 		if err := protoXUser.Validate(); err != nil {
-			log.Warn("Failed to validate proto profile")
+			log.Warn("Failed to validate proto profile", zap.Error(err))
 			return nil, status.Error(codes.Internal, "failed to validate proto profile")
 		}
 
 		previouslyLinkedUser, err := s.profiles.GetUserLinkedToXAccount(ctx, xUser.ID)
 		if err != nil && !errors.Is(err, ErrNotFound) {
-			log.Warn("Failed to get previously linked user")
+			log.Warn("Failed to get previously linked user", zap.Error(err))
 			return nil, status.Error(codes.Internal, "failed to get previously linked user")
 		}
 
