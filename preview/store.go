@@ -16,7 +16,7 @@ var (
 // Store defines the interface for Preview storage.
 type Store interface {
 	// GetPreviewByID retrieves a preview by ID.
-	GetPreviewByID(ctx context.Context, id string) (*Preview, error)
+	GetPreviewByID(ctx context.Context, id *commonpb.PreviewId) (*Preview, error)
 
 	// GetPreviewByOriginalURL retrieves a preview by the original URL.
 	GetPreviewByOriginalURL(ctx context.Context, originalURL string) (*Preview, error)
@@ -28,12 +28,12 @@ type Store interface {
 	UpdatePreview(ctx context.Context, preview *Preview) error
 
 	// DeletePreview deletes a preview by ID.
-	DeletePreview(ctx context.Context, id string) error
+	DeletePreview(ctx context.Context, id *commonpb.PreviewId) error
 }
 
 // Preview represents a preview.
 type Preview struct {
-	ID string
+	ID *commonpb.PreviewId
 
 	OriginalURL string
 	ContentType commonpb.ContentType
@@ -50,4 +50,27 @@ type Preview struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// Creates a copy of the preview.
+func (p *Preview) Clone() *Preview {
+	return &Preview{
+		ID: &commonpb.PreviewId{Value: p.ID.Value},
+
+		OriginalURL: p.OriginalURL,
+		ContentType: p.ContentType,
+		Moderation:  p.Moderation,
+
+		URL:         p.URL,
+		Title:       p.Title,
+		Description: p.Description,
+
+		ImageURL:    p.ImageURL,
+		ImageHash:   p.ImageHash,
+		ImageWidth:  p.ImageWidth,
+		ImageHeight: p.ImageHeight,
+
+		CreatedAt: p.CreatedAt,
+		UpdatedAt: p.UpdatedAt,
+	}
 }

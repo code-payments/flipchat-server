@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	pg "github.com/code-payments/flipchat-server/database/postgres"
+
 	"github.com/code-payments/flipchat-server/database/prisma/db"
 	"github.com/code-payments/flipchat-server/preview"
 )
@@ -32,9 +34,11 @@ func NewInPostgres(client *db.PrismaClient) preview.Store {
 }
 
 // GetPreviewByID retrieves a preview by ID from PostgreSQL.
-func (s *store) GetPreviewByID(ctx context.Context, id string) (*preview.Preview, error) {
+func (s *store) GetPreviewByID(ctx context.Context, id *commonpb.PreviewId) (*preview.Preview, error) {
+	encodedID := pg.Encode(id.Value)
+
 	res, err := s.client.Preview.FindUnique(
-		db.Preview.ID.Equals(id),
+		db.Preview.ID.Equals(encodedID),
 	).Exec(ctx)
 
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
@@ -45,7 +49,7 @@ func (s *store) GetPreviewByID(ctx context.Context, id string) (*preview.Preview
 		return nil, preview.ErrNotFound
 	}
 
-	return mapPrismaPreviewToPreview(res), nil
+	return fromModel(res)
 }
 
 // GetPreviewByOriginalURL retrieves a preview by the original URL from PostgreSQL.
@@ -62,13 +66,14 @@ func (s *store) GetPreviewByOriginalURL(ctx context.Context, originalURL string)
 		return nil, preview.ErrNotFound
 	}
 
-	return mapPrismaPreviewToPreview(res), nil
+	return fromModel(res)
 }
 
 // CreatePreview creates a new preview in PostgreSQL.
 func (s *store) CreatePreview(ctx context.Context, p *preview.Preview) error {
+	encodedID := pg.Encode(p.ID.Value)
 	_, err := s.client.Preview.CreateOne(
-		db.Preview.ID.Set(p.ID),
+		db.Preview.ID.Set(encodedID),
 		db.Preview.OriginalURL.Set(p.OriginalURL),
 		db.Preview.URL.Set(p.URL),
 		db.Preview.Title.Set(p.Title),
@@ -89,8 +94,9 @@ func (s *store) CreatePreview(ctx context.Context, p *preview.Preview) error {
 
 // UpdatePreview updates an existing preview in PostgreSQL.
 func (s *store) UpdatePreview(ctx context.Context, p *preview.Preview) error {
+	encodedID := pg.Encode(p.ID.Value)
 	_, err := s.client.Preview.FindUnique(
-		db.Preview.ID.Equals(p.ID),
+		db.Preview.ID.Equals(encodedID),
 	).Update(
 		db.Preview.URL.Set(p.URL),
 		db.Preview.Title.Set(p.Title),
@@ -109,9 +115,10 @@ func (s *store) UpdatePreview(ctx context.Context, p *preview.Preview) error {
 }
 
 // DeletePreview deletes a preview by ID from PostgreSQL.
-func (s *store) DeletePreview(ctx context.Context, id string) error {
+func (s *store) DeletePreview(ctx context.Context, id *commonpb.PreviewId) error {
+	encodedID := pg.Encode(id.Value)
 	_, err := s.client.Preview.FindUnique(
-		db.Preview.ID.Equals(id),
+		db.Preview.ID.Equals(encodedID),
 	).Delete().Exec(ctx)
 	if err != nil {
 		return preview.ErrNotFound
@@ -119,10 +126,15 @@ func (s *store) DeletePreview(ctx context.Context, id string) error {
 	return nil
 }
 
-// mapPrismaPreviewToPreview maps Prisma Preview to Preview struct.
-func mapPrismaPreviewToPreview(model *db.PreviewModel) *preview.Preview {
+// fromModel maps Prisma Preview to Preview struct.
+func fromModel(model *db.PreviewModel) (*preview.Preview, error) {
+	decodedID, err := pg.Decode(model.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &preview.Preview{
-		ID:          model.ID,
+		ID:          &commonpb.PreviewId{Value: decodedID},
 		OriginalURL: model.OriginalURL,
 		ContentType: commonpb.ContentType(model.ContentType),
 		Moderation:  commonpb.ModerationStatus(model.Moderation),
@@ -135,5 +147,5 @@ func mapPrismaPreviewToPreview(model *db.PreviewModel) *preview.Preview {
 		ImageHeight: model.ImageHeight,
 		CreatedAt:   model.CreatedAt,
 		UpdatedAt:   model.UpdatedAt,
-	}
+	}, nil
 }

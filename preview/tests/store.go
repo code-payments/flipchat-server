@@ -7,6 +7,7 @@ import (
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
+	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/preview"
 	"github.com/stretchr/testify/require"
 )
@@ -75,7 +76,8 @@ func testPreviewStore_GetPreviewByOriginalURL_Success(t *testing.T, previewStore
 }
 
 func testPreviewStore_GetPreviewByID_NotFound(t *testing.T, previewStore preview.Store) {
-	_, err := previewStore.GetPreviewByID(context.Background(), "non-existent-id")
+	nonExistentID := model.MustGeneratePreviewID()
+	_, err := previewStore.GetPreviewByID(context.Background(), nonExistentID)
 	require.Equal(t, preview.ErrNotFound, err)
 }
 
@@ -122,7 +124,8 @@ func testPreviewStore_DeletePreview_Success(t *testing.T, previewStore preview.S
 }
 
 func testPreviewStore_DeletePreview_NotFound(t *testing.T, previewStore preview.Store) {
-	err := previewStore.DeletePreview(context.Background(), "non-existent-id")
+	nonExistentID := model.MustGeneratePreviewID()
+	err := previewStore.DeletePreview(context.Background(), nonExistentID)
 	require.Equal(t, preview.ErrNotFound, err)
 }
 
@@ -143,8 +146,9 @@ func checkEqualPreview(t *testing.T, expected, actual *preview.Preview) {
 }
 
 func createSamplePreview(_ *testing.T) *preview.Preview {
+	id := model.MustGeneratePreviewID()
 	return &preview.Preview{
-		ID:          "preview-123",
+		ID:          id,
 		OriginalURL: "https://example.com",
 		ContentType: commonpb.ContentType_CONTENT_TYPE_TEXT,
 		Moderation:  commonpb.ModerationStatus_MODERATION_APPROVED,

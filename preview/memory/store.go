@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	pg "github.com/code-payments/flipchat-server/database/postgres"
 	"github.com/code-payments/flipchat-server/preview"
 )
 
@@ -23,18 +25,19 @@ func NewInMemory() preview.Store {
 }
 
 // GetPreviewByID retrieves a preview by ID.
-func (m *memoryStore) GetPreviewByID(ctx context.Context, id string) (*preview.Preview, error) {
+func (m *memoryStore) GetPreviewByID(ctx context.Context, id *commonpb.PreviewId) (*preview.Preview, error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	p, exists := m.previews[id]
+	encodedId := pg.Encode(id.Value)
+	p, exists := m.previews[encodedId]
 	if !exists {
 		return nil, preview.ErrNotFound
 	}
 
 	// Return a copy to prevent external modification.
-	copy := *p
-	return &copy, nil
+	cloned := p.Clone()
+	return cloned, nil
 }
 
 // GetPreviewByOriginalURL retrieves a preview by the original URL.
@@ -53,8 +56,8 @@ func (m *memoryStore) GetPreviewByOriginalURL(ctx context.Context, originalURL s
 	}
 
 	// Return a copy to prevent external modification.
-	copy := *p
-	return &copy, nil
+	cloned := p.Clone()
+	return cloned, nil
 }
 
 // CreatePreview creates a new preview.
@@ -62,7 +65,8 @@ func (m *memoryStore) CreatePreview(ctx context.Context, p *preview.Preview) err
 	m.Lock()
 	defer m.Unlock()
 
-	if _, exists := m.previews[p.ID]; exists {
+	encodedId := pg.Encode(p.ID.Value)
+	if _, exists := m.previews[encodedId]; exists {
 		return preview.ErrExists
 	}
 
@@ -72,9 +76,9 @@ func (m *memoryStore) CreatePreview(ctx context.Context, p *preview.Preview) err
 	}
 
 	// Store the preview
-	copy := *p
-	m.previews[p.ID] = &copy
-	m.originalURLIndex[p.OriginalURL] = p.ID
+	cloned := p.Clone()
+	m.previews[encodedId] = cloned
+	m.originalURLIndex[p.OriginalURL] = encodedId
 
 	return nil
 }
@@ -84,7 +88,8 @@ func (m *memoryStore) UpdatePreview(ctx context.Context, p *preview.Preview) err
 	m.Lock()
 	defer m.Unlock()
 
-	existing, exists := m.previews[p.ID]
+	encodedId := pg.Encode(p.ID.Value)
+	existing, exists := m.previews[encodedId]
 	if !exists {
 		return preview.ErrNotFound
 	}
@@ -105,16 +110,17 @@ func (m *memoryStore) UpdatePreview(ctx context.Context, p *preview.Preview) err
 }
 
 // DeletePreview deletes a preview by ID.
-func (m *memoryStore) DeletePreview(ctx context.Context, id string) error {
+func (m *memoryStore) DeletePreview(ctx context.Context, id *commonpb.PreviewId) error {
 	m.Lock()
 	defer m.Unlock()
 
-	p, exists := m.previews[id]
+	encodedId := pg.Encode(id.Value)
+	p, exists := m.previews[encodedId]
 	if !exists {
 		return preview.ErrNotFound
 	}
 
-	delete(m.previews, id)
+	delete(m.previews, encodedId)
 	delete(m.originalURLIndex, p.OriginalURL)
 
 	return nil
