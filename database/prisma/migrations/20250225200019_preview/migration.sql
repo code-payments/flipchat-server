@@ -16,3 +16,6 @@ CREATE TABLE "flipchat_previews" (
 
     CONSTRAINT "flipchat_previews_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "flipchat_previews_originalUrl_key" ON "flipchat_previews"("originalUrl");

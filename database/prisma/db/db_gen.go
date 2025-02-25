@@ -322,11 +322,11 @@ model PromotedChat {
 model Preview {
   // Fields
 
-  id String @id
+  id          String @id
+  originalUrl String @unique
 
-  originalUrl String
-  contentType Int    @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, Image: 2, Video: 3, Audio: 4, Pdf: 5, File: 6
-  moderation  Int    @default(0) @db.SmallInt // ModerationStatus enum: Unknown: 0, Pending: 1, Flagged: 2, Approved: 3
+  contentType Int @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, Image: 2, Video: 3, Audio: 4, Pdf: 5, File: 6
+  moderation  Int @default(0) @db.SmallInt // ModerationStatus enum: Unknown: 0, Pending: 1, Flagged: 2, Approved: 3
 
   url         String
   title       String
@@ -343,7 +343,6 @@ model Preview {
   // Relations
 
   // Constraints
-
   @@map("flipchat_previews")
 }
 `
@@ -27922,6 +27921,7 @@ type previewQuery struct {
 	// OriginalURL
 	//
 	// @required
+	// @unique
 	OriginalURL previewQueryOriginalURLString
 
 	// ContentType
@@ -28402,9 +28402,9 @@ func (r previewQueryOriginalURLString) SetIfPresent(value *String) previewWithPr
 	return r.Set(*value)
 }
 
-func (r previewQueryOriginalURLString) Equals(value string) previewWithPrismaOriginalURLEqualsParam {
+func (r previewQueryOriginalURLString) Equals(value string) previewWithPrismaOriginalURLEqualsUniqueParam {
 
-	return previewWithPrismaOriginalURLEqualsParam{
+	return previewWithPrismaOriginalURLEqualsUniqueParam{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28417,9 +28417,9 @@ func (r previewQueryOriginalURLString) Equals(value string) previewWithPrismaOri
 	}
 }
 
-func (r previewQueryOriginalURLString) EqualsIfPresent(value *string) previewWithPrismaOriginalURLEqualsParam {
+func (r previewQueryOriginalURLString) EqualsIfPresent(value *string) previewWithPrismaOriginalURLEqualsUniqueParam {
 	if value == nil {
-		return previewWithPrismaOriginalURLEqualsParam{}
+		return previewWithPrismaOriginalURLEqualsUniqueParam{}
 	}
 	return r.Equals(*value)
 }
@@ -28442,8 +28442,8 @@ func (r previewQueryOriginalURLString) Cursor(cursor string) previewCursorParam 
 	}
 }
 
-func (r previewQueryOriginalURLString) In(value []string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) In(value []string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28456,15 +28456,15 @@ func (r previewQueryOriginalURLString) In(value []string) previewDefaultParam {
 	}
 }
 
-func (r previewQueryOriginalURLString) InIfPresent(value []string) previewDefaultParam {
+func (r previewQueryOriginalURLString) InIfPresent(value []string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.In(value)
 }
 
-func (r previewQueryOriginalURLString) NotIn(value []string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) NotIn(value []string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28477,15 +28477,15 @@ func (r previewQueryOriginalURLString) NotIn(value []string) previewDefaultParam
 	}
 }
 
-func (r previewQueryOriginalURLString) NotInIfPresent(value []string) previewDefaultParam {
+func (r previewQueryOriginalURLString) NotInIfPresent(value []string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.NotIn(value)
 }
 
-func (r previewQueryOriginalURLString) Lt(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) Lt(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28498,15 +28498,15 @@ func (r previewQueryOriginalURLString) Lt(value string) previewDefaultParam {
 	}
 }
 
-func (r previewQueryOriginalURLString) LtIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) LtIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.Lt(*value)
 }
 
-func (r previewQueryOriginalURLString) Lte(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) Lte(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28519,15 +28519,15 @@ func (r previewQueryOriginalURLString) Lte(value string) previewDefaultParam {
 	}
 }
 
-func (r previewQueryOriginalURLString) LteIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) LteIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.Lte(*value)
 }
 
-func (r previewQueryOriginalURLString) Gt(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) Gt(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28540,15 +28540,15 @@ func (r previewQueryOriginalURLString) Gt(value string) previewDefaultParam {
 	}
 }
 
-func (r previewQueryOriginalURLString) GtIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) GtIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.Gt(*value)
 }
 
-func (r previewQueryOriginalURLString) Gte(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) Gte(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28561,15 +28561,15 @@ func (r previewQueryOriginalURLString) Gte(value string) previewDefaultParam {
 	}
 }
 
-func (r previewQueryOriginalURLString) GteIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) GteIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.Gte(*value)
 }
 
-func (r previewQueryOriginalURLString) Contains(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) Contains(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28582,15 +28582,15 @@ func (r previewQueryOriginalURLString) Contains(value string) previewDefaultPara
 	}
 }
 
-func (r previewQueryOriginalURLString) ContainsIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) ContainsIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.Contains(*value)
 }
 
-func (r previewQueryOriginalURLString) StartsWith(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) StartsWith(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28603,15 +28603,15 @@ func (r previewQueryOriginalURLString) StartsWith(value string) previewDefaultPa
 	}
 }
 
-func (r previewQueryOriginalURLString) StartsWithIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) StartsWithIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.StartsWith(*value)
 }
 
-func (r previewQueryOriginalURLString) EndsWith(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) EndsWith(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28624,15 +28624,15 @@ func (r previewQueryOriginalURLString) EndsWith(value string) previewDefaultPara
 	}
 }
 
-func (r previewQueryOriginalURLString) EndsWithIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) EndsWithIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.EndsWith(*value)
 }
 
-func (r previewQueryOriginalURLString) Mode(value QueryMode) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) Mode(value QueryMode) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28645,15 +28645,15 @@ func (r previewQueryOriginalURLString) Mode(value QueryMode) previewDefaultParam
 	}
 }
 
-func (r previewQueryOriginalURLString) ModeIfPresent(value *QueryMode) previewDefaultParam {
+func (r previewQueryOriginalURLString) ModeIfPresent(value *QueryMode) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.Mode(*value)
 }
 
-func (r previewQueryOriginalURLString) Not(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) Not(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28666,17 +28666,17 @@ func (r previewQueryOriginalURLString) Not(value string) previewDefaultParam {
 	}
 }
 
-func (r previewQueryOriginalURLString) NotIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) NotIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.Not(*value)
 }
 
 // deprecated: Use StartsWith instead.
 
-func (r previewQueryOriginalURLString) HasPrefix(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) HasPrefix(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28690,17 +28690,17 @@ func (r previewQueryOriginalURLString) HasPrefix(value string) previewDefaultPar
 }
 
 // deprecated: Use StartsWithIfPresent instead.
-func (r previewQueryOriginalURLString) HasPrefixIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) HasPrefixIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.HasPrefix(*value)
 }
 
 // deprecated: Use EndsWith instead.
 
-func (r previewQueryOriginalURLString) HasSuffix(value string) previewDefaultParam {
-	return previewDefaultParam{
+func (r previewQueryOriginalURLString) HasSuffix(value string) previewParamUnique {
+	return previewParamUnique{
 		data: builder.Field{
 			Name: "originalUrl",
 			Fields: []builder.Field{
@@ -28714,9 +28714,9 @@ func (r previewQueryOriginalURLString) HasSuffix(value string) previewDefaultPar
 }
 
 // deprecated: Use EndsWithIfPresent instead.
-func (r previewQueryOriginalURLString) HasSuffixIfPresent(value *string) previewDefaultParam {
+func (r previewQueryOriginalURLString) HasSuffixIfPresent(value *string) previewParamUnique {
 	if value == nil {
-		return previewDefaultParam{}
+		return previewParamUnique{}
 	}
 	return r.HasSuffix(*value)
 }

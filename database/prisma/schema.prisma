@@ -248,11 +248,11 @@ model PromotedChat {
 model Preview {
   // Fields
 
-  id String @id
+  id          String @id
+  originalUrl String @unique
 
-  originalUrl String
-  contentType Int    @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, Image: 2, Video: 3, Audio: 4, Pdf: 5, File: 6
-  moderation  Int    @default(0) @db.SmallInt // ModerationStatus enum: Unknown: 0, Pending: 1, Flagged: 2, Approved: 3
+  contentType Int @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, Image: 2, Video: 3, Audio: 4, Pdf: 5, File: 6
+  moderation  Int @default(0) @db.SmallInt // ModerationStatus enum: Unknown: 0, Pending: 1, Flagged: 2, Approved: 3
 
   url         String
   title       String
@@ -269,6 +269,5 @@ model Preview {
   // Relations
 
   // Constraints
-
   @@map("flipchat_previews")
 }
