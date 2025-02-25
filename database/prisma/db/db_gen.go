@@ -318,6 +318,34 @@ model PromotedChat {
   @@id([chatId, topic])
   @@map("flipchat_promotedchats")
 }
+
+model Preview {
+  // Fields
+
+  id String @id
+
+  originalUrl String
+  contentType Int    @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, Image: 2, Video: 3, Audio: 4, Pdf: 5, File: 6
+  moderation  Int    @default(0) @db.SmallInt // ModerationStatus enum: Unknown: 0, Pending: 1, Flagged: 2, Approved: 3
+
+  url         String
+  title       String
+  description String
+
+  imageUrl    String
+  imageHash   String
+  imageWidth  Int
+  imageHeight Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  // Constraints
+
+  @@map("flipchat_previews")
+}
 `
 const schemaDatasourceURL = ""
 const schemaEnvVarName = "DATABASE_URL"
@@ -400,6 +428,7 @@ func newClient() *PrismaClient {
 	c.PushToken = pushTokenActions{client: c}
 	c.Iap = iapActions{client: c}
 	c.PromotedChat = promotedChatActions{client: c}
+	c.Preview = previewActions{client: c}
 
 	c.Prisma = &PrismaActions{
 		Raw: &raw.Raw{Engine: c},
@@ -446,6 +475,8 @@ type PrismaClient struct {
 	Iap iapActions
 	// PromotedChat provides access to CRUD methods.
 	PromotedChat promotedChatActions
+	// Preview provides access to CRUD methods.
+	Preview previewActions
 }
 
 // --- template enums.gotpl ---
@@ -590,6 +621,24 @@ const (
 	PromotedChatScalarFieldEnumScore     PromotedChatScalarFieldEnum = "score"
 	PromotedChatScalarFieldEnumCreatedAt PromotedChatScalarFieldEnum = "createdAt"
 	PromotedChatScalarFieldEnumUpdatedAt PromotedChatScalarFieldEnum = "updatedAt"
+)
+
+type PreviewScalarFieldEnum string
+
+const (
+	PreviewScalarFieldEnumID          PreviewScalarFieldEnum = "id"
+	PreviewScalarFieldEnumOriginalURL PreviewScalarFieldEnum = "originalUrl"
+	PreviewScalarFieldEnumContentType PreviewScalarFieldEnum = "contentType"
+	PreviewScalarFieldEnumModeration  PreviewScalarFieldEnum = "moderation"
+	PreviewScalarFieldEnumURL         PreviewScalarFieldEnum = "url"
+	PreviewScalarFieldEnumTitle       PreviewScalarFieldEnum = "title"
+	PreviewScalarFieldEnumDescription PreviewScalarFieldEnum = "description"
+	PreviewScalarFieldEnumImageURL    PreviewScalarFieldEnum = "imageUrl"
+	PreviewScalarFieldEnumImageHash   PreviewScalarFieldEnum = "imageHash"
+	PreviewScalarFieldEnumImageWidth  PreviewScalarFieldEnum = "imageWidth"
+	PreviewScalarFieldEnumImageHeight PreviewScalarFieldEnum = "imageHeight"
+	PreviewScalarFieldEnumCreatedAt   PreviewScalarFieldEnum = "createdAt"
+	PreviewScalarFieldEnumUpdatedAt   PreviewScalarFieldEnum = "updatedAt"
 )
 
 type SortOrder string
@@ -838,6 +887,34 @@ const promotedChatFieldCreatedAt promotedChatPrismaFields = "createdAt"
 
 const promotedChatFieldUpdatedAt promotedChatPrismaFields = "updatedAt"
 
+type previewPrismaFields = prismaFields
+
+const previewFieldID previewPrismaFields = "id"
+
+const previewFieldOriginalURL previewPrismaFields = "originalUrl"
+
+const previewFieldContentType previewPrismaFields = "contentType"
+
+const previewFieldModeration previewPrismaFields = "moderation"
+
+const previewFieldURL previewPrismaFields = "url"
+
+const previewFieldTitle previewPrismaFields = "title"
+
+const previewFieldDescription previewPrismaFields = "description"
+
+const previewFieldImageURL previewPrismaFields = "imageUrl"
+
+const previewFieldImageHash previewPrismaFields = "imageHash"
+
+const previewFieldImageWidth previewPrismaFields = "imageWidth"
+
+const previewFieldImageHeight previewPrismaFields = "imageHeight"
+
+const previewFieldCreatedAt previewPrismaFields = "createdAt"
+
+const previewFieldUpdatedAt previewPrismaFields = "updatedAt"
+
 // --- template mock.gotpl ---
 func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 	expectations := new([]mock.Expectation)
@@ -892,6 +969,10 @@ func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 		mock: m,
 	}
 
+	m.Preview = previewMock{
+		mock: m,
+	}
+
 	return pc, m, m.Ensure
 }
 
@@ -919,6 +1000,8 @@ type Mock struct {
 	Iap iapMock
 
 	PromotedChat promotedChatMock
+
+	Preview previewMock
 }
 
 type userMock struct {
@@ -1383,6 +1466,48 @@ func (m *promotedChatMockExec) Errors(err error) {
 	})
 }
 
+type previewMock struct {
+	mock *Mock
+}
+
+type PreviewMockExpectParam interface {
+	ExtractQuery() builder.Query
+	previewModel()
+}
+
+func (m *previewMock) Expect(query PreviewMockExpectParam) *previewMockExec {
+	return &previewMockExec{
+		mock:  m.mock,
+		query: query.ExtractQuery(),
+	}
+}
+
+type previewMockExec struct {
+	mock  *Mock
+	query builder.Query
+}
+
+func (m *previewMockExec) Returns(v PreviewModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *previewMockExec) ReturnsMany(v []PreviewModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *previewMockExec) Errors(err error) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query:   m.query,
+		WantErr: err,
+	})
+}
+
 // --- template models.gotpl ---
 
 // UserModel represents the User model and is a wrapper for accessing fields and methods
@@ -1836,6 +1961,50 @@ func (r PromotedChatModel) Chat() (value *ChatModel) {
 		panic("attempted to access chat but did not fetch it using the .With() syntax")
 	}
 	return r.RelationsPromotedChat.Chat
+}
+
+// PreviewModel represents the Preview model and is a wrapper for accessing fields and methods
+type PreviewModel struct {
+	InnerPreview
+	RelationsPreview
+}
+
+// InnerPreview holds the actual data
+type InnerPreview struct {
+	ID          string   `json:"id"`
+	OriginalURL string   `json:"originalUrl"`
+	ContentType int      `json:"contentType"`
+	Moderation  int      `json:"moderation"`
+	URL         string   `json:"url"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	ImageURL    string   `json:"imageUrl"`
+	ImageHash   string   `json:"imageHash"`
+	ImageWidth  int      `json:"imageWidth"`
+	ImageHeight int      `json:"imageHeight"`
+	CreatedAt   DateTime `json:"createdAt"`
+	UpdatedAt   DateTime `json:"updatedAt"`
+}
+
+// RawPreviewModel is a struct for Preview when used in raw queries
+type RawPreviewModel struct {
+	ID          RawString   `json:"id"`
+	OriginalURL RawString   `json:"originalUrl"`
+	ContentType RawInt      `json:"contentType"`
+	Moderation  RawInt      `json:"moderation"`
+	URL         RawString   `json:"url"`
+	Title       RawString   `json:"title"`
+	Description RawString   `json:"description"`
+	ImageURL    RawString   `json:"imageUrl"`
+	ImageHash   RawString   `json:"imageHash"`
+	ImageWidth  RawInt      `json:"imageWidth"`
+	ImageHeight RawInt      `json:"imageHeight"`
+	CreatedAt   RawDateTime `json:"createdAt"`
+	UpdatedAt   RawDateTime `json:"updatedAt"`
+}
+
+// RelationsPreview holds the relation data separately
+type RelationsPreview struct {
 }
 
 // --- template query.gotpl ---
@@ -27739,6 +27908,4776 @@ func (r promotedChatQueryUpdatedAtDateTime) Field() promotedChatPrismaFields {
 	return promotedChatFieldUpdatedAt
 }
 
+// Preview acts as a namespaces to access query methods for the Preview model
+var Preview = previewQuery{}
+
+// previewQuery exposes query functions for the preview model
+type previewQuery struct {
+
+	// ID
+	//
+	// @required
+	ID previewQueryIDString
+
+	// OriginalURL
+	//
+	// @required
+	OriginalURL previewQueryOriginalURLString
+
+	// ContentType
+	//
+	// @required
+	ContentType previewQueryContentTypeInt
+
+	// Moderation
+	//
+	// @required
+	Moderation previewQueryModerationInt
+
+	// URL
+	//
+	// @required
+	URL previewQueryURLString
+
+	// Title
+	//
+	// @required
+	Title previewQueryTitleString
+
+	// Description
+	//
+	// @required
+	Description previewQueryDescriptionString
+
+	// ImageURL
+	//
+	// @required
+	ImageURL previewQueryImageURLString
+
+	// ImageHash
+	//
+	// @required
+	ImageHash previewQueryImageHashString
+
+	// ImageWidth
+	//
+	// @required
+	ImageWidth previewQueryImageWidthInt
+
+	// ImageHeight
+	//
+	// @required
+	ImageHeight previewQueryImageHeightInt
+
+	// CreatedAt
+	//
+	// @required
+	CreatedAt previewQueryCreatedAtDateTime
+
+	// UpdatedAt
+	//
+	// @required
+	UpdatedAt previewQueryUpdatedAtDateTime
+}
+
+func (previewQuery) Not(params ...PreviewWhereParam) previewDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:     "NOT",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (previewQuery) Or(params ...PreviewWhereParam) previewDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:     "OR",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (previewQuery) And(params ...PreviewWhereParam) previewDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:     "AND",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+// base struct
+type previewQueryIDString struct{}
+
+// Set the required value of ID
+func (r previewQueryIDString) Set(value string) previewWithPrismaIDSetParam {
+
+	return previewWithPrismaIDSetParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ID dynamically
+func (r previewQueryIDString) SetIfPresent(value *String) previewWithPrismaIDSetParam {
+	if value == nil {
+		return previewWithPrismaIDSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryIDString) Equals(value string) previewWithPrismaIDEqualsUniqueParam {
+
+	return previewWithPrismaIDEqualsUniqueParam{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) EqualsIfPresent(value *string) previewWithPrismaIDEqualsUniqueParam {
+	if value == nil {
+		return previewWithPrismaIDEqualsUniqueParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryIDString) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryIDString) Cursor(cursor string) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryIDString) In(value []string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) InIfPresent(value []string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryIDString) NotIn(value []string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) NotInIfPresent(value []string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryIDString) Lt(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) LtIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryIDString) Lte(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) LteIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryIDString) Gt(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) GtIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryIDString) Gte(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) GteIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryIDString) Contains(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) ContainsIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.Contains(*value)
+}
+
+func (r previewQueryIDString) StartsWith(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) StartsWithIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r previewQueryIDString) EndsWith(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) EndsWithIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r previewQueryIDString) Mode(value QueryMode) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) ModeIfPresent(value *QueryMode) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.Mode(*value)
+}
+
+func (r previewQueryIDString) Not(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryIDString) NotIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r previewQueryIDString) HasPrefix(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r previewQueryIDString) HasPrefixIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r previewQueryIDString) HasSuffix(value string) previewParamUnique {
+	return previewParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r previewQueryIDString) HasSuffixIfPresent(value *string) previewParamUnique {
+	if value == nil {
+		return previewParamUnique{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r previewQueryIDString) Field() previewPrismaFields {
+	return previewFieldID
+}
+
+// base struct
+type previewQueryOriginalURLString struct{}
+
+// Set the required value of OriginalURL
+func (r previewQueryOriginalURLString) Set(value string) previewWithPrismaOriginalURLSetParam {
+
+	return previewWithPrismaOriginalURLSetParam{
+		data: builder.Field{
+			Name:  "originalUrl",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of OriginalURL dynamically
+func (r previewQueryOriginalURLString) SetIfPresent(value *String) previewWithPrismaOriginalURLSetParam {
+	if value == nil {
+		return previewWithPrismaOriginalURLSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryOriginalURLString) Equals(value string) previewWithPrismaOriginalURLEqualsParam {
+
+	return previewWithPrismaOriginalURLEqualsParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) EqualsIfPresent(value *string) previewWithPrismaOriginalURLEqualsParam {
+	if value == nil {
+		return previewWithPrismaOriginalURLEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryOriginalURLString) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "originalUrl",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) Cursor(cursor string) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "originalUrl",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) In(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) InIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryOriginalURLString) NotIn(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) NotInIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryOriginalURLString) Lt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) LtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryOriginalURLString) Lte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) LteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryOriginalURLString) Gt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) GtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryOriginalURLString) Gte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) GteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryOriginalURLString) Contains(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) ContainsIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r previewQueryOriginalURLString) StartsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) StartsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r previewQueryOriginalURLString) EndsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) EndsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r previewQueryOriginalURLString) Mode(value QueryMode) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) ModeIfPresent(value *QueryMode) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r previewQueryOriginalURLString) Not(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryOriginalURLString) NotIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r previewQueryOriginalURLString) HasPrefix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r previewQueryOriginalURLString) HasPrefixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r previewQueryOriginalURLString) HasSuffix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "originalUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r previewQueryOriginalURLString) HasSuffixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r previewQueryOriginalURLString) Field() previewPrismaFields {
+	return previewFieldOriginalURL
+}
+
+// base struct
+type previewQueryContentTypeInt struct{}
+
+// Set the required value of ContentType
+func (r previewQueryContentTypeInt) Set(value int) previewSetParam {
+
+	return previewSetParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ContentType dynamically
+func (r previewQueryContentTypeInt) SetIfPresent(value *Int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of ContentType
+func (r previewQueryContentTypeInt) Increment(value int) previewSetParam {
+	return previewSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) IncrementIfPresent(value *int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of ContentType
+func (r previewQueryContentTypeInt) Decrement(value int) previewSetParam {
+	return previewSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) DecrementIfPresent(value *int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of ContentType
+func (r previewQueryContentTypeInt) Multiply(value int) previewSetParam {
+	return previewSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) MultiplyIfPresent(value *int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of ContentType
+func (r previewQueryContentTypeInt) Divide(value int) previewSetParam {
+	return previewSetParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) DivideIfPresent(value *int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r previewQueryContentTypeInt) Equals(value int) previewWithPrismaContentTypeEqualsParam {
+
+	return previewWithPrismaContentTypeEqualsParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) EqualsIfPresent(value *int) previewWithPrismaContentTypeEqualsParam {
+	if value == nil {
+		return previewWithPrismaContentTypeEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryContentTypeInt) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) Cursor(cursor int) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "contentType",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) In(value []int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) InIfPresent(value []int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryContentTypeInt) NotIn(value []int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) NotInIfPresent(value []int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryContentTypeInt) Lt(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) LtIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryContentTypeInt) Lte(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) LteIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryContentTypeInt) Gt(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) GtIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryContentTypeInt) Gte(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) GteIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryContentTypeInt) Not(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryContentTypeInt) NotIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r previewQueryContentTypeInt) LT(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r previewQueryContentTypeInt) LTIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r previewQueryContentTypeInt) LTE(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r previewQueryContentTypeInt) LTEIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r previewQueryContentTypeInt) GT(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r previewQueryContentTypeInt) GTIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r previewQueryContentTypeInt) GTE(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "contentType",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r previewQueryContentTypeInt) GTEIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r previewQueryContentTypeInt) Field() previewPrismaFields {
+	return previewFieldContentType
+}
+
+// base struct
+type previewQueryModerationInt struct{}
+
+// Set the required value of Moderation
+func (r previewQueryModerationInt) Set(value int) previewSetParam {
+
+	return previewSetParam{
+		data: builder.Field{
+			Name:  "moderation",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Moderation dynamically
+func (r previewQueryModerationInt) SetIfPresent(value *Int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of Moderation
+func (r previewQueryModerationInt) Increment(value int) previewSetParam {
+	return previewSetParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) IncrementIfPresent(value *int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of Moderation
+func (r previewQueryModerationInt) Decrement(value int) previewSetParam {
+	return previewSetParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) DecrementIfPresent(value *int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of Moderation
+func (r previewQueryModerationInt) Multiply(value int) previewSetParam {
+	return previewSetParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) MultiplyIfPresent(value *int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of Moderation
+func (r previewQueryModerationInt) Divide(value int) previewSetParam {
+	return previewSetParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) DivideIfPresent(value *int) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r previewQueryModerationInt) Equals(value int) previewWithPrismaModerationEqualsParam {
+
+	return previewWithPrismaModerationEqualsParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) EqualsIfPresent(value *int) previewWithPrismaModerationEqualsParam {
+	if value == nil {
+		return previewWithPrismaModerationEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryModerationInt) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "moderation",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryModerationInt) Cursor(cursor int) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "moderation",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryModerationInt) In(value []int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) InIfPresent(value []int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryModerationInt) NotIn(value []int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) NotInIfPresent(value []int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryModerationInt) Lt(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) LtIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryModerationInt) Lte(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) LteIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryModerationInt) Gt(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) GtIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryModerationInt) Gte(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) GteIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryModerationInt) Not(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryModerationInt) NotIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r previewQueryModerationInt) LT(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r previewQueryModerationInt) LTIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r previewQueryModerationInt) LTE(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r previewQueryModerationInt) LTEIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r previewQueryModerationInt) GT(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r previewQueryModerationInt) GTIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r previewQueryModerationInt) GTE(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "moderation",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r previewQueryModerationInt) GTEIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r previewQueryModerationInt) Field() previewPrismaFields {
+	return previewFieldModeration
+}
+
+// base struct
+type previewQueryURLString struct{}
+
+// Set the required value of URL
+func (r previewQueryURLString) Set(value string) previewWithPrismaURLSetParam {
+
+	return previewWithPrismaURLSetParam{
+		data: builder.Field{
+			Name:  "url",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of URL dynamically
+func (r previewQueryURLString) SetIfPresent(value *String) previewWithPrismaURLSetParam {
+	if value == nil {
+		return previewWithPrismaURLSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryURLString) Equals(value string) previewWithPrismaURLEqualsParam {
+
+	return previewWithPrismaURLEqualsParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) EqualsIfPresent(value *string) previewWithPrismaURLEqualsParam {
+	if value == nil {
+		return previewWithPrismaURLEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryURLString) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "url",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryURLString) Cursor(cursor string) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "url",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryURLString) In(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) InIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryURLString) NotIn(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) NotInIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryURLString) Lt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) LtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryURLString) Lte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) LteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryURLString) Gt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) GtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryURLString) Gte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) GteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryURLString) Contains(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) ContainsIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r previewQueryURLString) StartsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) StartsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r previewQueryURLString) EndsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) EndsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r previewQueryURLString) Mode(value QueryMode) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) ModeIfPresent(value *QueryMode) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r previewQueryURLString) Not(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryURLString) NotIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r previewQueryURLString) HasPrefix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r previewQueryURLString) HasPrefixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r previewQueryURLString) HasSuffix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "url",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r previewQueryURLString) HasSuffixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r previewQueryURLString) Field() previewPrismaFields {
+	return previewFieldURL
+}
+
+// base struct
+type previewQueryTitleString struct{}
+
+// Set the required value of Title
+func (r previewQueryTitleString) Set(value string) previewWithPrismaTitleSetParam {
+
+	return previewWithPrismaTitleSetParam{
+		data: builder.Field{
+			Name:  "title",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Title dynamically
+func (r previewQueryTitleString) SetIfPresent(value *String) previewWithPrismaTitleSetParam {
+	if value == nil {
+		return previewWithPrismaTitleSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryTitleString) Equals(value string) previewWithPrismaTitleEqualsParam {
+
+	return previewWithPrismaTitleEqualsParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) EqualsIfPresent(value *string) previewWithPrismaTitleEqualsParam {
+	if value == nil {
+		return previewWithPrismaTitleEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryTitleString) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "title",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryTitleString) Cursor(cursor string) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "title",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryTitleString) In(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) InIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryTitleString) NotIn(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) NotInIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryTitleString) Lt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) LtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryTitleString) Lte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) LteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryTitleString) Gt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) GtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryTitleString) Gte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) GteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryTitleString) Contains(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) ContainsIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r previewQueryTitleString) StartsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) StartsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r previewQueryTitleString) EndsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) EndsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r previewQueryTitleString) Mode(value QueryMode) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) ModeIfPresent(value *QueryMode) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r previewQueryTitleString) Not(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryTitleString) NotIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r previewQueryTitleString) HasPrefix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r previewQueryTitleString) HasPrefixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r previewQueryTitleString) HasSuffix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "title",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r previewQueryTitleString) HasSuffixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r previewQueryTitleString) Field() previewPrismaFields {
+	return previewFieldTitle
+}
+
+// base struct
+type previewQueryDescriptionString struct{}
+
+// Set the required value of Description
+func (r previewQueryDescriptionString) Set(value string) previewWithPrismaDescriptionSetParam {
+
+	return previewWithPrismaDescriptionSetParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Description dynamically
+func (r previewQueryDescriptionString) SetIfPresent(value *String) previewWithPrismaDescriptionSetParam {
+	if value == nil {
+		return previewWithPrismaDescriptionSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryDescriptionString) Equals(value string) previewWithPrismaDescriptionEqualsParam {
+
+	return previewWithPrismaDescriptionEqualsParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) EqualsIfPresent(value *string) previewWithPrismaDescriptionEqualsParam {
+	if value == nil {
+		return previewWithPrismaDescriptionEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryDescriptionString) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) Cursor(cursor string) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) In(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) InIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryDescriptionString) NotIn(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) NotInIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryDescriptionString) Lt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) LtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryDescriptionString) Lte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) LteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryDescriptionString) Gt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) GtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryDescriptionString) Gte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) GteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryDescriptionString) Contains(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) ContainsIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r previewQueryDescriptionString) StartsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) StartsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r previewQueryDescriptionString) EndsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) EndsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r previewQueryDescriptionString) Mode(value QueryMode) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) ModeIfPresent(value *QueryMode) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r previewQueryDescriptionString) Not(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryDescriptionString) NotIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r previewQueryDescriptionString) HasPrefix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r previewQueryDescriptionString) HasPrefixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r previewQueryDescriptionString) HasSuffix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r previewQueryDescriptionString) HasSuffixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r previewQueryDescriptionString) Field() previewPrismaFields {
+	return previewFieldDescription
+}
+
+// base struct
+type previewQueryImageURLString struct{}
+
+// Set the required value of ImageURL
+func (r previewQueryImageURLString) Set(value string) previewWithPrismaImageURLSetParam {
+
+	return previewWithPrismaImageURLSetParam{
+		data: builder.Field{
+			Name:  "imageUrl",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ImageURL dynamically
+func (r previewQueryImageURLString) SetIfPresent(value *String) previewWithPrismaImageURLSetParam {
+	if value == nil {
+		return previewWithPrismaImageURLSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryImageURLString) Equals(value string) previewWithPrismaImageURLEqualsParam {
+
+	return previewWithPrismaImageURLEqualsParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) EqualsIfPresent(value *string) previewWithPrismaImageURLEqualsParam {
+	if value == nil {
+		return previewWithPrismaImageURLEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryImageURLString) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "imageUrl",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryImageURLString) Cursor(cursor string) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "imageUrl",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryImageURLString) In(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) InIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryImageURLString) NotIn(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) NotInIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryImageURLString) Lt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) LtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryImageURLString) Lte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) LteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryImageURLString) Gt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) GtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryImageURLString) Gte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) GteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryImageURLString) Contains(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) ContainsIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r previewQueryImageURLString) StartsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) StartsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r previewQueryImageURLString) EndsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) EndsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r previewQueryImageURLString) Mode(value QueryMode) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) ModeIfPresent(value *QueryMode) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r previewQueryImageURLString) Not(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageURLString) NotIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r previewQueryImageURLString) HasPrefix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r previewQueryImageURLString) HasPrefixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r previewQueryImageURLString) HasSuffix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageUrl",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r previewQueryImageURLString) HasSuffixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r previewQueryImageURLString) Field() previewPrismaFields {
+	return previewFieldImageURL
+}
+
+// base struct
+type previewQueryImageHashString struct{}
+
+// Set the required value of ImageHash
+func (r previewQueryImageHashString) Set(value string) previewWithPrismaImageHashSetParam {
+
+	return previewWithPrismaImageHashSetParam{
+		data: builder.Field{
+			Name:  "imageHash",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ImageHash dynamically
+func (r previewQueryImageHashString) SetIfPresent(value *String) previewWithPrismaImageHashSetParam {
+	if value == nil {
+		return previewWithPrismaImageHashSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryImageHashString) Equals(value string) previewWithPrismaImageHashEqualsParam {
+
+	return previewWithPrismaImageHashEqualsParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) EqualsIfPresent(value *string) previewWithPrismaImageHashEqualsParam {
+	if value == nil {
+		return previewWithPrismaImageHashEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryImageHashString) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "imageHash",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryImageHashString) Cursor(cursor string) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "imageHash",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryImageHashString) In(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) InIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryImageHashString) NotIn(value []string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) NotInIfPresent(value []string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryImageHashString) Lt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) LtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryImageHashString) Lte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) LteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryImageHashString) Gt(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) GtIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryImageHashString) Gte(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) GteIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryImageHashString) Contains(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) ContainsIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r previewQueryImageHashString) StartsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) StartsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r previewQueryImageHashString) EndsWith(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) EndsWithIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r previewQueryImageHashString) Mode(value QueryMode) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) ModeIfPresent(value *QueryMode) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r previewQueryImageHashString) Not(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHashString) NotIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r previewQueryImageHashString) HasPrefix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r previewQueryImageHashString) HasPrefixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r previewQueryImageHashString) HasSuffix(value string) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHash",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r previewQueryImageHashString) HasSuffixIfPresent(value *string) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r previewQueryImageHashString) Field() previewPrismaFields {
+	return previewFieldImageHash
+}
+
+// base struct
+type previewQueryImageWidthInt struct{}
+
+// Set the required value of ImageWidth
+func (r previewQueryImageWidthInt) Set(value int) previewWithPrismaImageWidthSetParam {
+
+	return previewWithPrismaImageWidthSetParam{
+		data: builder.Field{
+			Name:  "imageWidth",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ImageWidth dynamically
+func (r previewQueryImageWidthInt) SetIfPresent(value *Int) previewWithPrismaImageWidthSetParam {
+	if value == nil {
+		return previewWithPrismaImageWidthSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of ImageWidth
+func (r previewQueryImageWidthInt) Increment(value int) previewWithPrismaImageWidthSetParam {
+	return previewWithPrismaImageWidthSetParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) IncrementIfPresent(value *int) previewWithPrismaImageWidthSetParam {
+	if value == nil {
+		return previewWithPrismaImageWidthSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of ImageWidth
+func (r previewQueryImageWidthInt) Decrement(value int) previewWithPrismaImageWidthSetParam {
+	return previewWithPrismaImageWidthSetParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) DecrementIfPresent(value *int) previewWithPrismaImageWidthSetParam {
+	if value == nil {
+		return previewWithPrismaImageWidthSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of ImageWidth
+func (r previewQueryImageWidthInt) Multiply(value int) previewWithPrismaImageWidthSetParam {
+	return previewWithPrismaImageWidthSetParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) MultiplyIfPresent(value *int) previewWithPrismaImageWidthSetParam {
+	if value == nil {
+		return previewWithPrismaImageWidthSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of ImageWidth
+func (r previewQueryImageWidthInt) Divide(value int) previewWithPrismaImageWidthSetParam {
+	return previewWithPrismaImageWidthSetParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) DivideIfPresent(value *int) previewWithPrismaImageWidthSetParam {
+	if value == nil {
+		return previewWithPrismaImageWidthSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r previewQueryImageWidthInt) Equals(value int) previewWithPrismaImageWidthEqualsParam {
+
+	return previewWithPrismaImageWidthEqualsParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) EqualsIfPresent(value *int) previewWithPrismaImageWidthEqualsParam {
+	if value == nil {
+		return previewWithPrismaImageWidthEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryImageWidthInt) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "imageWidth",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) Cursor(cursor int) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "imageWidth",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) In(value []int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) InIfPresent(value []int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryImageWidthInt) NotIn(value []int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) NotInIfPresent(value []int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryImageWidthInt) Lt(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) LtIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryImageWidthInt) Lte(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) LteIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryImageWidthInt) Gt(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) GtIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryImageWidthInt) Gte(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) GteIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryImageWidthInt) Not(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageWidthInt) NotIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r previewQueryImageWidthInt) LT(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r previewQueryImageWidthInt) LTIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r previewQueryImageWidthInt) LTE(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r previewQueryImageWidthInt) LTEIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r previewQueryImageWidthInt) GT(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r previewQueryImageWidthInt) GTIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r previewQueryImageWidthInt) GTE(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageWidth",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r previewQueryImageWidthInt) GTEIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r previewQueryImageWidthInt) Field() previewPrismaFields {
+	return previewFieldImageWidth
+}
+
+// base struct
+type previewQueryImageHeightInt struct{}
+
+// Set the required value of ImageHeight
+func (r previewQueryImageHeightInt) Set(value int) previewWithPrismaImageHeightSetParam {
+
+	return previewWithPrismaImageHeightSetParam{
+		data: builder.Field{
+			Name:  "imageHeight",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ImageHeight dynamically
+func (r previewQueryImageHeightInt) SetIfPresent(value *Int) previewWithPrismaImageHeightSetParam {
+	if value == nil {
+		return previewWithPrismaImageHeightSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of ImageHeight
+func (r previewQueryImageHeightInt) Increment(value int) previewWithPrismaImageHeightSetParam {
+	return previewWithPrismaImageHeightSetParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) IncrementIfPresent(value *int) previewWithPrismaImageHeightSetParam {
+	if value == nil {
+		return previewWithPrismaImageHeightSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of ImageHeight
+func (r previewQueryImageHeightInt) Decrement(value int) previewWithPrismaImageHeightSetParam {
+	return previewWithPrismaImageHeightSetParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) DecrementIfPresent(value *int) previewWithPrismaImageHeightSetParam {
+	if value == nil {
+		return previewWithPrismaImageHeightSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of ImageHeight
+func (r previewQueryImageHeightInt) Multiply(value int) previewWithPrismaImageHeightSetParam {
+	return previewWithPrismaImageHeightSetParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) MultiplyIfPresent(value *int) previewWithPrismaImageHeightSetParam {
+	if value == nil {
+		return previewWithPrismaImageHeightSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of ImageHeight
+func (r previewQueryImageHeightInt) Divide(value int) previewWithPrismaImageHeightSetParam {
+	return previewWithPrismaImageHeightSetParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) DivideIfPresent(value *int) previewWithPrismaImageHeightSetParam {
+	if value == nil {
+		return previewWithPrismaImageHeightSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r previewQueryImageHeightInt) Equals(value int) previewWithPrismaImageHeightEqualsParam {
+
+	return previewWithPrismaImageHeightEqualsParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) EqualsIfPresent(value *int) previewWithPrismaImageHeightEqualsParam {
+	if value == nil {
+		return previewWithPrismaImageHeightEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryImageHeightInt) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "imageHeight",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) Cursor(cursor int) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "imageHeight",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) In(value []int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) InIfPresent(value []int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryImageHeightInt) NotIn(value []int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) NotInIfPresent(value []int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryImageHeightInt) Lt(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) LtIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryImageHeightInt) Lte(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) LteIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryImageHeightInt) Gt(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) GtIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryImageHeightInt) Gte(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) GteIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryImageHeightInt) Not(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryImageHeightInt) NotIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r previewQueryImageHeightInt) LT(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r previewQueryImageHeightInt) LTIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r previewQueryImageHeightInt) LTE(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r previewQueryImageHeightInt) LTEIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r previewQueryImageHeightInt) GT(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r previewQueryImageHeightInt) GTIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r previewQueryImageHeightInt) GTE(value int) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "imageHeight",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r previewQueryImageHeightInt) GTEIfPresent(value *int) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r previewQueryImageHeightInt) Field() previewPrismaFields {
+	return previewFieldImageHeight
+}
+
+// base struct
+type previewQueryCreatedAtDateTime struct{}
+
+// Set the required value of CreatedAt
+func (r previewQueryCreatedAtDateTime) Set(value DateTime) previewSetParam {
+
+	return previewSetParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of CreatedAt dynamically
+func (r previewQueryCreatedAtDateTime) SetIfPresent(value *DateTime) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryCreatedAtDateTime) Equals(value DateTime) previewWithPrismaCreatedAtEqualsParam {
+
+	return previewWithPrismaCreatedAtEqualsParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) EqualsIfPresent(value *DateTime) previewWithPrismaCreatedAtEqualsParam {
+	if value == nil {
+		return previewWithPrismaCreatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryCreatedAtDateTime) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) Cursor(cursor DateTime) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) In(value []DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) InIfPresent(value []DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryCreatedAtDateTime) NotIn(value []DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) NotInIfPresent(value []DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryCreatedAtDateTime) Lt(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) LtIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryCreatedAtDateTime) Lte(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) LteIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryCreatedAtDateTime) Gt(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) GtIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryCreatedAtDateTime) Gte(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) GteIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryCreatedAtDateTime) Not(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryCreatedAtDateTime) NotIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r previewQueryCreatedAtDateTime) Before(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r previewQueryCreatedAtDateTime) BeforeIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r previewQueryCreatedAtDateTime) After(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r previewQueryCreatedAtDateTime) AfterIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r previewQueryCreatedAtDateTime) BeforeEquals(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r previewQueryCreatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r previewQueryCreatedAtDateTime) AfterEquals(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r previewQueryCreatedAtDateTime) AfterEqualsIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r previewQueryCreatedAtDateTime) Field() previewPrismaFields {
+	return previewFieldCreatedAt
+}
+
+// base struct
+type previewQueryUpdatedAtDateTime struct{}
+
+// Set the required value of UpdatedAt
+func (r previewQueryUpdatedAtDateTime) Set(value DateTime) previewSetParam {
+
+	return previewSetParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of UpdatedAt dynamically
+func (r previewQueryUpdatedAtDateTime) SetIfPresent(value *DateTime) previewSetParam {
+	if value == nil {
+		return previewSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r previewQueryUpdatedAtDateTime) Equals(value DateTime) previewWithPrismaUpdatedAtEqualsParam {
+
+	return previewWithPrismaUpdatedAtEqualsParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) EqualsIfPresent(value *DateTime) previewWithPrismaUpdatedAtEqualsParam {
+	if value == nil {
+		return previewWithPrismaUpdatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r previewQueryUpdatedAtDateTime) Order(direction SortOrder) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) Cursor(cursor DateTime) previewCursorParam {
+	return previewCursorParam{
+		data: builder.Field{
+			Name:  "updatedAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) In(value []DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) InIfPresent(value []DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r previewQueryUpdatedAtDateTime) NotIn(value []DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) NotInIfPresent(value []DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r previewQueryUpdatedAtDateTime) Lt(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) LtIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r previewQueryUpdatedAtDateTime) Lte(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) LteIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r previewQueryUpdatedAtDateTime) Gt(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) GtIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r previewQueryUpdatedAtDateTime) Gte(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) GteIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r previewQueryUpdatedAtDateTime) Not(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r previewQueryUpdatedAtDateTime) NotIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r previewQueryUpdatedAtDateTime) Before(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r previewQueryUpdatedAtDateTime) BeforeIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r previewQueryUpdatedAtDateTime) After(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r previewQueryUpdatedAtDateTime) AfterIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r previewQueryUpdatedAtDateTime) BeforeEquals(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r previewQueryUpdatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r previewQueryUpdatedAtDateTime) AfterEquals(value DateTime) previewDefaultParam {
+	return previewDefaultParam{
+		data: builder.Field{
+			Name: "updatedAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r previewQueryUpdatedAtDateTime) AfterEqualsIfPresent(value *DateTime) previewDefaultParam {
+	if value == nil {
+		return previewDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r previewQueryUpdatedAtDateTime) Field() previewPrismaFields {
+	return previewFieldUpdatedAt
+}
+
 // --- template actions.gotpl ---
 var countOutput = []builder.Output{
 	{Name: "count"},
@@ -36423,6 +41362,1205 @@ func (p promotedChatWithPrismaUpdatedAtEqualsUniqueParam) updatedAtField()    {}
 func (promotedChatWithPrismaUpdatedAtEqualsUniqueParam) unique() {}
 func (promotedChatWithPrismaUpdatedAtEqualsUniqueParam) equals() {}
 
+type previewActions struct {
+	// client holds the prisma client
+	client *PrismaClient
+}
+
+var previewOutput = []builder.Output{
+	{Name: "id"},
+	{Name: "originalUrl"},
+	{Name: "contentType"},
+	{Name: "moderation"},
+	{Name: "url"},
+	{Name: "title"},
+	{Name: "description"},
+	{Name: "imageUrl"},
+	{Name: "imageHash"},
+	{Name: "imageWidth"},
+	{Name: "imageHeight"},
+	{Name: "createdAt"},
+	{Name: "updatedAt"},
+}
+
+type PreviewRelationWith interface {
+	getQuery() builder.Query
+	with()
+	previewRelation()
+}
+
+type PreviewWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+}
+
+type previewDefaultParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewDefaultParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewDefaultParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewDefaultParam) previewModel() {}
+
+type PreviewOrderByParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+}
+
+type previewOrderByParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewOrderByParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewOrderByParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewOrderByParam) previewModel() {}
+
+type PreviewCursorParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	isCursor()
+}
+
+type previewCursorParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewCursorParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewCursorParam) isCursor() {}
+
+func (p previewCursorParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewCursorParam) previewModel() {}
+
+type PreviewParamUnique interface {
+	field() builder.Field
+	getQuery() builder.Query
+	unique()
+	previewModel()
+}
+
+type previewParamUnique struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewParamUnique) previewModel() {}
+
+func (previewParamUnique) unique() {}
+
+func (p previewParamUnique) field() builder.Field {
+	return p.data
+}
+
+func (p previewParamUnique) getQuery() builder.Query {
+	return p.query
+}
+
+type PreviewEqualsWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+}
+
+type previewEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewEqualsParam) previewModel() {}
+
+func (previewEqualsParam) equals() {}
+
+func (p previewEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+type PreviewEqualsUniqueWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	unique()
+	previewModel()
+}
+
+type previewEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewEqualsUniqueParam) previewModel() {}
+
+func (previewEqualsUniqueParam) unique() {}
+func (previewEqualsUniqueParam) equals() {}
+
+func (p previewEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+type PreviewSetParam interface {
+	field() builder.Field
+	settable()
+	previewModel()
+}
+
+type previewSetParam struct {
+	data builder.Field
+}
+
+func (previewSetParam) settable() {}
+
+func (p previewSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewSetParam) previewModel() {}
+
+type PreviewWithPrismaIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	idField()
+}
+
+type PreviewWithPrismaIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	idField()
+}
+
+type previewWithPrismaIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaIDSetParam) previewModel() {}
+
+func (p previewWithPrismaIDSetParam) idField() {}
+
+type PreviewWithPrismaIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	idField()
+}
+
+type previewWithPrismaIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaIDEqualsParam) previewModel() {}
+
+func (p previewWithPrismaIDEqualsParam) idField() {}
+
+func (previewWithPrismaIDSetParam) settable()  {}
+func (previewWithPrismaIDEqualsParam) equals() {}
+
+type previewWithPrismaIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaIDEqualsUniqueParam) previewModel() {}
+func (p previewWithPrismaIDEqualsUniqueParam) idField()      {}
+
+func (previewWithPrismaIDEqualsUniqueParam) unique() {}
+func (previewWithPrismaIDEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaOriginalURLEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	originalURLField()
+}
+
+type PreviewWithPrismaOriginalURLSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	originalURLField()
+}
+
+type previewWithPrismaOriginalURLSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaOriginalURLSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaOriginalURLSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaOriginalURLSetParam) previewModel() {}
+
+func (p previewWithPrismaOriginalURLSetParam) originalURLField() {}
+
+type PreviewWithPrismaOriginalURLWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	originalURLField()
+}
+
+type previewWithPrismaOriginalURLEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaOriginalURLEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaOriginalURLEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaOriginalURLEqualsParam) previewModel() {}
+
+func (p previewWithPrismaOriginalURLEqualsParam) originalURLField() {}
+
+func (previewWithPrismaOriginalURLSetParam) settable()  {}
+func (previewWithPrismaOriginalURLEqualsParam) equals() {}
+
+type previewWithPrismaOriginalURLEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaOriginalURLEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaOriginalURLEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaOriginalURLEqualsUniqueParam) previewModel()     {}
+func (p previewWithPrismaOriginalURLEqualsUniqueParam) originalURLField() {}
+
+func (previewWithPrismaOriginalURLEqualsUniqueParam) unique() {}
+func (previewWithPrismaOriginalURLEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaContentTypeEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	contentTypeField()
+}
+
+type PreviewWithPrismaContentTypeSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	contentTypeField()
+}
+
+type previewWithPrismaContentTypeSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaContentTypeSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaContentTypeSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaContentTypeSetParam) previewModel() {}
+
+func (p previewWithPrismaContentTypeSetParam) contentTypeField() {}
+
+type PreviewWithPrismaContentTypeWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	contentTypeField()
+}
+
+type previewWithPrismaContentTypeEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaContentTypeEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaContentTypeEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaContentTypeEqualsParam) previewModel() {}
+
+func (p previewWithPrismaContentTypeEqualsParam) contentTypeField() {}
+
+func (previewWithPrismaContentTypeSetParam) settable()  {}
+func (previewWithPrismaContentTypeEqualsParam) equals() {}
+
+type previewWithPrismaContentTypeEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaContentTypeEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaContentTypeEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaContentTypeEqualsUniqueParam) previewModel()     {}
+func (p previewWithPrismaContentTypeEqualsUniqueParam) contentTypeField() {}
+
+func (previewWithPrismaContentTypeEqualsUniqueParam) unique() {}
+func (previewWithPrismaContentTypeEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaModerationEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	moderationField()
+}
+
+type PreviewWithPrismaModerationSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	moderationField()
+}
+
+type previewWithPrismaModerationSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaModerationSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaModerationSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaModerationSetParam) previewModel() {}
+
+func (p previewWithPrismaModerationSetParam) moderationField() {}
+
+type PreviewWithPrismaModerationWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	moderationField()
+}
+
+type previewWithPrismaModerationEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaModerationEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaModerationEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaModerationEqualsParam) previewModel() {}
+
+func (p previewWithPrismaModerationEqualsParam) moderationField() {}
+
+func (previewWithPrismaModerationSetParam) settable()  {}
+func (previewWithPrismaModerationEqualsParam) equals() {}
+
+type previewWithPrismaModerationEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaModerationEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaModerationEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaModerationEqualsUniqueParam) previewModel()    {}
+func (p previewWithPrismaModerationEqualsUniqueParam) moderationField() {}
+
+func (previewWithPrismaModerationEqualsUniqueParam) unique() {}
+func (previewWithPrismaModerationEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaURLEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	urlField()
+}
+
+type PreviewWithPrismaURLSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	urlField()
+}
+
+type previewWithPrismaURLSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaURLSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaURLSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaURLSetParam) previewModel() {}
+
+func (p previewWithPrismaURLSetParam) urlField() {}
+
+type PreviewWithPrismaURLWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	urlField()
+}
+
+type previewWithPrismaURLEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaURLEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaURLEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaURLEqualsParam) previewModel() {}
+
+func (p previewWithPrismaURLEqualsParam) urlField() {}
+
+func (previewWithPrismaURLSetParam) settable()  {}
+func (previewWithPrismaURLEqualsParam) equals() {}
+
+type previewWithPrismaURLEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaURLEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaURLEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaURLEqualsUniqueParam) previewModel() {}
+func (p previewWithPrismaURLEqualsUniqueParam) urlField()     {}
+
+func (previewWithPrismaURLEqualsUniqueParam) unique() {}
+func (previewWithPrismaURLEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaTitleEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	titleField()
+}
+
+type PreviewWithPrismaTitleSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	titleField()
+}
+
+type previewWithPrismaTitleSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaTitleSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaTitleSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaTitleSetParam) previewModel() {}
+
+func (p previewWithPrismaTitleSetParam) titleField() {}
+
+type PreviewWithPrismaTitleWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	titleField()
+}
+
+type previewWithPrismaTitleEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaTitleEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaTitleEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaTitleEqualsParam) previewModel() {}
+
+func (p previewWithPrismaTitleEqualsParam) titleField() {}
+
+func (previewWithPrismaTitleSetParam) settable()  {}
+func (previewWithPrismaTitleEqualsParam) equals() {}
+
+type previewWithPrismaTitleEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaTitleEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaTitleEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaTitleEqualsUniqueParam) previewModel() {}
+func (p previewWithPrismaTitleEqualsUniqueParam) titleField()   {}
+
+func (previewWithPrismaTitleEqualsUniqueParam) unique() {}
+func (previewWithPrismaTitleEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaDescriptionEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	descriptionField()
+}
+
+type PreviewWithPrismaDescriptionSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	descriptionField()
+}
+
+type previewWithPrismaDescriptionSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaDescriptionSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaDescriptionSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaDescriptionSetParam) previewModel() {}
+
+func (p previewWithPrismaDescriptionSetParam) descriptionField() {}
+
+type PreviewWithPrismaDescriptionWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	descriptionField()
+}
+
+type previewWithPrismaDescriptionEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaDescriptionEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaDescriptionEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaDescriptionEqualsParam) previewModel() {}
+
+func (p previewWithPrismaDescriptionEqualsParam) descriptionField() {}
+
+func (previewWithPrismaDescriptionSetParam) settable()  {}
+func (previewWithPrismaDescriptionEqualsParam) equals() {}
+
+type previewWithPrismaDescriptionEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaDescriptionEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaDescriptionEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaDescriptionEqualsUniqueParam) previewModel()     {}
+func (p previewWithPrismaDescriptionEqualsUniqueParam) descriptionField() {}
+
+func (previewWithPrismaDescriptionEqualsUniqueParam) unique() {}
+func (previewWithPrismaDescriptionEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaImageURLEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	imageURLField()
+}
+
+type PreviewWithPrismaImageURLSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	imageURLField()
+}
+
+type previewWithPrismaImageURLSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageURLSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageURLSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageURLSetParam) previewModel() {}
+
+func (p previewWithPrismaImageURLSetParam) imageURLField() {}
+
+type PreviewWithPrismaImageURLWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	imageURLField()
+}
+
+type previewWithPrismaImageURLEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageURLEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageURLEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageURLEqualsParam) previewModel() {}
+
+func (p previewWithPrismaImageURLEqualsParam) imageURLField() {}
+
+func (previewWithPrismaImageURLSetParam) settable()  {}
+func (previewWithPrismaImageURLEqualsParam) equals() {}
+
+type previewWithPrismaImageURLEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageURLEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageURLEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageURLEqualsUniqueParam) previewModel()  {}
+func (p previewWithPrismaImageURLEqualsUniqueParam) imageURLField() {}
+
+func (previewWithPrismaImageURLEqualsUniqueParam) unique() {}
+func (previewWithPrismaImageURLEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaImageHashEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	imageHashField()
+}
+
+type PreviewWithPrismaImageHashSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	imageHashField()
+}
+
+type previewWithPrismaImageHashSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageHashSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageHashSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageHashSetParam) previewModel() {}
+
+func (p previewWithPrismaImageHashSetParam) imageHashField() {}
+
+type PreviewWithPrismaImageHashWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	imageHashField()
+}
+
+type previewWithPrismaImageHashEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageHashEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageHashEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageHashEqualsParam) previewModel() {}
+
+func (p previewWithPrismaImageHashEqualsParam) imageHashField() {}
+
+func (previewWithPrismaImageHashSetParam) settable()  {}
+func (previewWithPrismaImageHashEqualsParam) equals() {}
+
+type previewWithPrismaImageHashEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageHashEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageHashEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageHashEqualsUniqueParam) previewModel()   {}
+func (p previewWithPrismaImageHashEqualsUniqueParam) imageHashField() {}
+
+func (previewWithPrismaImageHashEqualsUniqueParam) unique() {}
+func (previewWithPrismaImageHashEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaImageWidthEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	imageWidthField()
+}
+
+type PreviewWithPrismaImageWidthSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	imageWidthField()
+}
+
+type previewWithPrismaImageWidthSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageWidthSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageWidthSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageWidthSetParam) previewModel() {}
+
+func (p previewWithPrismaImageWidthSetParam) imageWidthField() {}
+
+type PreviewWithPrismaImageWidthWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	imageWidthField()
+}
+
+type previewWithPrismaImageWidthEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageWidthEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageWidthEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageWidthEqualsParam) previewModel() {}
+
+func (p previewWithPrismaImageWidthEqualsParam) imageWidthField() {}
+
+func (previewWithPrismaImageWidthSetParam) settable()  {}
+func (previewWithPrismaImageWidthEqualsParam) equals() {}
+
+type previewWithPrismaImageWidthEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageWidthEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageWidthEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageWidthEqualsUniqueParam) previewModel()    {}
+func (p previewWithPrismaImageWidthEqualsUniqueParam) imageWidthField() {}
+
+func (previewWithPrismaImageWidthEqualsUniqueParam) unique() {}
+func (previewWithPrismaImageWidthEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaImageHeightEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	imageHeightField()
+}
+
+type PreviewWithPrismaImageHeightSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	imageHeightField()
+}
+
+type previewWithPrismaImageHeightSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageHeightSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageHeightSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageHeightSetParam) previewModel() {}
+
+func (p previewWithPrismaImageHeightSetParam) imageHeightField() {}
+
+type PreviewWithPrismaImageHeightWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	imageHeightField()
+}
+
+type previewWithPrismaImageHeightEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageHeightEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageHeightEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageHeightEqualsParam) previewModel() {}
+
+func (p previewWithPrismaImageHeightEqualsParam) imageHeightField() {}
+
+func (previewWithPrismaImageHeightSetParam) settable()  {}
+func (previewWithPrismaImageHeightEqualsParam) equals() {}
+
+type previewWithPrismaImageHeightEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaImageHeightEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaImageHeightEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaImageHeightEqualsUniqueParam) previewModel()     {}
+func (p previewWithPrismaImageHeightEqualsUniqueParam) imageHeightField() {}
+
+func (previewWithPrismaImageHeightEqualsUniqueParam) unique() {}
+func (previewWithPrismaImageHeightEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaCreatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	createdAtField()
+}
+
+type PreviewWithPrismaCreatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	createdAtField()
+}
+
+type previewWithPrismaCreatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaCreatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaCreatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaCreatedAtSetParam) previewModel() {}
+
+func (p previewWithPrismaCreatedAtSetParam) createdAtField() {}
+
+type PreviewWithPrismaCreatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	createdAtField()
+}
+
+type previewWithPrismaCreatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaCreatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaCreatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaCreatedAtEqualsParam) previewModel() {}
+
+func (p previewWithPrismaCreatedAtEqualsParam) createdAtField() {}
+
+func (previewWithPrismaCreatedAtSetParam) settable()  {}
+func (previewWithPrismaCreatedAtEqualsParam) equals() {}
+
+type previewWithPrismaCreatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaCreatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaCreatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaCreatedAtEqualsUniqueParam) previewModel()   {}
+func (p previewWithPrismaCreatedAtEqualsUniqueParam) createdAtField() {}
+
+func (previewWithPrismaCreatedAtEqualsUniqueParam) unique() {}
+func (previewWithPrismaCreatedAtEqualsUniqueParam) equals() {}
+
+type PreviewWithPrismaUpdatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	previewModel()
+	updatedAtField()
+}
+
+type PreviewWithPrismaUpdatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	updatedAtField()
+}
+
+type previewWithPrismaUpdatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaUpdatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaUpdatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaUpdatedAtSetParam) previewModel() {}
+
+func (p previewWithPrismaUpdatedAtSetParam) updatedAtField() {}
+
+type PreviewWithPrismaUpdatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	previewModel()
+	updatedAtField()
+}
+
+type previewWithPrismaUpdatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaUpdatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaUpdatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaUpdatedAtEqualsParam) previewModel() {}
+
+func (p previewWithPrismaUpdatedAtEqualsParam) updatedAtField() {}
+
+func (previewWithPrismaUpdatedAtSetParam) settable()  {}
+func (previewWithPrismaUpdatedAtEqualsParam) equals() {}
+
+type previewWithPrismaUpdatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p previewWithPrismaUpdatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p previewWithPrismaUpdatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p previewWithPrismaUpdatedAtEqualsUniqueParam) previewModel()   {}
+func (p previewWithPrismaUpdatedAtEqualsUniqueParam) updatedAtField() {}
+
+func (previewWithPrismaUpdatedAtEqualsUniqueParam) unique() {}
+func (previewWithPrismaUpdatedAtEqualsUniqueParam) equals() {}
+
 // --- template create.gotpl ---
 
 // Creates a single user.
@@ -37202,6 +43340,90 @@ func (r promotedChatCreateOne) Exec(ctx context.Context) (*PromotedChatModel, er
 
 func (r promotedChatCreateOne) Tx() PromotedChatUniqueTxResult {
 	v := newPromotedChatUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+// Creates a single preview.
+func (r previewActions) CreateOne(
+	_id PreviewWithPrismaIDSetParam,
+	_originalURL PreviewWithPrismaOriginalURLSetParam,
+	_url PreviewWithPrismaURLSetParam,
+	_title PreviewWithPrismaTitleSetParam,
+	_description PreviewWithPrismaDescriptionSetParam,
+	_imageURL PreviewWithPrismaImageURLSetParam,
+	_imageHash PreviewWithPrismaImageHashSetParam,
+	_imageWidth PreviewWithPrismaImageWidthSetParam,
+	_imageHeight PreviewWithPrismaImageHeightSetParam,
+
+	optional ...PreviewSetParam,
+) previewCreateOne {
+	var v previewCreateOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "createOne"
+	v.query.Model = "Preview"
+	v.query.Outputs = previewOutput
+
+	var fields []builder.Field
+
+	fields = append(fields, _id.field())
+	fields = append(fields, _originalURL.field())
+	fields = append(fields, _url.field())
+	fields = append(fields, _title.field())
+	fields = append(fields, _description.field())
+	fields = append(fields, _imageURL.field())
+	fields = append(fields, _imageHash.field())
+	fields = append(fields, _imageWidth.field())
+	fields = append(fields, _imageHeight.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+func (r previewCreateOne) With(params ...PreviewRelationWith) previewCreateOne {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+type previewCreateOne struct {
+	query builder.Query
+}
+
+func (p previewCreateOne) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p previewCreateOne) previewModel() {}
+
+func (r previewCreateOne) Exec(ctx context.Context) (*PreviewModel, error) {
+	var v PreviewModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r previewCreateOne) Tx() PreviewUniqueTxResult {
+	v := newPreviewUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v
@@ -48791,6 +55013,656 @@ func (r promotedChatDeleteMany) Tx() PromotedChatManyTxResult {
 	return v
 }
 
+type previewFindUnique struct {
+	query builder.Query
+}
+
+func (r previewFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r previewFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r previewFindUnique) with()            {}
+func (r previewFindUnique) previewModel()    {}
+func (r previewFindUnique) previewRelation() {}
+
+func (r previewActions) FindUnique(
+	params PreviewEqualsUniqueWhereParam,
+) previewFindUnique {
+	var v previewFindUnique
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findUnique"
+
+	v.query.Model = "Preview"
+	v.query.Outputs = previewOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r previewFindUnique) With(params ...PreviewRelationWith) previewFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r previewFindUnique) Select(params ...previewPrismaFields) previewFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r previewFindUnique) Omit(params ...previewPrismaFields) previewFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range previewOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r previewFindUnique) Exec(ctx context.Context) (
+	*PreviewModel,
+	error,
+) {
+	var v *PreviewModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r previewFindUnique) ExecInner(ctx context.Context) (
+	*InnerPreview,
+	error,
+) {
+	var v *InnerPreview
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r previewFindUnique) Update(params ...PreviewSetParam) previewUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "Preview"
+
+	var v previewUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type previewUpdateUnique struct {
+	query builder.Query
+}
+
+func (r previewUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r previewUpdateUnique) previewModel() {}
+
+func (r previewUpdateUnique) Exec(ctx context.Context) (*PreviewModel, error) {
+	var v PreviewModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r previewUpdateUnique) Tx() PreviewUniqueTxResult {
+	v := newPreviewUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r previewFindUnique) Delete() previewDeleteUnique {
+	var v previewDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "Preview"
+
+	return v
+}
+
+type previewDeleteUnique struct {
+	query builder.Query
+}
+
+func (r previewDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p previewDeleteUnique) previewModel() {}
+
+func (r previewDeleteUnique) Exec(ctx context.Context) (*PreviewModel, error) {
+	var v PreviewModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r previewDeleteUnique) Tx() PreviewUniqueTxResult {
+	v := newPreviewUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type previewFindFirst struct {
+	query builder.Query
+}
+
+func (r previewFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r previewFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r previewFindFirst) with()            {}
+func (r previewFindFirst) previewModel()    {}
+func (r previewFindFirst) previewRelation() {}
+
+func (r previewActions) FindFirst(
+	params ...PreviewWhereParam,
+) previewFindFirst {
+	var v previewFindFirst
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findFirst"
+
+	v.query.Model = "Preview"
+	v.query.Outputs = previewOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r previewFindFirst) With(params ...PreviewRelationWith) previewFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r previewFindFirst) Select(params ...previewPrismaFields) previewFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r previewFindFirst) Omit(params ...previewPrismaFields) previewFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range previewOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r previewFindFirst) OrderBy(params ...PreviewOrderByParam) previewFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r previewFindFirst) Skip(count int) previewFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r previewFindFirst) Take(count int) previewFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r previewFindFirst) Cursor(cursor PreviewCursorParam) previewFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r previewFindFirst) Exec(ctx context.Context) (
+	*PreviewModel,
+	error,
+) {
+	var v *PreviewModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r previewFindFirst) ExecInner(ctx context.Context) (
+	*InnerPreview,
+	error,
+) {
+	var v *InnerPreview
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type previewFindMany struct {
+	query builder.Query
+}
+
+func (r previewFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r previewFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r previewFindMany) with()            {}
+func (r previewFindMany) previewModel()    {}
+func (r previewFindMany) previewRelation() {}
+
+func (r previewActions) FindMany(
+	params ...PreviewWhereParam,
+) previewFindMany {
+	var v previewFindMany
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findMany"
+
+	v.query.Model = "Preview"
+	v.query.Outputs = previewOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r previewFindMany) With(params ...PreviewRelationWith) previewFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r previewFindMany) Select(params ...previewPrismaFields) previewFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r previewFindMany) Omit(params ...previewPrismaFields) previewFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range previewOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r previewFindMany) OrderBy(params ...PreviewOrderByParam) previewFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r previewFindMany) Skip(count int) previewFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r previewFindMany) Take(count int) previewFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r previewFindMany) Cursor(cursor PreviewCursorParam) previewFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r previewFindMany) Exec(ctx context.Context) (
+	[]PreviewModel,
+	error,
+) {
+	var v []PreviewModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r previewFindMany) ExecInner(ctx context.Context) (
+	[]InnerPreview,
+	error,
+) {
+	var v []InnerPreview
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r previewFindMany) Update(params ...PreviewSetParam) previewUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "Preview"
+
+	r.query.Outputs = countOutput
+
+	var v previewUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type previewUpdateMany struct {
+	query builder.Query
+}
+
+func (r previewUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r previewUpdateMany) previewModel() {}
+
+func (r previewUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r previewUpdateMany) Tx() PreviewManyTxResult {
+	v := newPreviewManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r previewFindMany) Delete() previewDeleteMany {
+	var v previewDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "Preview"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type previewDeleteMany struct {
+	query builder.Query
+}
+
+func (r previewDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p previewDeleteMany) previewModel() {}
+
+func (r previewDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r previewDeleteMany) Tx() PreviewManyTxResult {
+	v := newPreviewManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 // --- template transaction.gotpl ---
 
 func newUserUniqueTxResult() UserUniqueTxResult {
@@ -49315,6 +56187,54 @@ func (p PromotedChatManyTxResult) ExtractQuery() builder.Query {
 func (p PromotedChatManyTxResult) IsTx() {}
 
 func (r PromotedChatManyTxResult) Result() (v *BatchResult) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newPreviewUniqueTxResult() PreviewUniqueTxResult {
+	return PreviewUniqueTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type PreviewUniqueTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p PreviewUniqueTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p PreviewUniqueTxResult) IsTx() {}
+
+func (r PreviewUniqueTxResult) Result() (v *PreviewModel) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newPreviewManyTxResult() PreviewManyTxResult {
+	return PreviewManyTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type PreviewManyTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p PreviewManyTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p PreviewManyTxResult) IsTx() {}
+
+func (r PreviewManyTxResult) Result() (v *BatchResult) {
 	if err := r.result.Get(r.query.TxResult, &v); err != nil {
 		panic(err)
 	}
@@ -50562,6 +57482,132 @@ func (r promotedChatUpsertOne) Exec(ctx context.Context) (*PromotedChatModel, er
 
 func (r promotedChatUpsertOne) Tx() PromotedChatUniqueTxResult {
 	v := newPromotedChatUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type previewUpsertOne struct {
+	query builder.Query
+}
+
+func (r previewUpsertOne) getQuery() builder.Query {
+	return r.query
+}
+
+func (r previewUpsertOne) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r previewUpsertOne) with()            {}
+func (r previewUpsertOne) previewModel()    {}
+func (r previewUpsertOne) previewRelation() {}
+
+func (r previewActions) UpsertOne(
+	params PreviewEqualsUniqueWhereParam,
+) previewUpsertOne {
+	var v previewUpsertOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "upsertOne"
+	v.query.Model = "Preview"
+	v.query.Outputs = previewOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r previewUpsertOne) Create(
+
+	_id PreviewWithPrismaIDSetParam,
+	_originalURL PreviewWithPrismaOriginalURLSetParam,
+	_url PreviewWithPrismaURLSetParam,
+	_title PreviewWithPrismaTitleSetParam,
+	_description PreviewWithPrismaDescriptionSetParam,
+	_imageURL PreviewWithPrismaImageURLSetParam,
+	_imageHash PreviewWithPrismaImageHashSetParam,
+	_imageWidth PreviewWithPrismaImageWidthSetParam,
+	_imageHeight PreviewWithPrismaImageHeightSetParam,
+
+	optional ...PreviewSetParam,
+) previewUpsertOne {
+	var v previewUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	fields = append(fields, _id.field())
+	fields = append(fields, _originalURL.field())
+	fields = append(fields, _url.field())
+	fields = append(fields, _title.field())
+	fields = append(fields, _description.field())
+	fields = append(fields, _imageURL.field())
+	fields = append(fields, _imageHash.field())
+	fields = append(fields, _imageWidth.field())
+	fields = append(fields, _imageHeight.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "create",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r previewUpsertOne) Update(
+	params ...PreviewSetParam,
+) previewUpsertOne {
+	var v previewUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "update",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r previewUpsertOne) Exec(ctx context.Context) (*PreviewModel, error) {
+	var v PreviewModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r previewUpsertOne) Tx() PreviewUniqueTxResult {
+	v := newPreviewUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v

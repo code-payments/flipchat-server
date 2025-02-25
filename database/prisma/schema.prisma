@@ -244,3 +244,31 @@ model PromotedChat {
   @@id([chatId, topic])
   @@map("flipchat_promotedchats")
 }
+
+model Preview {
+  // Fields
+
+  id String @id
+
+  originalUrl String
+  contentType Int    @default(0) @db.SmallInt // ContentType enum: Unknown: 0, Text: 1, Image: 2, Video: 3, Audio: 4, Pdf: 5, File: 6
+  moderation  Int    @default(0) @db.SmallInt // ModerationStatus enum: Unknown: 0, Pending: 1, Flagged: 2, Approved: 3
+
+  url         String
+  title       String
+  description String
+
+  imageUrl    String
+  imageHash   String
+  imageWidth  Int
+  imageHeight Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  // Constraints
+
+  @@map("flipchat_previews")
+}
