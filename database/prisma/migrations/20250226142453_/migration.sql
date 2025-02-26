@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "flipchat_users" ADD COLUMN     "nextAirdropAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

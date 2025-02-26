@@ -20,7 +20,7 @@ func RunStoreTests(t *testing.T, s account.Store, teardown func()) {
 	for _, tf := range []func(t *testing.T, s account.Store){
 		testStore_keyManagement,
 		testStore_registrationStatus,
-		testStore_airdropEligiblityTimestamp,
+		testStore_airdrops,
 	} {
 		tf(t, s)
 		teardown()
@@ -107,12 +107,18 @@ func testStore_registrationStatus(t *testing.T, s account.Store) {
 	require.False(t, isRegistered)
 }
 
-func testStore_airdropEligiblityTimestamp(t *testing.T, s account.Store) {
+func testStore_airdrops(t *testing.T, s account.Store) {
 	ctx := context.Background()
 
 	user := model.MustGenerateUserID()
 
-	err := s.ExtendAirdropEligibility(ctx, user, time.Now())
+	err := s.SetNextAirdropTimestamp(ctx, user, time.Now())
+	require.Equal(t, err, account.ErrNotFound)
+
+	_, err = s.GetNextAirdropTimestamp(ctx, user)
+	require.Equal(t, err, account.ErrNotFound)
+
+	err = s.ExtendAirdropEligibility(ctx, user, time.Now())
 	require.Equal(t, err, account.ErrNotFound)
 
 	_, err = s.GetAirdropEligibilityTimestamp(ctx, user)
@@ -121,11 +127,17 @@ func testStore_airdropEligiblityTimestamp(t *testing.T, s account.Store) {
 	user, err = s.Bind(ctx, user, model.MustGenerateKeyPair().Proto())
 	require.NoError(t, err)
 
-	expected := time.Unix(1740146105, 0).UTC()
+	expected1 := time.Unix(12345, 0).UTC()
+	expected2 := time.Unix(67890, 0).UTC()
 
-	require.NoError(t, s.ExtendAirdropEligibility(ctx, user, expected))
+	require.NoError(t, s.SetNextAirdropTimestamp(ctx, user, expected1))
+	require.NoError(t, s.ExtendAirdropEligibility(ctx, user, expected2))
 
-	actual, err := s.GetAirdropEligibilityTimestamp(ctx, user)
+	actual, err := s.GetNextAirdropTimestamp(ctx, user)
 	require.NoError(t, err)
-	require.Equal(t, expected, actual)
+	require.Equal(t, expected1, actual)
+
+	actual, err = s.GetAirdropEligibilityTimestamp(ctx, user)
+	require.NoError(t, err)
+	require.Equal(t, expected2, actual)
 }

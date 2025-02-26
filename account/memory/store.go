@@ -23,7 +23,8 @@ type memory struct {
 	// maps a publicKey (string representation) to a userID (also stored as a string). This allows quick lookups of the user by their public key.
 	keys map[string]string
 
-	// maps a userID to an airdrop elibigility timestamp
+	// maps a userID to an airdrop timestampts
+	nextAirdrop        map[string]time.Time
 	airdropEligibility map[string]time.Time
 
 	// set of registered users
@@ -34,6 +35,7 @@ func NewInMemory() account.Store {
 	return &memory{
 		users:              make(map[string][]string),
 		keys:               make(map[string]string),
+		nextAirdrop:        make(map[string]time.Time),
 		airdropEligibility: make(map[string]time.Time),
 		registeredUsers:    make(map[string]any),
 	}
@@ -61,6 +63,7 @@ func (m *memory) Bind(_ context.Context, userID *commonpb.UserId, pubKey *common
 
 	m.keys[string(pubKey.Value)] = string(userID.Value)
 
+	m.nextAirdrop[string(userID.Value)] = time.Now()
 	m.airdropEligibility[string(userID.Value)] = time.Now()
 
 	return proto.Clone(userID).(*commonpb.UserId), nil
@@ -156,6 +159,32 @@ func (m *memory) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserI
 	return nil
 }
 
+func (m *memory) SetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId, ts time.Time) error {
+	m.Lock()
+	defer m.Unlock()
+
+	_, ok := m.users[string(userID.Value)]
+	if !ok {
+		return account.ErrNotFound
+	}
+
+	m.nextAirdrop[string(userID.Value)] = ts
+
+	return nil
+}
+
+func (m *memory) GetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	_, ok := m.users[string(userID.Value)]
+	if !ok {
+		return time.Time{}, account.ErrNotFound
+	}
+
+	return m.nextAirdrop[string(userID.Value)], nil
+}
+
 func (m *memory) ExtendAirdropEligibility(ctx context.Context, userID *commonpb.UserId, until time.Time) error {
 	m.Lock()
 	defer m.Unlock()
@@ -180,4 +209,9 @@ func (m *memory) GetAirdropEligibilityTimestamp(ctx context.Context, userID *com
 	}
 
 	return m.airdropEligibility[string(userID.Value)], nil
+}
+
+// todo: implement me
+func (m *memory) GetCreationTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
+	return time.Now(), nil
 }

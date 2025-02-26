@@ -298,6 +298,56 @@ func (s *store) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId
 	return err
 }
 
+func (s *store) SetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId, ts time.Time) error {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "SetRegistrationFlag")
+	defer tracer.End()
+
+	err := func() error {
+		encodedUserID := pg.Encode(userID.Value)
+
+		_, err := s.client.User.FindUnique(
+			db.User.ID.Equals(encodedUserID),
+		).Update(
+			db.User.NextAirdropAt.Set(ts),
+		).Exec(ctx)
+
+		if errors.Is(err, db.ErrNotFound) {
+			return account.ErrNotFound
+		}
+
+		return err
+	}()
+
+	tracer.OnError(err)
+
+	return err
+}
+
+func (s *store) GetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetNextAirdropTimestamp")
+	defer tracer.End()
+
+	res, err := func() (time.Time, error) {
+		encodedUserID := pg.Encode(userID.Value)
+
+		res, err := s.client.User.FindUnique(
+			db.User.ID.Equals(encodedUserID),
+		).Exec(ctx)
+
+		if errors.Is(err, db.ErrNotFound) {
+			return time.Time{}, account.ErrNotFound
+		} else if err != nil {
+			return time.Time{}, err
+		}
+
+		return res.NextAirdropAt, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
+}
+
 func (s *store) ExtendAirdropEligibility(ctx context.Context, userID *commonpb.UserId, until time.Time) error {
 	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "ExtendAirdropEligibility")
 	defer tracer.End()
@@ -341,6 +391,31 @@ func (s *store) GetAirdropEligibilityTimestamp(ctx context.Context, userID *comm
 		}
 
 		return res.ElibigibleForAirdropsUntil, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
+}
+
+func (s *store) GetCreationTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetCreationTimestamp")
+	defer tracer.End()
+
+	res, err := func() (time.Time, error) {
+		encodedUserID := pg.Encode(userID.Value)
+
+		res, err := s.client.User.FindUnique(
+			db.User.ID.Equals(encodedUserID),
+		).Exec(ctx)
+
+		if errors.Is(err, db.ErrNotFound) {
+			return time.Time{}, account.ErrNotFound
+		} else if err != nil {
+			return time.Time{}, err
+		}
+
+		return res.CreatedAt, nil
 	}()
 
 	tracer.OnError(err)
