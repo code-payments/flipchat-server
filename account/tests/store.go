@@ -110,34 +110,68 @@ func testStore_registrationStatus(t *testing.T, s account.Store) {
 func testStore_airdrops(t *testing.T, s account.Store) {
 	ctx := context.Background()
 
-	user := model.MustGenerateUserID()
+	user1 := model.MustGenerateUserID()
+	user2 := model.MustGenerateUserID()
 
-	err := s.SetNextAirdropTimestamp(ctx, user, time.Now())
+	err := s.SetNextAirdropTimestamp(ctx, user1, time.Now())
 	require.Equal(t, err, account.ErrNotFound)
 
-	_, err = s.GetNextAirdropTimestamp(ctx, user)
+	_, err = s.GetNextAirdropTimestamp(ctx, user1)
 	require.Equal(t, err, account.ErrNotFound)
 
-	err = s.ExtendAirdropEligibility(ctx, user, time.Now())
+	err = s.ExtendAirdropEligibility(ctx, user1, time.Now())
 	require.Equal(t, err, account.ErrNotFound)
 
-	_, err = s.GetAirdropEligibilityTimestamp(ctx, user)
+	_, err = s.GetAirdropEligibilityTimestamp(ctx, user1)
 	require.Equal(t, err, account.ErrNotFound)
 
-	user, err = s.Bind(ctx, user, model.MustGenerateKeyPair().Proto())
+	_, err = s.GetUsersToAirdrop(ctx, time.Now())
+	require.Equal(t, err, account.ErrNotFound)
+
+	user1, err = s.Bind(ctx, user1, model.MustGenerateKeyPair().Proto())
+	require.NoError(t, err)
+	user2, err = s.Bind(ctx, user2, model.MustGenerateKeyPair().Proto())
 	require.NoError(t, err)
 
-	expected1 := time.Unix(12345, 0).UTC()
-	expected2 := time.Unix(67890, 0).UTC()
+	expectedTs1 := time.Unix(5, 0).UTC()
+	expectedTs2 := time.Unix(10, 0).UTC()
 
-	require.NoError(t, s.SetNextAirdropTimestamp(ctx, user, expected1))
-	require.NoError(t, s.ExtendAirdropEligibility(ctx, user, expected2))
+	for _, user := range []*commonpb.UserId{user1, user2} {
+		require.NoError(t, s.SetNextAirdropTimestamp(ctx, user, expectedTs1))
+		require.NoError(t, s.ExtendAirdropEligibility(ctx, user, expectedTs2))
 
-	actual, err := s.GetNextAirdropTimestamp(ctx, user)
+		actualTs, err := s.GetNextAirdropTimestamp(ctx, user)
+		require.NoError(t, err)
+		require.Equal(t, expectedTs1, actualTs)
+
+		actualTs, err = s.GetAirdropEligibilityTimestamp(ctx, user)
+		require.NoError(t, err)
+		require.Equal(t, expectedTs2, actualTs)
+	}
+
+	// Both users not registered, and ts within bound
+	_, err = s.GetUsersToAirdrop(ctx, time.Unix(7, 0))
+	require.Equal(t, account.ErrNotFound, err)
+
+	require.NoError(t, s.SetRegistrationFlag(ctx, user1, true))
+
+	// First user registered, and ts within bound
+	actualUsers, err := s.GetUsersToAirdrop(ctx, time.Unix(7, 0))
 	require.NoError(t, err)
-	require.Equal(t, expected1, actual)
+	require.NoError(t, protoutil.SliceEqualError([]*commonpb.UserId{user1}, actualUsers))
 
-	actual, err = s.GetAirdropEligibilityTimestamp(ctx, user)
+	require.NoError(t, s.SetRegistrationFlag(ctx, user2, true))
+
+	// Both users registered, and ts within bound
+	actualUsers, err = s.GetUsersToAirdrop(ctx, time.Unix(7, 0))
 	require.NoError(t, err)
-	require.Equal(t, expected2, actual)
+	require.NoError(t, protoutil.SliceEqualError([]*commonpb.UserId{user1, user2}, actualUsers))
+
+	// Ts after eligibility
+	_, err = s.GetUsersToAirdrop(ctx, time.Unix(15, 0))
+	require.Equal(t, account.ErrNotFound, err)
+
+	// Ts before next scheduled airdrop
+	_, err = s.GetUsersToAirdrop(ctx, time.Unix(2, 0))
+	require.Equal(t, account.ErrNotFound, err)
 }

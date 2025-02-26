@@ -211,6 +211,26 @@ func (m *memory) GetAirdropEligibilityTimestamp(ctx context.Context, userID *com
 	return m.airdropEligibility[string(userID.Value)], nil
 }
 
+func (m *memory) GetUsersToAirdrop(ctx context.Context, at time.Time) ([]*commonpb.UserId, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	var res []*commonpb.UserId
+	for userID := range m.registeredUsers {
+		nextAirdropAt := m.nextAirdrop[userID]
+		eligibileForAirdropsUntil := m.airdropEligibility[userID]
+
+		if nextAirdropAt.Before(at) && eligibileForAirdropsUntil.After(at) {
+			res = append(res, &commonpb.UserId{Value: []byte(userID)})
+		}
+	}
+
+	if len(res) == 0 {
+		return nil, account.ErrNotFound
+	}
+	return res, nil
+}
+
 // todo: implement me
 func (m *memory) GetCreationTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
 	return time.Now(), nil

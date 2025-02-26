@@ -398,6 +398,45 @@ func (s *store) GetAirdropEligibilityTimestamp(ctx context.Context, userID *comm
 	return res, err
 }
 
+func (s *store) GetUsersToAirdrop(ctx context.Context, at time.Time) ([]*commonpb.UserId, error) {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetUsersToAirdrop")
+	defer tracer.End()
+
+	res, err := func() ([]*commonpb.UserId, error) {
+
+		res, err := s.client.User.FindMany(
+			db.User.NextAirdropAt.Before(at),
+			db.User.ElibigibleForAirdropsUntil.After(at),
+			db.User.IsRegistered.Equals(true),
+		).Exec(ctx)
+
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, account.ErrNotFound
+		} else if err != nil {
+			return nil, err
+		}
+
+		var userIDs []*commonpb.UserId
+		for _, user := range res {
+			val, err := pg.Decode(user.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			userIDs = append(userIDs, &commonpb.UserId{Value: val})
+		}
+
+		if len(userIDs) == 0 {
+			return nil, account.ErrNotFound
+		}
+		return userIDs, nil
+	}()
+
+	tracer.OnError(err)
+
+	return res, err
+}
+
 func (s *store) GetCreationTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
 	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetCreationTimestamp")
 	defer tracer.End()

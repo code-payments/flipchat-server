@@ -45,6 +45,9 @@ type Store interface {
 	// GetNextAirdropTimestamp gets the next airdrop timestamp for a user
 	GetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error)
 
+	// GetUsersToAirdrop gets a set of users to airdrop at a particular time
+	GetUsersToAirdrop(ctx context.Context, at time.Time) ([]*commonpb.UserId, error)
+
 	// ExtendAirdropEligibility extends airdrop eligibility for a user until the
 	// specified time
 	ExtendAirdropEligibility(ctx context.Context, userID *commonpb.UserId, until time.Time) error
