@@ -14,6 +14,7 @@ import (
 
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/moderation"
+	"github.com/code-payments/flipchat-server/preview/generate"
 )
 
 // Server implements the Preview service.
@@ -106,24 +107,25 @@ func (s *Server) GetPreviewUrl(ctx context.Context, req *previewpb.GetPreviewUrl
 
 // generatePreview generates preview data for a given URL.
 func (s *Server) generatePreview(ctx context.Context, url string) (*Preview, error) {
-	// TODO: Implement actual URL fetching and parsing logic.
-	// For demonstration, we'll use placeholder data.
-
-	// Placeholder implementation
 	now := time.Now()
 	id := model.MustGeneratePreviewID()
+
+	res, err := generate.FetchPreview(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Preview{
 		ID:          id,
 		OriginalURL: url,
-		ContentType: commonpb.ContentType_CONTENT_TYPE_UNKNOWN,
-		Moderation:  commonpb.ModerationStatus_MODERATION_UNKNOWN,
-		URL:         url,
-		Title:       "Sample Title",
-		Description: "Sample description for the provided URL.",
-		ImageURL:    "https://example.com/image.png",
-		ImageHash:   "LKO2?U%2Tw=w]~RBVZRi};RPxuwH",
-		ImageWidth:  800,
-		ImageHeight: 600,
+		ContentType: res.ContentType,
+		URL:         res.URL,
+		Title:       res.Title,
+		Description: res.Description,
+		ImageURL:    res.ImageURL,
+		ImageHash:   res.ImageHash,
+		ImageWidth:  res.ImageWidth,
+		ImageHeight: res.ImageHeight,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}, nil

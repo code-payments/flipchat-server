@@ -3,7 +3,6 @@ package postgres
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"

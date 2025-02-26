@@ -32,6 +32,7 @@ require (
 	cloud.google.com/go/auth v0.13.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.6 // indirect
 	dario.cat/mergo v1.0.0 // indirect
+	github.com/buckket/go-blurhash v1.1.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352 // indirect
