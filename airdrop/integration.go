@@ -5,37 +5,32 @@ import (
 	"errors"
 	"time"
 
+	codeairdrop "github.com/code-payments/code-server/pkg/code/async/airdrop"
 	codecommon "github.com/code-payments/code-server/pkg/code/common"
 	codekin "github.com/code-payments/code-server/pkg/kin"
-	"github.com/code-payments/flipchat-server/account"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+
+	"github.com/code-payments/flipchat-server/account"
 )
 
 var (
-	AirdropAmount    = codekin.ToQuarks(100)
-	AirdropFrequency = 7 * 24 * time.Hour // 1 week
+	Amount    = codekin.ToQuarks(100)
+	Frequency = 7 * 24 * time.Hour // 1 week
 )
 
-// todo: promote to code-server
-type CodeAirdropIntegration interface {
-	GetOwnersToAirdropNow(ctx context.Context) ([]*codecommon.Account, uint64, error)
-
-	OnSuccess(ctx context.Context, owners []*codecommon.Account) error
-}
-
 // todo: needs tests
-type FlipchatAirdropIntegration struct {
+type FlipchatIntegration struct {
 	accounts account.Store
 }
 
-func NewFlipchatAirdropIntegration(accounts account.Store) CodeAirdropIntegration {
-	return &FlipchatAirdropIntegration{
+func NewFlipchatAirdropIntegration(accounts account.Store) codeairdrop.Integration {
+	return &FlipchatIntegration{
 		accounts: accounts,
 	}
 }
 
-func (a *FlipchatAirdropIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*codecommon.Account, uint64, error) {
+func (a *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*codecommon.Account, uint64, error) {
 	userIDs, err := a.accounts.GetUsersToAirdrop(ctx, time.Now())
 	if err == account.ErrNotFound {
 		return nil, 0, nil
@@ -72,10 +67,10 @@ func (a *FlipchatAirdropIntegration) GetOwnersToAirdropNow(ctx context.Context) 
 		owners = append(owners, owner)
 	}
 
-	return owners, AirdropAmount, nil
+	return owners, Amount, nil
 }
 
-func (a *FlipchatAirdropIntegration) OnSuccess(ctx context.Context, owners []*codecommon.Account) error {
+func (a *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecommon.Account) error {
 	for _, owner := range owners {
 		userID, err := a.accounts.GetUserId(ctx, &commonpb.PublicKey{Value: owner.PublicKey().ToBytes()})
 		if err != nil {
@@ -91,7 +86,7 @@ func (a *FlipchatAirdropIntegration) OnSuccess(ctx context.Context, owners []*co
 		now := time.Now()
 		nextAirdropAt := creationTs
 		for {
-			nextAirdropAt = nextAirdropAt.Add(AirdropFrequency)
+			nextAirdropAt = nextAirdropAt.Add(Frequency)
 
 			if nextAirdropAt.After(now) {
 				break

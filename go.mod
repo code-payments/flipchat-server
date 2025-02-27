@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/aws/aws-sdk-go-v2 v0.17.0
 	github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84
-	github.com/code-payments/code-server v1.10.20-0.20241113221941-16bb545e1277
+	github.com/code-payments/code-server v1.10.20-0.20250227175955-b835606637cb
 	github.com/code-payments/flipchat-protobuf-api v1.3.1
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
@@ -32,6 +32,7 @@ require (
 	cloud.google.com/go/auth v0.13.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.6 // indirect
 	dario.cat/mergo v1.0.0 // indirect
+	github.com/code-payments/code-vm-indexer v0.1.11-0.20241028132209-23031e814fba // indirect
 	github.com/googleapis/gax-go/v2 v2.14.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352 // indirect
