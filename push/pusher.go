@@ -13,11 +13,18 @@ import (
 )
 
 type Pusher interface {
+	SendBasicPushes(ctx context.Context, title, body string, users ...*commonpb.UserId) error
+
+	// todo: these are likely going away with a new push stragey
 	SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, sender *string, data map[string]string) error
 	SendSilentPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, data map[string]string) error
 }
 
 type NoOpPusher struct{}
+
+func (n *NoOpPusher) SendBasicPushes(_ context.Context, _, _ string, _ ...*commonpb.UserId) error {
+	return nil
+}
 
 func (n *NoOpPusher) SendPushes(_ context.Context, _ *commonpb.ChatId, _ []*commonpb.UserId, _, _ string, _ map[string]string) error {
 	return nil
@@ -43,6 +50,57 @@ func NewFCMPusher(log *zap.Logger, tokens TokenStore, client FCMClient) *FCMPush
 		tokens: tokens,
 		client: client,
 	}
+}
+
+// todo: Some duplicated code, but the existing push per message flow is likely going away anyways. We'll refactor when we get to that.
+func (p *FCMPusher) SendBasicPushes(ctx context.Context, title, body string, users ...*commonpb.UserId) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	pushTokens, err := p.getTokenList(ctx, users)
+	if err != nil {
+		return err
+	}
+
+	// A single MulticastMessage may contain up to 500 registration tokens.
+	if len(pushTokens) > 500 {
+		p.log.Warn("Dropping push, too many tokens", zap.Int("num_tokens", len(pushTokens)))
+		return nil
+	}
+	if len(pushTokens) == 0 {
+		p.log.Debug("Dropping push, no tokens for users", zap.Int("num_users", len(users)))
+		return nil
+	}
+
+	tokens := extractTokens(pushTokens)
+
+	message := &messaging.MulticastMessage{
+		Tokens: tokens,
+		Notification: &messaging.Notification{
+			Title: title,
+			Body:  body,
+		},
+	}
+
+	response, err := p.client.SendEachForMulticast(ctx, message)
+	if err != nil {
+		return err
+	}
+
+	if response == nil {
+		p.log.Debug("No response from FCM")
+		return nil
+	}
+
+	p.log.Debug("Send pushes", zap.Int("success", response.SuccessCount), zap.Int("failed", response.FailureCount))
+	if response.FailureCount == 0 {
+		return nil
+	}
+
+	p.processResponse(response, pushTokens, tokens)
+
+	return nil
 }
 
 func (p *FCMPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, users []*commonpb.UserId, title, body string, sender *string, data map[string]string) error {

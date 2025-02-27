@@ -21,17 +21,27 @@ import (
 )
 
 type mockPusher struct {
-	lastChatID      *commonpb.ChatId
-	lastPushMembers []*commonpb.UserId
-	lastTitle       string
-	lastBody        string
-	lastSender      *string
-	lastData        map[string]string
+	lastChatID    *commonpb.ChatId
+	lastPushUsers []*commonpb.UserId
+	lastTitle     string
+	lastBody      string
+	lastSender    *string
+	lastData      map[string]string
+}
+
+func (m *mockPusher) SendBasicPushes(ctx context.Context, title, body string, users ...*commonpb.UserId) error {
+	m.lastChatID = nil
+	m.lastPushUsers = users
+	m.lastTitle = title
+	m.lastBody = body
+	m.lastSender = nil
+	m.lastData = nil
+	return nil
 }
 
 func (m *mockPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, title, body string, sender *string, data map[string]string) error {
 	m.lastChatID = chatID
-	m.lastPushMembers = members
+	m.lastPushUsers = members
 	m.lastTitle = title
 	m.lastBody = body
 	m.lastSender = sender
@@ -41,7 +51,7 @@ func (m *mockPusher) SendPushes(ctx context.Context, chatID *commonpb.ChatId, me
 
 func (m *mockPusher) SendSilentPushes(ctx context.Context, chatID *commonpb.ChatId, members []*commonpb.UserId, data map[string]string) error {
 	m.lastChatID = chatID
-	m.lastPushMembers = members
+	m.lastPushUsers = members
 	m.lastTitle = ""
 	m.lastBody = ""
 	m.lastSender = nil
@@ -51,7 +61,7 @@ func (m *mockPusher) SendSilentPushes(ctx context.Context, chatID *commonpb.Chat
 
 func (m *mockPusher) reset() {
 	m.lastChatID = nil
-	m.lastPushMembers = nil
+	m.lastPushUsers = nil
 	m.lastTitle = ""
 	m.lastBody = ""
 	m.lastSender = nil
@@ -273,7 +283,7 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 				MessageUpdate: tt.message,
 			})
 
-			require.NoError(t, protoutil.SliceEqualError(tt.expectedPushes, pusher.lastPushMembers), "i: %d", i)
+			require.NoError(t, protoutil.SliceEqualError(tt.expectedPushes, pusher.lastPushUsers), "i: %d", i)
 			if tt.expectedPushes != nil {
 				assert.Equal(t, tt.expectedTitle, pusher.lastTitle)
 				assert.Equal(t, tt.expectedBody, pusher.lastBody)

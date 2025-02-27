@@ -12,6 +12,7 @@ import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/push"
 )
 
 var (
@@ -22,16 +23,18 @@ var (
 // todo: needs tests
 type FlipchatIntegration struct {
 	accounts account.Store
+	pusher   push.Pusher
 }
 
-func NewFlipchatAirdropIntegration(accounts account.Store) codeairdrop.Integration {
+func NewFlipchatAirdropIntegration(accounts account.Store, pusher push.Pusher) codeairdrop.Integration {
 	return &FlipchatIntegration{
 		accounts: accounts,
+		pusher:   pusher,
 	}
 }
 
-func (a *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*codecommon.Account, uint64, error) {
-	userIDs, err := a.accounts.GetUsersToAirdrop(ctx, time.Now())
+func (i *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*codecommon.Account, uint64, error) {
+	userIDs, err := i.accounts.GetUsersToAirdrop(ctx, time.Now())
 	if err == account.ErrNotFound {
 		return nil, 0, nil
 	} else if err != nil {
@@ -41,7 +44,7 @@ func (a *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*cod
 	// todo: batch fetch
 	var owners []*codecommon.Account
 	for _, userID := range userIDs {
-		isStaff, err := a.accounts.IsStaff(ctx, userID)
+		isStaff, err := i.accounts.IsStaff(ctx, userID)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -51,7 +54,7 @@ func (a *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*cod
 			continue
 		}
 
-		pubKeys, err := a.accounts.GetPubKeys(ctx, userID)
+		pubKeys, err := i.accounts.GetPubKeys(ctx, userID)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -70,14 +73,15 @@ func (a *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*cod
 	return owners, Amount, nil
 }
 
-func (a *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecommon.Account) error {
+func (i *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecommon.Account) error {
+	var userIDs []*commonpb.UserId
 	for _, owner := range owners {
-		userID, err := a.accounts.GetUserId(ctx, &commonpb.PublicKey{Value: owner.PublicKey().ToBytes()})
+		userID, err := i.accounts.GetUserId(ctx, &commonpb.PublicKey{Value: owner.PublicKey().ToBytes()})
 		if err != nil {
 			return err
 		}
 
-		creationTs, err := a.accounts.GetCreationTimestamp(ctx, userID)
+		creationTs, err := i.accounts.GetCreationTimestamp(ctx, userID)
 		if err != nil {
 			return err
 		}
@@ -93,10 +97,15 @@ func (a *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecomm
 			}
 		}
 
-		err = a.accounts.SetNextAirdropTimestamp(ctx, userID, nextAirdropAt)
+		err = i.accounts.SetNextAirdropTimestamp(ctx, userID, nextAirdropAt)
 		if err != nil {
 			return err
 		}
+
+		userIDs = append(userIDs, userID)
 	}
+
+	go push.SendWeeklyAirdropPush(context.Background(), i.pusher, Amount, userIDs...)
+
 	return nil
 }
