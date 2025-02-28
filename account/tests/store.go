@@ -113,10 +113,9 @@ func testStore_airdrops(t *testing.T, s account.Store) {
 	user1 := model.MustGenerateUserID()
 	user2 := model.MustGenerateUserID()
 
-	err := s.SetNextAirdropTimestamp(ctx, user1, time.Now())
-	require.Equal(t, err, account.ErrNotFound)
+	require.NoError(t, s.BatchSetNextAirdropTimestamp(ctx, time.Now(), user1, user2))
 
-	_, err = s.GetNextAirdropTimestamp(ctx, user1)
+	_, err := s.GetNextAirdropTimestamp(ctx, user1)
 	require.Equal(t, err, account.ErrNotFound)
 
 	err = s.ExtendAirdropEligibility(ctx, user1, time.Now())
@@ -135,9 +134,10 @@ func testStore_airdrops(t *testing.T, s account.Store) {
 
 	expectedTs1 := time.Unix(5, 0).UTC()
 	expectedTs2 := time.Unix(10, 0).UTC()
+	expectedTs3 := time.Unix(15, 0).UTC()
 
 	for _, user := range []*commonpb.UserId{user1, user2} {
-		require.NoError(t, s.SetNextAirdropTimestamp(ctx, user, expectedTs1))
+		require.NoError(t, s.BatchSetNextAirdropTimestamp(ctx, expectedTs1, user))
 		require.NoError(t, s.ExtendAirdropEligibility(ctx, user, expectedTs2))
 
 		actualTs, err := s.GetNextAirdropTimestamp(ctx, user)
@@ -174,4 +174,11 @@ func testStore_airdrops(t *testing.T, s account.Store) {
 	// Ts before next scheduled airdrop
 	_, err = s.GetUsersToAirdrop(ctx, time.Unix(2, 0))
 	require.Equal(t, account.ErrNotFound, err)
+
+	require.NoError(t, s.BatchSetNextAirdropTimestamp(ctx, expectedTs3, user1, user2))
+	for _, user := range []*commonpb.UserId{user1, user2} {
+		actualTs, err := s.GetNextAirdropTimestamp(ctx, user)
+		require.NoError(t, err)
+		require.Equal(t, expectedTs3, actualTs)
+	}
 }

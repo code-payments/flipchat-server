@@ -39,8 +39,8 @@ type Store interface {
 	// SetRegistrationFlag sets wether a userID is a registered account
 	SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId, isRegistered bool) error
 
-	// SetNextAirdropTimestamp sets the next timestamp when a user should
-	SetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId, ts time.Time) error
+	// BatchSetNextAirdropTimestamp sets the next timestamp the users should be airdropped next
+	BatchSetNextAirdropTimestamp(ctx context.Context, ts time.Time, userIDs ...*commonpb.UserId) error
 
 	// GetNextAirdropTimestamp gets the next airdrop timestamp for a user
 	GetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error)
@@ -54,7 +54,4 @@ type Store interface {
 
 	// GetAirdropEligibilityTimestamp gets the airdrop eligibility timestamp for a user
 	GetAirdropEligibilityTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error)
-
-	// GetCreationTimestamp gets the creation timestamp for a user
-	GetCreationTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error)
 }

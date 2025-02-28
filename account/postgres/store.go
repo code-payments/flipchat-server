@@ -298,22 +298,21 @@ func (s *store) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserId
 	return err
 }
 
-func (s *store) SetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId, ts time.Time) error {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "SetRegistrationFlag")
+func (s *store) BatchSetNextAirdropTimestamp(ctx context.Context, ts time.Time, userIDs ...*commonpb.UserId) error {
+	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "BatchSetNextAirdropTimestamp")
 	defer tracer.End()
 
 	err := func() error {
-		encodedUserID := pg.Encode(userID.Value)
+		var encodedUserIDs []string
+		for _, userID := range userIDs {
+			encodedUserIDs = append(encodedUserIDs, pg.Encode(userID.Value))
+		}
 
-		_, err := s.client.User.FindUnique(
-			db.User.ID.Equals(encodedUserID),
+		_, err := s.client.User.FindMany(
+			db.User.ID.In(encodedUserIDs),
 		).Update(
 			db.User.NextAirdropAt.Set(ts),
 		).Exec(ctx)
-
-		if errors.Is(err, db.ErrNotFound) {
-			return account.ErrNotFound
-		}
 
 		return err
 	}()
@@ -430,31 +429,6 @@ func (s *store) GetUsersToAirdrop(ctx context.Context, at time.Time) ([]*commonp
 			return nil, account.ErrNotFound
 		}
 		return userIDs, nil
-	}()
-
-	tracer.OnError(err)
-
-	return res, err
-}
-
-func (s *store) GetCreationTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetCreationTimestamp")
-	defer tracer.End()
-
-	res, err := func() (time.Time, error) {
-		encodedUserID := pg.Encode(userID.Value)
-
-		res, err := s.client.User.FindUnique(
-			db.User.ID.Equals(encodedUserID),
-		).Exec(ctx)
-
-		if errors.Is(err, db.ErrNotFound) {
-			return time.Time{}, account.ErrNotFound
-		} else if err != nil {
-			return time.Time{}, err
-		}
-
-		return res.CreatedAt, nil
 	}()
 
 	tracer.OnError(err)

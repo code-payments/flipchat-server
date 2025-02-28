@@ -159,16 +159,18 @@ func (m *memory) SetRegistrationFlag(ctx context.Context, userID *commonpb.UserI
 	return nil
 }
 
-func (m *memory) SetNextAirdropTimestamp(ctx context.Context, userID *commonpb.UserId, ts time.Time) error {
+func (m *memory) BatchSetNextAirdropTimestamp(ctx context.Context, ts time.Time, userIDs ...*commonpb.UserId) error {
 	m.Lock()
 	defer m.Unlock()
 
-	_, ok := m.users[string(userID.Value)]
-	if !ok {
-		return account.ErrNotFound
-	}
+	for _, userID := range userIDs {
+		_, ok := m.users[string(userID.Value)]
+		if !ok {
+			continue
+		}
 
-	m.nextAirdrop[string(userID.Value)] = ts
+		m.nextAirdrop[string(userID.Value)] = ts
+	}
 
 	return nil
 }
@@ -229,9 +231,4 @@ func (m *memory) GetUsersToAirdrop(ctx context.Context, at time.Time) ([]*common
 		return nil, account.ErrNotFound
 	}
 	return res, nil
-}
-
-// todo: implement me
-func (m *memory) GetCreationTimestamp(ctx context.Context, userID *commonpb.UserId) (time.Time, error) {
-	return time.Now(), nil
 }

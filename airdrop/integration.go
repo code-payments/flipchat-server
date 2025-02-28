@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	Amount    = codekin.ToQuarks(100)
-	Frequency = 7 * 24 * time.Hour // 1 week
+	Amount      = codekin.ToQuarks(100)
+	Frequency   = 7 * 24 * time.Hour // 1 week
+	InauguralTs = time.Date(2025, 3, 7, 4, 0, 0, 0, time.UTC)
 )
 
 // todo: needs tests
@@ -34,6 +35,10 @@ func NewFlipchatAirdropIntegration(accounts account.Store, pusher push.Pusher) c
 }
 
 func (i *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*codecommon.Account, uint64, error) {
+	if time.Now().Before(InauguralTs) {
+		return nil, 0, nil
+	}
+
 	userIDs, err := i.accounts.GetUsersToAirdrop(ctx, time.Now())
 	if err == account.ErrNotFound {
 		return nil, 0, nil
@@ -80,32 +85,31 @@ func (i *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecomm
 		if err != nil {
 			return err
 		}
-
-		creationTs, err := i.accounts.GetCreationTimestamp(ctx, userID)
-		if err != nil {
-			return err
-		}
-
-		// todo: something more efficient?
-		now := time.Now()
-		nextAirdropAt := creationTs
-		for {
-			nextAirdropAt = nextAirdropAt.Add(Frequency)
-
-			if nextAirdropAt.After(now) {
-				break
-			}
-		}
-
-		err = i.accounts.SetNextAirdropTimestamp(ctx, userID, nextAirdropAt)
-		if err != nil {
-			return err
-		}
-
 		userIDs = append(userIDs, userID)
+	}
+
+	err := i.accounts.BatchSetNextAirdropTimestamp(ctx, GetNextAirdropTime(), userIDs...)
+	if err != nil {
+		return err
 	}
 
 	go push.SendWeeklyAirdropPush(context.Background(), i.pusher, Amount, userIDs...)
 
 	return nil
+}
+
+func GetNextAirdropTime() time.Time {
+	return getNextAirdropTime(InauguralTs)
+}
+
+// todo: something more efficient?
+func getNextAirdropTime(inauguralTs time.Time) time.Time {
+	now := time.Now()
+	ts := inauguralTs
+	for {
+		if now.Before(ts) {
+			return ts
+		}
+		ts = ts.Add(Frequency)
+	}
 }
