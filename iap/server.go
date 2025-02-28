@@ -14,6 +14,7 @@ import (
 	iappb "github.com/code-payments/flipchat-protobuf-api/generated/go/iap/v1"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/airdrop"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
 )
@@ -104,6 +105,12 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	} else if err != ErrNotFound {
 		log.Warn("Failed to check existing purchase", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to check existing purchase")
+	}
+
+	err = s.accounts.BatchSetNextAirdropTimestamp(ctx, airdrop.GetNextAirdropTime(), userID)
+	if err != nil {
+		log.Warn("Failed to set next airdrop time")
+		return nil, status.Error(codes.Internal, "failed to set next airdrop time")
 	}
 
 	err = s.accounts.SetRegistrationFlag(ctx, userID, true)

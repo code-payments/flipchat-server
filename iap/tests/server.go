@@ -13,6 +13,7 @@ import (
 	iappb "github.com/code-payments/flipchat-protobuf-api/generated/go/iap/v1"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/airdrop"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/iap"
 	"github.com/code-payments/flipchat-server/model"
@@ -76,6 +77,10 @@ func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Stor
 		resp, err := server.OnPurchaseCompleted(context.Background(), req)
 		require.NoError(t, err)
 		require.NoError(t, protoutil.ProtoEqualError(&iappb.OnPurchaseCompletedResponse{}, resp))
+
+		nextAirdropTime, err := accounts.GetNextAirdropTimestamp(context.Background(), userID)
+		require.NoError(t, err)
+		require.Equal(t, airdrop.GetNextAirdropTime(), nextAirdropTime)
 
 		isRegistered, err := accounts.IsRegistered(context.Background(), userID)
 		require.NoError(t, err)
