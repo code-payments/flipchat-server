@@ -76,12 +76,12 @@ func extractMainImageURL(doc *html.Node, baseURL string) string {
 	return findFirstImg(doc, baseURL)
 }
 
-// findTextByTag traverses the document tree looking for the first occurrence of a tag.
+// findTextByTag finds and returns all text inside the first occurrence of the given tag.
 func findTextByTag(n *html.Node, tag string) string {
 	if n.Type == html.ElementNode && n.Data == tag {
-		if n.FirstChild != nil {
-			return strings.TrimSpace(n.FirstChild.Data)
-		}
+		var sb strings.Builder
+		collectText(n, &sb)
+		return strings.TrimSpace(sb.String())
 	}
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		if text := findTextByTag(c, tag); text != "" {
@@ -89,6 +89,19 @@ func findTextByTag(n *html.Node, tag string) string {
 		}
 	}
 	return ""
+}
+
+// collectText recursively gathers text from all TextNode children.
+func collectText(n *html.Node, sb *strings.Builder) {
+	if n.Type == html.TextNode {
+		// Replace newlines with spaces to preserve text formatting.
+		n.Data = strings.ReplaceAll(n.Data, "\n", " ")
+		sb.WriteString(n.Data)
+		sb.WriteString(" ") // Preserve spacing between text nodes.
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		collectText(c, sb)
+	}
 }
 
 // findMetaContent returns the content attribute of a meta tag matching the given key and value.
