@@ -18,7 +18,7 @@ import (
 var (
 	Amount      = codekin.ToQuarks(100)
 	Frequency   = 7 * 24 * time.Hour // 1 week
-	InauguralTs = time.Date(2025, 3, 7, 4, 0, 0, 0, time.UTC)
+	InauguralTs = time.Date(2025, 3, 7, 16, 0, 0, 0, time.UTC)
 )
 
 // todo: needs tests
