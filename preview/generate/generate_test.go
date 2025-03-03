@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"encoding/json"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +37,6 @@ func testGeneratePreview_OK(t *testing.T) {
 	expected := &Result{
 		OriginalURL: "https://github.com/code-payments/code-vm",
 		ContentType: 1,
-		Moderation:  0,
 		URL:         "https://github.com/code-payments/code-vm",
 		Title:       "GitHub - code-payments/code-vm: Purpose built VM for reduced fees on Solana",
 		Description: "Purpose built VM for reduced fees on Solana. Contribute to code-payments/code-vm development by creating an account on GitHub.",
@@ -50,7 +48,6 @@ func testGeneratePreview_OK(t *testing.T) {
 
 	require.Equal(t, expected.OriginalURL, got.OriginalURL)
 	require.Equal(t, expected.ContentType, got.ContentType)
-	require.Equal(t, expected.Moderation, got.Moderation)
 	require.Equal(t, expected.URL, got.URL)
 	require.Equal(t, expected.Title, got.Title)
 	require.Equal(t, expected.Description, got.Description)
@@ -60,10 +57,11 @@ func testGeneratePreview_OK(t *testing.T) {
 	require.Equal(t, expected.ImageHeight, got.ImageHeight)
 
 	// Temporarily output the response for debugging
-	prettyJSON, err := json.MarshalIndent(got, "", "  ")
-	require.NoError(t, err)
-	t.Logf("resp: %v", string(prettyJSON))
-	t.Logf("err: %v", err)
 
-	require.True(t, false)
+	// prettyJSON, err := json.MarshalIndent(got, "", "  ")
+	// require.NoError(t, err)
+	// t.Logf("resp: %v", string(prettyJSON))
+	// t.Logf("err: %v", err)
+	//
+	// require.True(t, false)
 }

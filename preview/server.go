@@ -17,6 +17,11 @@ import (
 	"github.com/code-payments/flipchat-server/preview/generate"
 )
 
+const (
+	shouldModerateText  = false
+	shouldModerateImage = true
+)
+
 // Server implements the Preview service.
 type Server struct {
 	log        *zap.Logger
@@ -71,7 +76,7 @@ func (s *Server) GetPreviewUrl(ctx context.Context, req *previewpb.GetPreviewUrl
 		}, nil
 	}
 
-	// Flag content synchronously
+	// Flag content synchronously (for now)
 	moderationResult, err := s.flagContent(ctx, generatedPreview)
 	if err != nil {
 		s.log.Error("Moderation failed", zap.Error(err))
@@ -133,41 +138,35 @@ func (s *Server) generatePreview(ctx context.Context, url string) (*Preview, err
 
 // flagContent uses the moderation client to flag the content.
 func (s *Server) flagContent(ctx context.Context, preview *Preview) (*moderation.ModerationResult, error) {
-	// Moderate text fields
-	text := preview.Title + " " + preview.Description
-	textResult, err := s.moderation.ClassifyText(ctx, text)
-	if err != nil {
-		return nil, err
+
+	res := &moderation.ModerationResult{
+		Flagged: false,
 	}
 
-	// Moderate image
-	imageResult, err := s.moderation.ClassifyImage(ctx, preview.ImageURL)
-	if err != nil {
-		return nil, err
+	if shouldModerateText {
+		text := preview.Title + " " + preview.Description
+		textResult, err := s.moderation.ClassifyText(ctx, text)
+		if err != nil {
+			return nil, err
+		}
+
+		if textResult.Flagged {
+			res.Flagged = true
+		}
 	}
 
-	// Combine results
-	flagged := false
-	if textResult.Flagged || imageResult.Flagged {
-		flagged = true
+	if shouldModerateImage {
+		imageResult, err := s.moderation.ClassifyImage(ctx, preview.ImageURL)
+		if err != nil {
+			return nil, err
+		}
+
+		if imageResult.Flagged {
+			res.Flagged = true
+		}
 	}
 
-	return &moderation.ModerationResult{
-		Flagged:        flagged,
-		CategoryScores: mergeCategoryScores(textResult.CategoryScores, imageResult.CategoryScores),
-	}, nil
-}
-
-// mergeCategoryScores merges category scores from text and image moderation.
-func mergeCategoryScores(a, b map[string]float64) map[string]float64 {
-	result := make(map[string]float64)
-	for k, v := range a {
-		result[k] += v
-	}
-	for k, v := range b {
-		result[k] += v
-	}
-	return result
+	return res, nil
 }
 
 // convertToProto converts Preview to PreviewUrl proto message.

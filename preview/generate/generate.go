@@ -19,7 +19,6 @@ var (
 type Result struct {
 	OriginalURL string
 	ContentType commonpb.ContentType
-	Moderation  commonpb.ModerationStatus
 
 	URL         string
 	Title       string
@@ -78,14 +77,14 @@ func FetchPreview(ctx context.Context, urlStr string) (*Result, error) {
 	// Fetch and process the image if available.
 	imageInfo, err := fetchAndProcessImage(ctx, imageURL)
 	if err != nil {
-		return nil, ErrProcessImage
+		// If image processing failed, set image URL to empty.
+		imageInfo = &commonpb.ImageInfo{}
 	}
 
 	// Construct the Preview struct.
 	return &Result{
 		OriginalURL: urlStr,
 		ContentType: previewContentType,
-		Moderation:  commonpb.ModerationStatus_MODERATION_UNKNOWN,
 		URL:         urlStr,
 		Title:       title,
 		Description: description,
