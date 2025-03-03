@@ -18,5 +18,5 @@ var (
 func SendWeeklyAirdropPush(ctx context.Context, pusher Pusher, quarks uint64, users ...*commonpb.UserId) error {
 	title := "Weekly Bonus Received"
 	body := kinAmountPrinter.Sprintf("You received ⬢ %d Kin for being an active user", codekin.FromQuarks(quarks))
-	return pusher.SendBasicPushes(ctx, title, body)
+	return pusher.SendBasicPushes(ctx, title, body, users...)
 }
