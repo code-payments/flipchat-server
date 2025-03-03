@@ -35,10 +35,6 @@ func NewFlipchatAirdropIntegration(accounts account.Store, pusher push.Pusher) c
 }
 
 func (i *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*codecommon.Account, uint64, error) {
-	if time.Now().Before(InauguralTs) {
-		return nil, 0, nil
-	}
-
 	userIDs, err := i.accounts.GetUsersToAirdrop(ctx, time.Now())
 	if err == account.ErrNotFound {
 		return nil, 0, nil
@@ -54,8 +50,8 @@ func (i *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*cod
 			return nil, 0, err
 		}
 
-		// Initially enabled for staff users until feature is launched
-		if !isStaff {
+		// Initially enabled for staff before feature is launched
+		if !isStaff && time.Now().Before(InauguralTs) {
 			continue
 		}
 
