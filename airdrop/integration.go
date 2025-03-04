@@ -2,8 +2,11 @@ package airdrop
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"time"
+
+	"go.uber.org/zap"
 
 	codeairdrop "github.com/code-payments/code-server/pkg/code/async/airdrop"
 	codecommon "github.com/code-payments/code-server/pkg/code/common"
@@ -23,12 +26,14 @@ var (
 
 // todo: needs tests
 type FlipchatIntegration struct {
+	log      *zap.Logger
 	accounts account.Store
 	pusher   push.Pusher
 }
 
-func NewFlipchatAirdropIntegration(accounts account.Store, pusher push.Pusher) codeairdrop.Integration {
+func NewFlipchatAirdropIntegration(log *zap.Logger, accounts account.Store, pusher push.Pusher) codeairdrop.Integration {
 	return &FlipchatIntegration{
+		log:      log,
 		accounts: accounts,
 		pusher:   pusher,
 	}
@@ -37,6 +42,7 @@ func NewFlipchatAirdropIntegration(accounts account.Store, pusher push.Pusher) c
 func (i *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*codecommon.Account, uint64, error) {
 	userIDs, err := i.accounts.GetUsersToAirdrop(ctx, time.Now())
 	if err == account.ErrNotFound {
+		i.log.Debug("No users to airdrop")
 		return nil, 0, nil
 	} else if err != nil {
 		return nil, 0, err
@@ -69,7 +75,15 @@ func (i *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*cod
 			return nil, 0, err
 		}
 		owners = append(owners, owner)
+
+		i.log.Debug(
+			"Airdropping to user",
+			zap.String("user_id", base64.StdEncoding.EncodeToString(userID.Value)),
+			zap.String("public_key", owner.PublicKey().ToBase58()),
+		)
 	}
+
+	i.log.Debug("Airdropping to users", zap.Int("count", len(owners)))
 
 	return owners, Amount, nil
 }
@@ -82,6 +96,12 @@ func (i *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecomm
 			return err
 		}
 		userIDs = append(userIDs, userID)
+
+		i.log.Debug(
+			"Airdropped user",
+			zap.String("user_id", base64.StdEncoding.EncodeToString(userID.Value)),
+			zap.String("public_key", owner.PublicKey().ToBase58()),
+		)
 	}
 
 	err := i.accounts.BatchSetNextAirdropTimestamp(ctx, GetNextAirdropTime(), userIDs...)
@@ -90,6 +110,8 @@ func (i *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecomm
 	}
 
 	go push.SendWeeklyAirdropPush(context.Background(), i.pusher, Amount, userIDs...)
+
+	i.log.Debug("Airdropped users", zap.Int("count", len(owners)))
 
 	return nil
 }
