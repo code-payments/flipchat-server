@@ -3,15 +3,18 @@ module github.com/code-payments/flipchat-server
 go 1.24.0
 
 require (
+	github.com/ReneKroon/ttlcache v1.7.0
 	github.com/aws/aws-sdk-go-v2 v0.17.0
 	github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84
 	github.com/code-payments/code-server v1.10.20-0.20250227175955-b835606637cb
 	github.com/code-payments/flipchat-protobuf-api v1.3.2
+	github.com/georgysavva/scany/v2 v2.1.3
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
-	github.com/jackc/pgconn v1.10.0
+	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgerrcode v0.0.0-20201024163028-a0d42d470451
-	github.com/jackc/pgx/v4 v4.13.0
+	github.com/jackc/pgx/v4 v4.18.3
+	github.com/jackc/pgx/v5 v5.7.2
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/joho/godotenv v1.5.1
 	github.com/mr-tron/base58 v1.2.0
@@ -26,14 +29,13 @@ require (
 	google.golang.org/protobuf v1.35.2
 )
 
-require github.com/ReneKroon/ttlcache v1.7.0
-
 require (
 	cloud.google.com/go/auth v0.13.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.6 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/code-payments/code-vm-indexer v0.1.11-0.20241028132209-23031e814fba // indirect
 	github.com/googleapis/gax-go/v2 v2.14.0 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352 // indirect
 )
@@ -66,9 +68,9 @@ require (
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgproto3/v2 v2.1.1 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
-	github.com/jackc/pgtype v1.8.1 // indirect
+	github.com/jackc/pgproto3/v2 v2.3.3 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgtype v1.14.0 // indirect
 	github.com/jackc/pgx v3.6.2+incompatible // indirect
 	github.com/jdgcs/ed25519 v0.0.0-20200408034030-96c10d46cdc3 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af // indirect

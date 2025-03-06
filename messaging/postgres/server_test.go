@@ -3,7 +3,10 @@
 package postgres
 
 import (
+	"context"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	account "github.com/code-payments/flipchat-server/account/postgres"
 	chat "github.com/code-payments/flipchat-server/chat/postgres"
@@ -12,18 +15,23 @@ import (
 
 	"github.com/code-payments/flipchat-server/messaging/tests"
 
-	_ "github.com/jackc/pgx/v4/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestMessaging_PostgresServer(t *testing.T) {
+	pool, err := pgxpool.New(context.Background(), testEnv.DatabaseUrl)
+	require.NoError(t, err)
+	defer pool.Close()
+
 	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
 	defer disconnect()
 
 	accounts := account.NewInPostgres(client)
 	chats := chat.NewInPostgres(client)
 	intents := intent.NewInPostgres(client)
-	messages := NewInPostgresMessages(client)
-	pointers := NewInPostgresPointers(client)
+	messages := NewInPostgresMessages(pool)
+	pointers := NewInPostgresPointers(pool)
 
 	teardown := func() {
 		messages.(*store).reset()
