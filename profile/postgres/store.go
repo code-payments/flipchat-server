@@ -2,268 +2,102 @@ package postgres
 
 import (
 	"context"
-	"errors"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	profilepb "github.com/code-payments/flipchat-protobuf-api/generated/go/profile/v1"
-	pg "github.com/code-payments/flipchat-server/database/postgres"
 
-	"github.com/code-payments/code-server/pkg/metrics"
-
-	"github.com/code-payments/flipchat-server/database/prisma/db"
 	"github.com/code-payments/flipchat-server/profile"
 )
 
-const (
-	metricsStructName = "profile.postgres.store"
-)
-
 type store struct {
-	client *db.PrismaClient
+	pool *pgxpool.Pool
 }
 
-func NewInPostgres(client *db.PrismaClient) profile.Store {
+func NewInPostgres(pool *pgxpool.Pool) profile.Store {
 	return &store{
-		client,
-	}
-}
-
-func (s *store) reset() {
-	ctx := context.Background()
-
-	users := s.client.User.FindMany().Update(db.User.DisplayName.SetOptional(nil)).Tx()
-
-	err := s.client.Prisma.Transaction(users).Exec(ctx)
-	if err != nil {
-		panic(err)
+		pool: pool,
 	}
 }
 
 func (s *store) GetProfile(ctx context.Context, id *commonpb.UserId) (*profilepb.UserProfile, error) {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetProfile")
-	defer tracer.End()
+	displayName, err := dbGetDisplayName(ctx, s.pool, id)
+	if err != nil {
+		return nil, err
+	} else if displayName == nil {
+		return nil, profile.ErrNotFound
+	}
 
-	res, err := func() (*profilepb.UserProfile, error) {
-		encodedUserID := pg.Encode(id.Value)
+	userProfile := &profilepb.UserProfile{
+		DisplayName: *displayName,
+	}
 
-		baseProfile, err := s.client.User.FindFirst(
-			db.User.ID.Equals(encodedUserID),
-		).Exec(ctx)
-
-		if errors.Is(err, db.ErrNotFound) {
-			return nil, profile.ErrNotFound
-		} else if err != nil {
+	xUserModel, err := dbGetXUser(ctx, s.pool, id)
+	if err == nil {
+		xProfile, err := fromXUserModel(xUserModel)
+		if err != nil {
 			return nil, err
 		}
 
-		// User found but the optional display name is not set
-		name, ok := baseProfile.DisplayName()
-		if !ok {
-			return nil, profile.ErrNotFound
-		}
+		userProfile.SocialProfiles = append(userProfile.SocialProfiles, &profilepb.SocialProfile{
+			Type: &profilepb.SocialProfile_X{
+				X: xProfile,
+			},
+		})
+	} else if err != profile.ErrNotFound {
+		return nil, err
+	}
 
-		var socialProfiles []*profilepb.SocialProfile
-
-		xProfile, err := s.client.XUser.FindFirst(
-			db.XUser.UserID.Equals(encodedUserID),
-		).Exec(ctx)
-
-		if err == nil {
-			protoXProfile, err := fromXUserModel(xProfile)
-			if err != nil {
-				return nil, err
-			}
-			socialProfiles = append(socialProfiles, &profilepb.SocialProfile{
-				Type: &profilepb.SocialProfile_X{
-					X: protoXProfile,
-				},
-			})
-		} else if !errors.Is(err, db.ErrNotFound) {
-			return nil, err
-		}
-
-		return &profilepb.UserProfile{
-			DisplayName:    name,
-			SocialProfiles: socialProfiles,
-		}, nil
-	}()
-
-	tracer.OnError(err)
-
-	return res, err
+	return userProfile, nil
 }
 
 func (s *store) SetDisplayName(ctx context.Context, id *commonpb.UserId, displayName string) error {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "SetDisplayName")
-	defer tracer.End()
-
-	err := func() error {
-		encodedUserID := pg.Encode(id.Value)
-
-		// TODO: The upsert feels a bit weird here but the memory store does it too
-
-		// Upsert the user with the new display name
-		_, err := s.client.User.UpsertOne(
-			db.User.ID.Equals(encodedUserID),
-		).Create(
-			db.User.ID.Set(encodedUserID),
-			db.User.DisplayName.Set(displayName),
-		).Update(
-			db.User.DisplayName.Set(displayName),
-		).Exec(ctx)
-
-		return err
-	}()
-
-	tracer.OnError(err)
-
-	return err
+	return dbSetDisplayName(ctx, s.pool, id, displayName)
 }
 
 func (s *store) LinkXAccount(ctx context.Context, userID *commonpb.UserId, xProfile *profilepb.XProfile, accessToken string) error {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "LinkXAccount")
-	defer tracer.End()
-
-	err := func() error {
-		encodedUserID := pg.Encode(userID.Value)
-
-		existing, err := s.client.XUser.FindUnique(db.XUser.UserID.Equals(encodedUserID)).Exec(ctx)
-		if err == nil {
-			if existing.ID == xProfile.Id {
-				// todo: Upsert doesn't update fields if it's the same user
-				_, err = s.client.XUser.FindUnique(db.XUser.ID.Equals(xProfile.Id)).
-					Update(
-						db.XUser.Username.Set(xProfile.Username),
-						db.XUser.Name.Set(xProfile.Name),
-						db.XUser.Description.Set(xProfile.Description),
-						db.XUser.ProfilePicURL.Set(xProfile.ProfilePicUrl),
-						db.XUser.AccessToken.Set(accessToken),
-						db.XUser.FollowerCount.Set(int(xProfile.FollowerCount)),
-						db.XUser.VerifiedType.Set(int(xProfile.VerifiedType)),
-					).
-					Exec(ctx)
-				return err
-			}
-			return profile.ErrExistingSocialLink
-		} else if !errors.Is(err, db.ErrNotFound) {
-			return err
-		}
-
-		_, err = s.client.XUser.UpsertOne(db.XUser.ID.Equals(xProfile.Id)).
-			Create(
-				db.XUser.ID.Set(xProfile.Id),
-				db.XUser.Username.Set(xProfile.Username),
-				db.XUser.Name.Set(xProfile.Name),
-				db.XUser.Description.Set(xProfile.Description),
-				db.XUser.ProfilePicURL.Set(xProfile.ProfilePicUrl),
-				db.XUser.AccessToken.Set(accessToken),
-				db.XUser.User.Link(
-					db.User.ID.Equals(encodedUserID),
-				),
-				db.XUser.FollowerCount.Set(int(xProfile.FollowerCount)),
-				db.XUser.VerifiedType.Set(int(xProfile.VerifiedType)),
-			).
-			Update(
-				db.XUser.Username.Set(xProfile.Username),
-				db.XUser.Name.Set(xProfile.Name),
-				db.XUser.Description.Set(xProfile.Description),
-				db.XUser.ProfilePicURL.Set(xProfile.ProfilePicUrl),
-				db.XUser.AccessToken.Set(accessToken),
-				db.XUser.User.Link(
-					db.User.ID.Equals(encodedUserID),
-				),
-				db.XUser.FollowerCount.Set(int(xProfile.FollowerCount)),
-				db.XUser.VerifiedType.Set(int(xProfile.VerifiedType)),
-			).
-			Exec(ctx)
+	model, err := toXUserModel(userID, xProfile, accessToken)
+	if err != nil {
 		return err
-	}()
+	}
 
-	tracer.OnError(err)
+	existing, err := dbGetXUser(ctx, s.pool, userID)
+	if err != nil && err != profile.ErrNotFound {
+		return err
+	}
 
-	return err
+	if existing != nil && existing.ID != xProfile.Id {
+		return profile.ErrExistingSocialLink
+	}
+
+	return model.dbUpsert(ctx, s.pool)
 }
 
 func (s *store) UnlinkXAccount(ctx context.Context, userID *commonpb.UserId, xUserID string) error {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "UnlinkXAccount")
-	defer tracer.End()
-
-	err := func() error {
-		encodedUserID := pg.Encode(userID.Value)
-
-		res, err := s.client.XUser.FindMany(
-			db.XUser.ID.Equals(xUserID),
-			db.XUser.UserID.Equals(encodedUserID),
-		).Delete().Exec(ctx)
-		if err != nil {
-			return err
-		}
-
-		if res.Count == 0 {
-			return profile.ErrNotFound
-		}
-		return nil
-	}()
-
-	tracer.OnError(err)
-
-	return err
+	return dbUnlinkXAccount(ctx, s.pool, userID, xUserID)
 }
 
 func (s *store) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error) {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetXProfile")
-	defer tracer.End()
-
-	res, err := func() (*profilepb.XProfile, error) {
-		encodedUserID := pg.Encode(userID.Value)
-
-		res, err := s.client.XUser.FindUnique(db.XUser.UserID.Equals(encodedUserID)).Exec(ctx)
-		if errors.Is(err, db.ErrNotFound) {
-			return nil, profile.ErrNotFound
-		} else if err != nil {
-			return nil, err
-		}
-
-		return fromXUserModel(res)
-	}()
-
-	tracer.OnError(err)
-
-	return res, err
+	model, err := dbGetXUser(ctx, s.pool, userID)
+	if err != nil {
+		return nil, err
+	}
+	return fromXUserModel(model)
 }
 
 func (s *store) GetUserLinkedToXAccount(ctx context.Context, xUserID string) (*commonpb.UserId, error) {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetUserLinkedToXAccount")
-	defer tracer.End()
-
-	res, err := func() (*commonpb.UserId, error) {
-		res, err := s.client.XUser.FindUnique(db.XUser.ID.Equals(xUserID)).Exec(ctx)
-		if errors.Is(err, db.ErrNotFound) {
-			return nil, profile.ErrNotFound
-		} else if err != nil {
-			return nil, err
-		}
-
-		decodedUserID, err := pg.Decode(res.UserID)
-		if err != nil {
-			return nil, err
-		}
-		return &commonpb.UserId{Value: decodedUserID}, nil
-	}()
-
-	tracer.OnError(err)
-
-	return res, err
+	return dbGetUserLinkedToXAccount(ctx, s.pool, xUserID)
 }
 
-func fromXUserModel(m *db.XUserModel) (*profilepb.XProfile, error) {
-	return &profilepb.XProfile{
-		Id:            m.ID,
-		Username:      m.Username,
-		Name:          m.Name,
-		Description:   m.Description,
-		ProfilePicUrl: m.ProfilePicURL,
-		VerifiedType:  profilepb.XProfile_VerifiedType(m.VerifiedType),
-		FollowerCount: uint32(m.FollowerCount),
-	}, nil
+func (s *store) reset() {
+	_, err := s.pool.Exec(context.Background(), "DELETE FROM "+xUsersTableName)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = s.pool.Exec(context.Background(), `UPDATE `+usersTableName+` SET "displayName" = NULL`)
+	if err != nil {
+		panic(err)
+	}
 }
