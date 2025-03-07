@@ -30,7 +30,7 @@ func TestChat_PostgresServer(t *testing.T) {
 
 	chats := NewInPostgres(client)
 	accounts := account.NewInPostgres(pool)
-	profiles := profile.NewInPostgres(client)
+	profiles := profile.NewInPostgres(pool)
 	intents := intent.NewInPostgres(client)
 	messages := messaging.NewInMemory() // TODO: Implement Postgres messaging
 
