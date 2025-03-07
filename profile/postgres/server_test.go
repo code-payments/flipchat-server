@@ -27,7 +27,7 @@ func TestProfile_PostgresServer(t *testing.T) {
 
 	accounts := account_postgres.NewInPostgres(pool)
 	chats := chat_postgres.NewInPostgres(client)
-	profiles := NewInPostgres(client)
+	profiles := NewInPostgres(pool)
 	teardown := func() {
 		profiles.(*store).reset()
 	}
