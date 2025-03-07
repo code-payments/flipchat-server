@@ -3,7 +3,6 @@ package airdrop
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"time"
 
 	"go.uber.org/zap"
@@ -67,7 +66,12 @@ func (i *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*cod
 		}
 
 		if len(pubKeys) != 1 {
-			return nil, 0, errors.New("expected 1 public key for user")
+			i.log.Info(
+				"Skipping airdrop to user with unexpected public key count",
+				zap.String("user_id", base64.StdEncoding.EncodeToString(userID.Value)),
+				zap.Int("count", len(pubKeys)),
+			)
+			continue
 		}
 
 		owner, err := codecommon.NewAccountFromPublicKeyBytes(pubKeys[0].Value)
