@@ -9,7 +9,7 @@ import (
 
 	"github.com/code-payments/flipchat-server/iap/tests"
 
-	_ "github.com/jackc/pgx/v4/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestIap_PostgresStore(t *testing.T) {

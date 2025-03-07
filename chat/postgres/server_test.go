@@ -3,9 +3,11 @@
 package postgres
 
 import (
+	"context"
 	"testing"
 
 	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
+	"github.com/stretchr/testify/require"
 
 	account "github.com/code-payments/flipchat-server/account/postgres"
 	intent "github.com/code-payments/flipchat-server/intent/postgres"
@@ -14,15 +16,20 @@ import (
 
 	"github.com/code-payments/flipchat-server/chat/tests"
 
-	_ "github.com/jackc/pgx/v4/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestChat_PostgresServer(t *testing.T) {
+	pool, err := pgxpool.New(context.Background(), testEnv.DatabaseUrl)
+	require.NoError(t, err)
+	defer pool.Close()
+
 	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
 	defer disconnect()
 
 	chats := NewInPostgres(client)
-	accounts := account.NewInPostgres(client)
+	accounts := account.NewInPostgres(pool)
 	profiles := profile.NewInPostgres(client)
 	intents := intent.NewInPostgres(client)
 	messages := messaging.NewInMemory() // TODO: Implement Postgres messaging

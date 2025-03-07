@@ -209,7 +209,7 @@ func fromPointerModel(m *pointerModel) (messaging.UserPointer, error) {
 }
 
 func (m *messageModel) dbPut(ctx context.Context, pool *pgxpool.Pool) error {
-	query := `INSERT INTO ` + messagesTableName + `(` + allMessageFields + `) VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now()) RETURNING ` + allMessageFields
+	query := `INSERT INTO ` + messagesTableName + `(` + allMessageFields + `) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING ` + allMessageFields
 	return pgxscan.Get(
 		ctx,
 		pool,

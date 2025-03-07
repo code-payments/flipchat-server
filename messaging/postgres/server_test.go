@@ -27,7 +27,7 @@ func TestMessaging_PostgresServer(t *testing.T) {
 	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
 	defer disconnect()
 
-	accounts := account.NewInPostgres(client)
+	accounts := account.NewInPostgres(pool)
 	chats := chat.NewInPostgres(client)
 	intents := intent.NewInPostgres(client)
 	messages := NewInPostgresMessages(pool)

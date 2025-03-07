@@ -10,7 +10,7 @@ import (
 
 	"github.com/code-payments/flipchat-server/promoted/tests"
 
-	_ "github.com/jackc/pgx/v4/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestPromoted_PostgresStore(t *testing.T) {
