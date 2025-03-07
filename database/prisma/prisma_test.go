@@ -11,7 +11,7 @@ import (
 
 	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 
-	_ "github.com/jackc/pgx/v4/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 var testEnv *prismatest.TestEnv

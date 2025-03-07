@@ -13,7 +13,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgerrcode v0.0.0-20201024163028-a0d42d470451
-	github.com/jackc/pgx/v4 v4.18.3
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/joho/godotenv v1.5.1
@@ -35,6 +34,7 @@ require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/code-payments/code-vm-indexer v0.1.11-0.20241028132209-23031e814fba // indirect
 	github.com/googleapis/gax-go/v2 v2.14.0 // indirect
+	github.com/jackc/pgx/v4 v4.18.3 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352 // indirect
