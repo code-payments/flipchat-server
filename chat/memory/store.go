@@ -17,7 +17,6 @@ import (
 
 	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/protoutil"
-	"github.com/code-payments/flipchat-server/query"
 )
 
 type InMemoryStore struct {
@@ -82,7 +81,7 @@ func (s *InMemoryStore) GetChatMetadataBatched(ctx context.Context, chatIDs ...*
 	return protoutil.SliceClone(metadata), nil
 }
 
-func (s *InMemoryStore) GetChatsForUser(_ context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error) {
+func (s *InMemoryStore) GetChatsForUser(_ context.Context, userID *commonpb.UserId) ([]*commonpb.ChatId, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -92,39 +91,6 @@ func (s *InMemoryStore) GetChatsForUser(_ context.Context, userID *commonpb.User
 	for _, chatIDString := range chatIDStrings {
 		chatIDs = append(chatIDs, &commonpb.ChatId{Value: []byte(chatIDString)})
 	}
-
-	queryOpts := query.DefaultOptions()
-	for _, o := range opts {
-		o(&queryOpts)
-	}
-
-	slices.SortFunc(chatIDs, func(a, b *commonpb.ChatId) int {
-		if queryOpts.Order == commonpb.QueryOptions_ASC {
-			return bytes.Compare(a.GetValue(), b.GetValue())
-		} else {
-			return -1 * bytes.Compare(a.GetValue(), b.GetValue())
-		}
-	})
-
-	if queryOpts.Token != nil {
-		for i := range chatIDs {
-			cmp := bytes.Compare(chatIDs[i].GetValue(), queryOpts.Token.GetValue())
-			if queryOpts.Order == commonpb.QueryOptions_DESC {
-				cmp *= -1
-			}
-			if cmp <= 0 {
-				continue
-			} else {
-				chatIDs = chatIDs[i:]
-				break
-			}
-		}
-	}
-
-	if queryOpts.Limit > 0 {
-		chatIDs = chatIDs[:min(queryOpts.Limit, len(chatIDs))]
-	}
-
 	return chatIDs, nil
 }
 

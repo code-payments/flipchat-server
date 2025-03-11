@@ -6,7 +6,6 @@ import (
 	"context"
 	"testing"
 
-	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 	"github.com/stretchr/testify/require"
 
 	account_postgres "github.com/code-payments/flipchat-server/account/postgres"
@@ -22,11 +21,8 @@ func TestProfile_PostgresServer(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 
-	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
-	defer disconnect()
-
 	accounts := account_postgres.NewInPostgres(pool)
-	chats := chat_postgres.NewInPostgres(client)
+	chats := chat_postgres.NewInPostgres(pool)
 	profiles := NewInPostgres(pool)
 	teardown := func() {
 		profiles.(*store).reset()

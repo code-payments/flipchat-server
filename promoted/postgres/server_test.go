@@ -27,7 +27,7 @@ func TestPromoted_PostgresServer(t *testing.T) {
 	defer disconnect()
 
 	accountStore := account.NewInPostgres(pool)
-	chatStore := chat.NewInPostgres(client)
+	chatStore := chat.NewInPostgres(pool)
 	testStore := NewInPostgres(client)
 	teardown := func() {
 		testStore.(*store).reset()

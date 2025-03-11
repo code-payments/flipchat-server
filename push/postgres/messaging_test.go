@@ -28,7 +28,7 @@ func TestPush_PostgresMessaging(t *testing.T) {
 
 	pushes := NewInPostgres(client)
 	profiles := profile.NewInPostgres(pool)
-	chats := chat.NewInPostgres(client)
+	chats := chat.NewInPostgres(pool)
 
 	teardown := func() {
 		pushes.(*store).reset()

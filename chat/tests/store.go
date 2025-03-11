@@ -18,14 +18,12 @@ import (
 	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
-	"github.com/code-payments/flipchat-server/query"
 )
 
 func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 	for _, tf := range []func(t *testing.T, s chat.Store){
 		testChatStore_Metadata,
 		testChatStore_GetAllChatsForUser,
-		testChatStore_GetAllChatsForUser_Pagination,
 		testChatStore_GetChatMembers,
 		testChatStore_IsChatMember,
 		testChatStore_SetChatMuteState,
@@ -148,77 +146,12 @@ func testChatStore_GetAllChatsForUser(t *testing.T, store chat.Store) {
 		return bytes.Compare(a.Value, b.Value)
 	})
 
-	chatIDs, err = store.GetChatsForUser(context.Background(), memberID)
+	actualChatIDs, err := store.GetChatsForUser(context.Background(), memberID)
 	require.NoError(t, err)
-	require.NoError(t, protoutil.SliceEqualError(expectedChatIDs, chatIDs))
-}
-
-func testChatStore_GetAllChatsForUser_Pagination(t *testing.T, store chat.Store) {
-
-	memberID := model.MustGenerateUserID()
-
-	// Create 10 chats
-	var chatIDs []*commonpb.ChatId
-	for i := 0; i < 10; i++ {
-		chatID := model.MustGenerateChatID()
-		chatIDs = append(chatIDs, chatID)
-
-		_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
-			ChatId: chatID,
-			Type:   chatpb.Metadata_TWO_WAY,
-		})
-		require.NoError(t, err)
-
-		require.NoError(t, store.AddMember(context.Background(), chatID, chat.Member{
-			UserID: memberID,
-		}))
-	}
-
-	slices.SortFunc(chatIDs, func(a, b *commonpb.ChatId) int {
+	slices.SortFunc(actualChatIDs, func(a, b *commonpb.ChatId) int {
 		return bytes.Compare(a.Value, b.Value)
 	})
-
-	reversedChatIds := slices.Clone(chatIDs)
-	slices.Reverse(reversedChatIds)
-
-	t.Run("Ascending Order", func(t *testing.T) {
-		result, err := store.GetChatsForUser(context.Background(), memberID, query.WithAscending())
-		require.NoError(t, err)
-		require.Equal(t, chatIDs, result)
-	})
-
-	t.Run("Descending Order", func(t *testing.T) {
-		result, err := store.GetChatsForUser(context.Background(), memberID, query.WithDescending())
-		require.NoError(t, err)
-		require.Equal(t, reversedChatIds, result)
-	})
-
-	t.Run("With Cursor", func(t *testing.T) {
-		cursor := &commonpb.PagingToken{Value: chatIDs[3].Value}
-		result, err := store.GetChatsForUser(context.Background(), memberID, query.WithAscending(), query.WithToken(cursor))
-		require.NoError(t, err)
-		require.Equal(t, chatIDs[4:], result)
-	})
-
-	t.Run("With Cursor (Descending)", func(t *testing.T) {
-		cursor := &commonpb.PagingToken{Value: reversedChatIds[6].Value}
-		result, err := store.GetChatsForUser(context.Background(), memberID, query.WithDescending(), query.WithToken(cursor))
-		require.NoError(t, err)
-		require.Equal(t, reversedChatIds[7:], result)
-	})
-
-	t.Run("With Limit", func(t *testing.T) {
-		result, err := store.GetChatsForUser(context.Background(), memberID, query.WithLimit(5))
-		require.NoError(t, err)
-		require.Equal(t, chatIDs[:5], result)
-	})
-
-	t.Run("With Limit (Descending)", func(t *testing.T) {
-		cursor := &commonpb.PagingToken{Value: reversedChatIds[4].Value}
-		result, err := store.GetChatsForUser(context.Background(), memberID, query.WithDescending(), query.WithToken(cursor), query.WithLimit(3))
-		require.NoError(t, err)
-		require.Equal(t, reversedChatIds[5:8], result)
-	})
+	require.NoError(t, protoutil.SliceEqualError(expectedChatIDs, actualChatIDs))
 }
 
 // TODO: Need proper pagination tests
@@ -234,9 +167,11 @@ func testChatStore_GetChatMembers(t *testing.T, store chat.Store) {
 	var expectedMembers []*chat.Member
 	for i := 0; i < 10; i++ {
 		member := &chat.Member{
-			UserID:  model.MustGenerateUserID(),
-			AddedBy: model.MustGenerateUserID(),
-			IsMuted: i%2 == 0,
+			UserID:            model.MustGenerateUserID(),
+			AddedBy:           model.MustGenerateUserID(),
+			IsMuted:           i%2 == 0,
+			HasModPermission:  i%3 == 0,
+			HasSendPermission: i%5 == 0,
 		}
 
 		expectedMembers = append(expectedMembers, member)
@@ -250,17 +185,22 @@ func testChatStore_GetChatMembers(t *testing.T, store chat.Store) {
 		return bytes.Compare(a.UserID.Value, b.UserID.Value)
 	})
 
-	members, err := store.GetMembers(context.Background(), chatID)
+	actualMembers, err := store.GetMembers(context.Background(), chatID)
 	require.NoError(t, err)
-	require.Equal(t, len(expectedMembers), len(members))
+	require.Equal(t, len(expectedMembers), len(actualMembers))
 
 	for i := range expectedMembers {
-		require.NoError(t, protoutil.ProtoEqualError(expectedMembers[i].UserID, members[i].UserID))
-		require.NoError(t, protoutil.ProtoEqualError(expectedMembers[i].AddedBy, members[i].AddedBy))
-		require.Equal(t, expectedMembers[i].IsMuted, members[i].IsMuted)
+		require.NoError(t, protoutil.ProtoEqualError(expectedMembers[i].UserID, actualMembers[i].UserID))
+		require.NoError(t, protoutil.ProtoEqualError(expectedMembers[i].AddedBy, actualMembers[i].AddedBy))
+		require.Equal(t, expectedMembers[i].IsMuted, actualMembers[i].IsMuted)
+		require.Equal(t, expectedMembers[i].HasModPermission, actualMembers[i].HasModPermission)
+		require.Equal(t, expectedMembers[i].HasSendPermission, actualMembers[i].HasSendPermission)
 
 		// Expect push to be enabled by default
-		require.True(t, members[i].IsPushEnabled)
+		require.True(t, actualMembers[i].IsPushEnabled)
+
+		// Expect none to be soft deleted
+		require.False(t, actualMembers[i].IsSoftDeleted)
 	}
 
 }
@@ -287,6 +227,12 @@ func testChatStore_IsChatMember(t *testing.T, store chat.Store) {
 	isMember, err = store.IsMember(context.Background(), chatID, memberID)
 	require.NoError(t, err)
 	require.True(t, isMember)
+
+	require.NoError(t, store.RemoveMember(context.Background(), chatID, memberID))
+
+	isMember, err = store.IsMember(context.Background(), chatID, memberID)
+	require.NoError(t, err)
+	require.False(t, isMember)
 }
 
 func testChatStore_SetChatMuteState(t *testing.T, store chat.Store) {

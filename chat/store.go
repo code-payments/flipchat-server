@@ -11,8 +11,6 @@ import (
 
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-
-	"github.com/code-payments/flipchat-server/query"
 )
 
 var (
@@ -77,7 +75,7 @@ type Store interface {
 
 	GetChatMetadata(ctx context.Context, chatID *commonpb.ChatId) (*chatpb.Metadata, error)
 	GetChatMetadataBatched(ctx context.Context, chatIDs ...*commonpb.ChatId) ([]*chatpb.Metadata, error) // todo: add paging?
-	GetChatsForUser(ctx context.Context, userID *commonpb.UserId, opts ...query.Option) ([]*commonpb.ChatId, error)
+	GetChatsForUser(ctx context.Context, userID *commonpb.UserId) ([]*commonpb.ChatId, error)
 	GetMembers(ctx context.Context, chatID *commonpb.ChatId) ([]*Member, error)
 	GetMember(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (*Member, error)
 	IsMember(_ context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, error)

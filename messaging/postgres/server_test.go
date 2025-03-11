@@ -28,7 +28,7 @@ func TestMessaging_PostgresServer(t *testing.T) {
 	defer disconnect()
 
 	accounts := account.NewInPostgres(pool)
-	chats := chat.NewInPostgres(client)
+	chats := chat.NewInPostgres(pool)
 	intents := intent.NewInPostgres(client)
 	messages := NewInPostgresMessages(pool)
 	pointers := NewInPostgresPointers(pool)
