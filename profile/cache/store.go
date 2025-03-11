@@ -56,18 +56,27 @@ func (c *Cache) GetProfile(ctx context.Context, id *commonpb.UserId) (*profilepb
 }
 
 func (c *Cache) SetDisplayName(ctx context.Context, id *commonpb.UserId, displayName string) error {
-	c.cache.Remove(toCacheKey(id))
-	return c.db.SetDisplayName(ctx, id, displayName)
+	err := c.db.SetDisplayName(ctx, id, displayName)
+	if err == nil {
+		c.cache.Remove(toCacheKey(id))
+	}
+	return err
 }
 
 func (c *Cache) LinkXAccount(ctx context.Context, userID *commonpb.UserId, xProfile *profilepb.XProfile, accessToken string) error {
-	c.cache.Remove(toCacheKey(userID))
-	return c.db.LinkXAccount(ctx, userID, xProfile, accessToken)
+	err := c.db.LinkXAccount(ctx, userID, xProfile, accessToken)
+	if err == nil {
+		c.cache.Remove(toCacheKey(userID))
+	}
+	return err
 }
 
 func (c *Cache) UnlinkXAccount(ctx context.Context, userID *commonpb.UserId, xUserID string) error {
-	c.cache.Remove(toCacheKey(userID))
-	return c.db.UnlinkXAccount(ctx, userID, xUserID)
+	err := c.db.UnlinkXAccount(ctx, userID, xUserID)
+	if err == nil {
+		c.cache.Remove(toCacheKey(userID))
+	}
+	return err
 }
 
 func (c *Cache) GetXProfile(ctx context.Context, userID *commonpb.UserId) (*profilepb.XProfile, error) {
