@@ -160,6 +160,7 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 				md, err := chatStore.CreateChat(ctx, &chatpb.Metadata{
 					ChatId: chatID,
 					Type:   chatpb.Metadata_GROUP,
+					Owner:  sender,
 				})
 				if err != nil {
 					return nil, err
@@ -198,6 +199,7 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 				md, err := chatStore.CreateChat(ctx, &chatpb.Metadata{
 					ChatId: chatID,
 					Type:   chatpb.Metadata_GROUP,
+					Owner:  sender,
 				})
 				if err != nil {
 					return nil, err
@@ -265,6 +267,45 @@ func testEventHandler_HandleMessage(t *testing.T, _ push.TokenStore, profileStor
 						Type: &messagingpb.Content_Text{
 							Text: &messagingpb.TextContent{
 								Text: "Hello Muted",
+							},
+						},
+					},
+				},
+			},
+			expectedPushes: nil,
+		},
+		{
+			name: "push_disabled_sender_not_group_host",
+			setupChat: func() (*chatpb.Metadata, error) {
+				chatID := model.MustGenerateChatID()
+				md, err := chatStore.CreateChat(ctx, &chatpb.Metadata{
+					ChatId: chatID,
+					Type:   chatpb.Metadata_GROUP,
+					Owner:  recipient,
+				})
+				if err != nil {
+					return nil, err
+				}
+				for _, user := range []*commonpb.UserId{sender, recipient} {
+					err = chatStore.AddMember(ctx, chatID, chat.Member{UserID: user})
+					if err != nil {
+						return nil, err
+					}
+
+					err = chatStore.SetPushState(ctx, chatID, user, false)
+					if err != nil {
+						return nil, err
+					}
+				}
+				return md, nil
+			},
+			message: &messagingpb.Message{
+				SenderId: sender,
+				Content: []*messagingpb.Content{
+					{
+						Type: &messagingpb.Content_Text{
+							Text: &messagingpb.TextContent{
+								Text: "Hello from non-host",
 							},
 						},
 					},

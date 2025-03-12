@@ -64,11 +64,6 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 		h.log.Debug("Dropping push, no content")
 		return nil
 	}
-	// todo: filter by speakers?
-	if msg.WasSenderOffStage {
-		h.log.Debug("Dropping push, sender was off stage")
-		return nil
-	}
 
 	sender, err := h.profiles.GetProfile(ctx, msg.SenderId)
 	if errors.Is(err, profile.ErrNotFound) {
@@ -80,6 +75,33 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	md, err := h.chats.GetChatMetadata(ctx, chatID)
 	if err != nil {
 		return fmt.Errorf("failed to get chat: %w", err)
+	}
+
+	var title string
+	switch md.Type {
+	case chatpb.Metadata_GROUP:
+		if md.Owner == nil || !bytes.Equal(md.Owner.Value, msg.SenderId.Value) {
+			h.log.Debug("Dropping push, sender is not owner")
+			return nil
+		}
+
+		title = fmt.Sprintf("#%d", md.RoomNumber)
+		if len(md.DisplayName) > 0 {
+			title = fmt.Sprintf("#%d: %s", md.RoomNumber, md.DisplayName)
+		}
+	case chatpb.Metadata_TWO_WAY:
+		title = sender.DisplayName
+	}
+
+	var pushPreview string
+	switch typed := msg.Content[0].Type.(type) {
+	case *messagingpb.Content_Text:
+		pushPreview = typed.Text.Text
+	case *messagingpb.Content_Reply:
+		// todo: this needs tests
+		pushPreview = typed.Reply.ReplyText
+	default:
+		return nil
 	}
 
 	members, err := h.chats.GetMembers(ctx, chatID)
@@ -101,28 +123,6 @@ func (h *EventHandler) handleMessage(ctx context.Context, chatID *commonpb.ChatI
 	if len(pushMembers) == 0 {
 		h.log.Debug("Dropping push, no pushable members")
 		return nil
-	}
-
-	var pushPreview string
-	switch typed := msg.Content[0].Type.(type) {
-	case *messagingpb.Content_Text:
-		pushPreview = typed.Text.Text
-	case *messagingpb.Content_Reply:
-		// todo: this needs tests
-		pushPreview = typed.Reply.ReplyText
-	default:
-		return nil
-	}
-
-	var title string
-	switch md.Type {
-	case chatpb.Metadata_GROUP:
-		title = fmt.Sprintf("#%d", md.RoomNumber)
-		if len(md.DisplayName) > 0 {
-			title = fmt.Sprintf("#%d: %s", md.RoomNumber, md.DisplayName)
-		}
-	case chatpb.Metadata_TWO_WAY:
-		title = sender.DisplayName
 	}
 
 	data := make(map[string]string)
