@@ -6,7 +6,6 @@ import (
 	"context"
 	"testing"
 
-	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 	"github.com/stretchr/testify/require"
 
 	account "github.com/code-payments/flipchat-server/account/postgres"
@@ -22,9 +21,6 @@ func TestChat_PostgresServer(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 
-	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
-	defer disconnect()
-
 	pub, priv, err := iap_memory.GenerateKeyPair()
 	if err != nil {
 		t.Fatalf("error generating key pair: %v", err)
@@ -36,7 +32,7 @@ func TestChat_PostgresServer(t *testing.T) {
 	}
 
 	accounts := account.NewInPostgres(pool)
-	iaps := NewInPostgres(client)
+	iaps := NewInPostgres(pool)
 
 	teardown := func() {
 		iaps.(*store).reset()

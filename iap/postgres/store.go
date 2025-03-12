@@ -4,120 +4,47 @@ import (
 	"context"
 	"errors"
 
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/code-payments/code-server/pkg/metrics"
-
-	pg "github.com/code-payments/flipchat-server/database/postgres"
-	"github.com/code-payments/flipchat-server/database/prisma/db"
 	"github.com/code-payments/flipchat-server/iap"
 )
 
-const (
-	metricsStructName = "iap.postgres.store"
-)
-
 type store struct {
-	client *db.PrismaClient
+	pool *pgxpool.Pool
 }
 
-func (s *store) reset() {
-	ctx := context.Background()
-
-	purchases := s.client.Iap.FindMany().Delete().Tx()
-	err := s.client.Prisma.Transaction(purchases).Exec(ctx)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func NewInPostgres(client *db.PrismaClient) iap.Store {
+func NewInPostgres(pool *pgxpool.Pool) iap.Store {
 	return &store{
-		client,
+		pool: pool,
 	}
 }
 
 func (s *store) CreatePurchase(ctx context.Context, purchase *iap.Purchase) error {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "CreatePurchase")
-	defer tracer.End()
+	if purchase.Product != iap.ProductCreateAccount {
+		return errors.New("product must be create account")
+	}
+	if purchase.State != iap.StateFulfilled {
+		return errors.New("state must be fulfilled")
+	}
 
-	err := func() error {
-		if purchase.Product != iap.ProductCreateAccount {
-			return errors.New("product must be create account")
-		}
-		if purchase.State != iap.StateFulfilled {
-			return errors.New("state must be fulfilled")
-		}
-
-		encodedReceiptID := pg.Encode(purchase.ReceiptID)
-		encodedUserID := pg.Encode(purchase.User.Value)
-
-		_, err := s.client.Iap.FindUnique(
-			db.Iap.ReceiptID.Equals(encodedReceiptID),
-		).Exec(ctx)
-		if err == nil {
-			return iap.ErrExists
-		} else if !errors.Is(err, db.ErrNotFound) {
-			return err
-		}
-
-		_, err = s.client.Iap.CreateOne(
-			db.Iap.ReceiptID.Set(encodedReceiptID),
-			db.Iap.UserID.Set(encodedUserID),
-			db.Iap.Platform.Set(int(purchase.Platform)),
-			db.Iap.Product.Set(int(purchase.Product)),
-			db.Iap.State.Set(int(purchase.State)),
-		).Exec(ctx)
+	model, err := toModel(purchase)
+	if err != nil {
 		return err
-	}()
-
-	tracer.OnError(err)
-
-	return err
+	}
+	return model.dbPut(ctx, s.pool)
 }
 
 func (s *store) GetPurchase(ctx context.Context, receiptID []byte) (*iap.Purchase, error) {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetPurchase")
-	defer tracer.End()
-
-	res, err := func() (*iap.Purchase, error) {
-		encodedReceiptID := pg.Encode(receiptID)
-
-		res, err := s.client.Iap.FindUnique(
-			db.Iap.ReceiptID.Equals(encodedReceiptID),
-		).Exec(ctx)
-
-		if errors.Is(err, db.ErrNotFound) {
-			return nil, iap.ErrNotFound
-		} else if err != nil {
-			return nil, err
-		}
-
-		return fromModel(res)
-	}()
-
-	tracer.OnError(err)
-
-	return res, err
+	model, err := dbGetPurchase(ctx, s.pool, receiptID)
+	if err != nil {
+		return nil, err
+	}
+	return fromModel(model)
 }
 
-func fromModel(m *db.IapModel) (*iap.Purchase, error) {
-	decodedReceiptID, err := pg.Decode(m.ReceiptID)
+func (s *store) reset() {
+	_, err := s.pool.Exec(context.Background(), "DELETE FROM "+iapsTableName)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-
-	decodedUserID, err := pg.Decode(m.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &iap.Purchase{
-		ReceiptID: decodedReceiptID,
-		Platform:  commonpb.Platform(m.Platform),
-		User:      &commonpb.UserId{Value: decodedUserID},
-		Product:   iap.Product(m.Product),
-		State:     iap.State(m.State),
-		CreatedAt: m.CreatedAt,
-	}, nil
 }
