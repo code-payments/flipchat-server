@@ -9,10 +9,6 @@ import (
 	"github.com/code-payments/flipchat-server/intent"
 )
 
-const (
-	metricsStructName = "intent.postgres.store"
-)
-
 type store struct {
 	pool *pgxpool.Pool
 }

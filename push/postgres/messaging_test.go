@@ -6,7 +6,6 @@ import (
 	"context"
 	"testing"
 
-	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 	"github.com/stretchr/testify/require"
 
 	chat "github.com/code-payments/flipchat-server/chat/postgres"
@@ -23,10 +22,7 @@ func TestPush_PostgresMessaging(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 
-	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
-	defer disconnect()
-
-	pushes := NewInPostgres(client)
+	pushes := NewInPostgres(pool)
 	profiles := profile.NewInPostgres(pool)
 	chats := chat.NewInPostgres(pool)
 

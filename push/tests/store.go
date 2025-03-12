@@ -86,8 +86,10 @@ func testDeleteToken(t *testing.T, store push.TokenStore) {
 	userID := &commonpb.UserId{Value: []byte("user1")}
 	appInstallID := &commonpb.AppInstallId{Value: "device1"}
 
-	// Add token
+	// Add tokens
 	err := store.AddToken(ctx, userID, appInstallID, pushpb.TokenType_FCM_APNS, "token1")
+	require.NoError(t, err)
+	err = store.AddToken(ctx, userID, appInstallID, pushpb.TokenType_FCM_APNS, "token2")
 	require.NoError(t, err)
 
 	// Delete token
@@ -97,31 +99,41 @@ func testDeleteToken(t *testing.T, store push.TokenStore) {
 	// Verify token is deleted
 	tokens, err := store.GetTokens(ctx, userID)
 	require.NoError(t, err)
-	assert.Empty(t, tokens)
+	assert.Len(t, tokens, 1)
+	assert.Equal(t, "token2", tokens[0].Token)
 }
 
 func testClearToken(t *testing.T, store push.TokenStore) {
 	ctx := context.Background()
 
-	userID := &commonpb.UserId{Value: []byte("user1")}
+	userID1 := &commonpb.UserId{Value: []byte("user1")}
+	userID2 := &commonpb.UserId{Value: []byte("user2")}
 	appInstallID1 := &commonpb.AppInstallId{Value: "device1"}
 	appInstallID2 := &commonpb.AppInstallId{Value: "device2"}
+	appInstallID3 := &commonpb.AppInstallId{Value: "device3"}
 
-	// Add tokens for two devices
-	err := store.AddToken(ctx, userID, appInstallID1, pushpb.TokenType_FCM_APNS, "token1")
+	// Add tokens for three devices across two users
+	err := store.AddToken(ctx, userID1, appInstallID1, pushpb.TokenType_FCM_APNS, "token1")
 	require.NoError(t, err)
 
-	err = store.AddToken(ctx, userID, appInstallID2, pushpb.TokenType_FCM_APNS, "token2")
+	err = store.AddToken(ctx, userID1, appInstallID2, pushpb.TokenType_FCM_APNS, "token2")
+	require.NoError(t, err)
+
+	err = store.AddToken(ctx, userID2, appInstallID3, pushpb.TokenType_FCM_APNS, "token3")
 	require.NoError(t, err)
 
 	// Clear all tokens
-	err = store.ClearTokens(ctx, userID)
+	err = store.ClearTokens(ctx, userID1)
 	require.NoError(t, err)
 
-	// Verify all tokens are cleared
-	tokens, err := store.GetTokens(ctx, userID)
+	// Verify all tokens are cleared for user 1 only
+	tokens, err := store.GetTokens(ctx, userID1)
 	require.NoError(t, err)
 	assert.Empty(t, tokens)
+
+	tokens, err = store.GetTokens(ctx, userID2)
+	require.NoError(t, err)
+	assert.Len(t, tokens, 1)
 }
 
 func testMultipleUsers(t *testing.T, store push.TokenStore) {

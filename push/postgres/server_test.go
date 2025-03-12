@@ -3,20 +3,23 @@
 package postgres
 
 import (
+	"context"
 	"testing"
 
-	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
+	"github.com/stretchr/testify/require"
 
 	"github.com/code-payments/flipchat-server/push/tests"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestPush_PostgresServer(t *testing.T) {
-	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
-	defer disconnect()
+	pool, err := pgxpool.New(context.Background(), testEnv.DatabaseUrl)
+	require.NoError(t, err)
+	defer pool.Close()
 
-	testStore := NewInPostgres(client)
+	testStore := NewInPostgres(pool)
 	teardown := func() {
 		testStore.(*store).reset()
 	}

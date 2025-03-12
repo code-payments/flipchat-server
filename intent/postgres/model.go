@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	intentsTableName = `flipchat_intents`
+	intentsTableName = "flipchat_intents"
 	allIntentFields  = `"id", "isFulfilled", "createdAt", "updatedAt"`
 )
 
