@@ -165,6 +165,7 @@ model Message {
 
   // Constraints
 
+  @@index([chatId, id(sort: Asc)])
   @@map("flipchat_messages")
 }
 
