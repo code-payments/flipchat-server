@@ -2,14 +2,10 @@ package postgres
 
 import (
 	"context"
-	"errors"
 
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	pg "github.com/code-payments/flipchat-server/database/postgres"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/code-payments/code-server/pkg/metrics"
-
-	"github.com/code-payments/flipchat-server/database/prisma/db"
 	"github.com/code-payments/flipchat-server/intent"
 )
 
@@ -18,79 +14,32 @@ const (
 )
 
 type store struct {
-	client *db.PrismaClient
+	pool *pgxpool.Pool
 }
 
-func NewInPostgres(client *db.PrismaClient) intent.Store {
+func NewInPostgres(pool *pgxpool.Pool) intent.Store {
 	return &store{
-		client,
-	}
-}
-
-func (s *store) reset() {
-	ctx := context.Background()
-
-	intents := s.client.Intent.FindMany().Delete().Tx()
-
-	err := s.client.Prisma.Transaction(intents).Exec(ctx)
-	if err != nil {
-		panic(err)
+		pool: pool,
 	}
 }
 
 func (s *store) IsFulfilled(ctx context.Context, id *commonpb.IntentId) (bool, error) {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "GetChatID")
-	defer tracer.End()
-
-	res, err := func() (bool, error) {
-		encodedIntentID := pg.Encode(id.Value, pg.Base58)
-
-		intent, err := s.client.Intent.FindFirst(
-			db.Intent.ID.Equals(encodedIntentID),
-		).Exec(ctx)
-
-		if errors.Is(err, db.ErrNotFound) || intent == nil {
-			return false, nil
-		}
-
-		return intent.IsFulfilled, nil
-	}()
-
-	tracer.OnError(err)
-
-	return res, err
+	return dbIsFulfilled(ctx, s.pool, id)
 }
 
 func (s *store) MarkFulfilled(ctx context.Context, id *commonpb.IntentId) error {
-	tracer := metrics.TraceMethodCall(ctx, metricsStructName, "MarkFulfilled")
-	defer tracer.End()
-
-	err := func() error {
-		encodedIntentID := pg.Encode(id.Value, pg.Base58)
-
-		ok, err := s.IsFulfilled(ctx, id)
-		if err != nil {
-			return err
-		}
-
-		if ok {
-			return intent.ErrAlreadyFulfilled
-		}
-
-		// Upsert the intent with the new fulfilled status
-		_, err = s.client.Intent.UpsertOne(
-			db.Intent.ID.Equals(encodedIntentID),
-		).Create(
-			db.Intent.ID.Set(encodedIntentID),
-			db.Intent.IsFulfilled.Set(true),
-		).Update(
-			db.Intent.IsFulfilled.Set(true),
-		).Exec(ctx)
-
+	isFulfilled, err := dbIsFulfilled(ctx, s.pool, id)
+	if err != nil {
 		return err
-	}()
+	} else if isFulfilled {
+		return intent.ErrAlreadyFulfilled
+	}
+	return dbMarkFulfilled(ctx, s.pool, id)
+}
 
-	tracer.OnError(err)
-
-	return err
+func (s *store) reset() {
+	_, err := s.pool.Exec(context.Background(), "DELETE FROM "+intentsTableName)
+	if err != nil {
+		panic(err)
+	}
 }

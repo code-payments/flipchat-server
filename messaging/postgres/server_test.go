@@ -10,7 +10,6 @@ import (
 
 	account "github.com/code-payments/flipchat-server/account/postgres"
 	chat "github.com/code-payments/flipchat-server/chat/postgres"
-	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 	intent "github.com/code-payments/flipchat-server/intent/postgres"
 
 	"github.com/code-payments/flipchat-server/messaging/tests"
@@ -24,12 +23,9 @@ func TestMessaging_PostgresServer(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 
-	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
-	defer disconnect()
-
 	accounts := account.NewInPostgres(pool)
 	chats := chat.NewInPostgres(pool)
-	intents := intent.NewInPostgres(client)
+	intents := intent.NewInPostgres(pool)
 	messages := NewInPostgresMessages(pool)
 	pointers := NewInPostgresPointers(pool)
 

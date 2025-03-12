@@ -6,12 +6,11 @@ import (
 	"context"
 	"testing"
 
-	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 	"github.com/stretchr/testify/require"
 
 	account "github.com/code-payments/flipchat-server/account/postgres"
 	intent "github.com/code-payments/flipchat-server/intent/postgres"
-	messaging "github.com/code-payments/flipchat-server/messaging/memory"
+	messaging "github.com/code-payments/flipchat-server/messaging/postgres"
 	profile "github.com/code-payments/flipchat-server/profile/postgres"
 
 	"github.com/code-payments/flipchat-server/chat/tests"
@@ -25,19 +24,17 @@ func TestChat_PostgresServer(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 
-	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
-	defer disconnect()
-
 	chats := NewInPostgres(pool)
 	accounts := account.NewInPostgres(pool)
 	profiles := profile.NewInPostgres(pool)
-	intents := intent.NewInPostgres(client)
-	messages := messaging.NewInMemory() // TODO: Implement Postgres messaging
+	intents := intent.NewInPostgres(pool)
+	messages := messaging.NewInPostgresMessages(pool)
+	pointers := messaging.NewInPostgresPointers(pool)
 
 	teardown := func() {
 		chats.(*store).reset()
 	}
 
 	tests.RunServerTests(
-		t, accounts, profiles, chats, messages, messages, intents, teardown)
+		t, accounts, profiles, chats, messages, pointers, intents, teardown)
 }
