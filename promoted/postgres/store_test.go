@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	chat "github.com/code-payments/flipchat-server/chat/postgres"
-	prismatest "github.com/code-payments/flipchat-server/database/prisma/test"
 
 	"github.com/code-payments/flipchat-server/promoted/tests"
 
@@ -22,11 +21,8 @@ func TestPromoted_PostgresStore(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 
-	client, disconnect := prismatest.NewTestClient(testEnv.DatabaseUrl, t)
-	defer disconnect()
-
 	chatStore := chat.NewInPostgres(pool)
-	testStore := NewInPostgres(client)
+	testStore := NewInPostgres(pool)
 	teardown := func() {
 		testStore.(*store).reset()
 	}

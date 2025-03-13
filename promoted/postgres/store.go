@@ -3,70 +3,43 @@ package postgres
 import (
 	"context"
 
-	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	pg "github.com/code-payments/flipchat-server/database/postgres"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/code-payments/flipchat-server/database/prisma/db"
+	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+
 	"github.com/code-payments/flipchat-server/promoted"
 )
 
 type store struct {
-	client *db.PrismaClient
-}
-
-// reset clears the PromotedChat table (used for testing).
-func (s *store) reset() {
-	ctx := context.Background()
-
-	promotedChats := s.client.PromotedChat.FindMany().Delete().Tx()
-	err := s.client.Prisma.Transaction(promotedChats).Exec(ctx)
-	if err != nil {
-		panic(err)
-	}
+	pool *pgxpool.Pool
 }
 
 // NewInPostgres creates a new PostgreSQL store for Promoted Chats.
-func NewInPostgres(client *db.PrismaClient) promoted.Store {
+func NewInPostgres(pool *pgxpool.Pool) promoted.Store {
 	return &store{
-		client: client,
+		pool: pool,
 	}
 }
 
 // GetPromotedChats retrieves promoted chats by topic from PostgreSQL.
 func (s *store) GetPromotedChats(ctx context.Context, topic string) ([]*promoted.PromotedChat, error) {
-
-	prChats, err := s.client.PromotedChat.FindMany(
-		db.PromotedChat.Topic.Equals(topic),
-	).OrderBy(
-		db.PromotedChat.Score.Order(db.SortOrderDesc),
-	).Exec(ctx)
+	models, err := dbGetPromotedChats(ctx, s.pool, topic)
 	if err != nil {
 		return nil, err
 	}
 
-	var chats []*promoted.PromotedChat
-	for _, prChat := range prChats {
-
-		decodedChatID, err := pg.Decode(prChat.ChatID)
+	res := make([]*promoted.PromotedChat, len(models))
+	for i, model := range models {
+		res[i], err = fromModel(model)
 		if err != nil {
 			return nil, err
 		}
-
-		chats = append(chats, &promoted.PromotedChat{
-			ChatID:    &commonpb.ChatId{Value: decodedChatID},
-			Score:     prChat.Score,
-			Topic:     prChat.Topic,
-			CreatedAt: prChat.CreatedAt,
-			UpdatedAt: prChat.UpdatedAt,
-		})
 	}
-
-	return chats, nil
+	return res, nil
 }
 
 // PromoteChat promotes a chat (or updates the score if it already exists).
 func (s *store) PromoteChat(ctx context.Context, chatID *commonpb.ChatId, topic string, score int) error {
-
 	if chatID == nil {
 		return promoted.ErrInvalidChatID
 	}
@@ -79,22 +52,16 @@ func (s *store) PromoteChat(ctx context.Context, chatID *commonpb.ChatId, topic 
 		return promoted.ErrInvalidTopic
 	}
 
-	encodedChatID := pg.Encode(chatID.Value)
+	model, err := toModel(&promoted.PromotedChat{
+		ChatID: chatID,
+		Topic:  topic,
+		Score:  score,
+	})
+	if err != nil {
+		return err
+	}
 
-	_, err := s.client.PromotedChat.UpsertOne(
-		db.PromotedChat.ChatIDTopic(
-			db.PromotedChat.ChatID.Equals(encodedChatID),
-			db.PromotedChat.Topic.Equals(topic),
-		),
-	).Create(
-		db.PromotedChat.Chat.Link(db.Chat.ID.Equals(encodedChatID)),
-		db.PromotedChat.Topic.Set(topic),
-		db.PromotedChat.Score.Set(score),
-	).Update(
-		db.PromotedChat.Score.Set(score),
-	).Exec(ctx)
-
-	return err
+	return model.dbUpsert(ctx, s.pool)
 }
 
 func (s *store) DemoteChat(ctx context.Context, chatID *commonpb.ChatId, topic string) error {
@@ -106,16 +73,12 @@ func (s *store) DemoteChat(ctx context.Context, chatID *commonpb.ChatId, topic s
 		return promoted.ErrInvalidTopic
 	}
 
-	encodedChatID := pg.Encode(chatID.Value)
+	return dbDemoteChat(ctx, s.pool, chatID, topic)
+}
 
-	_, err := s.client.PromotedChat.FindMany(
-		db.PromotedChat.ChatID.Equals(encodedChatID),
-		db.PromotedChat.Topic.Equals(topic),
-	).Delete().Exec(ctx)
-
+func (s *store) reset() {
+	_, err := s.pool.Exec(context.Background(), "DELETE FROM "+promotedChatsTableName)
 	if err != nil {
-		return promoted.ErrNotFound
+		panic(err)
 	}
-
-	return nil
 }
