@@ -33,7 +33,7 @@ func dbBind(ctx context.Context, pool *pgxpool.Pool, userID *commonpb.UserId, pu
 		return err
 	}
 
-	putPubkeyQuery := `INSERT INTO ` + publicKeysTableName + ` (` + allPublicKeyFields + `) VALUES ($1, $2, NOW(), NOW()) ON CONFLICT ("key") DO UPDATE SET "userId" = $2 WHERE ` + publicKeysTableName + `."key" = $1`
+	putPubkeyQuery := `INSERT INTO ` + publicKeysTableName + ` (` + allPublicKeyFields + `) VALUES ($1, $2, NOW(), NOW())`
 	_, err = tx.Exec(ctx, putPubkeyQuery, pg.Encode(pubKey.Value, pg.Base58), pg.Encode(userID.Value))
 	if err != nil {
 		return err

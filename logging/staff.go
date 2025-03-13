@@ -2,7 +2,6 @@ package logging
 
 import (
 	"context"
-	"sync"
 
 	"go.uber.org/zap"
 
@@ -12,21 +11,12 @@ import (
 	"github.com/code-payments/flipchat-server/model"
 )
 
-var (
-	cachedStaffFlagMu sync.RWMutex
-	cachedStaffFlag   map[string]bool
-)
-
-func init() {
-	cachedStaffFlag = make(map[string]bool)
-}
-
 type StaffLogger struct {
 	log *zap.Logger
 }
 
 func NewStaffLogger(ctx context.Context, log *zap.Logger, userID *commonpb.UserId, accounts account.Store) *StaffLogger {
-	isStaff := isStaff(ctx, userID, accounts)
+	isStaff, _ := accounts.IsStaff(ctx, userID)
 	if !isStaff {
 		return nil
 	}
@@ -53,27 +43,4 @@ func (l *StaffLogger) With(fields ...zap.Field) *StaffLogger {
 	}
 	l.log = l.log.With(fields...)
 	return l
-}
-
-func isStaff(ctx context.Context, userID *commonpb.UserId, accounts account.Store) bool {
-	cacheKey := model.UserIDString(userID)
-
-	cachedStaffFlagMu.RLock()
-	isStaff, ok := cachedStaffFlag[cacheKey]
-	if ok {
-		cachedStaffFlagMu.RUnlock()
-		return isStaff
-	}
-	cachedStaffFlagMu.RUnlock()
-
-	isStaff, err := accounts.IsStaff(ctx, userID)
-	if err != nil {
-		return false
-	}
-
-	cachedStaffFlagMu.Lock()
-	cachedStaffFlag[cacheKey] = isStaff
-	cachedStaffFlagMu.Unlock()
-
-	return isStaff
 }
