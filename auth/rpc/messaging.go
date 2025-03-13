@@ -32,15 +32,15 @@ func NewMessagingRpcAuthorizer(chats chat.Store, intents intent.Store, messages 
 }
 
 func (a *MessagingAuthorizer) CanStreamMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, string, error) {
-	return a.chatMembershipCheck(ctx, chatID, userID)
+	return true, "", nil
 }
 
 func (a *MessagingAuthorizer) CanGetMessage(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, string, error) {
-	return a.chatMembershipCheck(ctx, chatID, userID)
+	return true, "", nil
 }
 
 func (a *MessagingAuthorizer) CanGetMessages(ctx context.Context, chatID *commonpb.ChatId, userID *commonpb.UserId) (bool, string, error) {
-	return a.chatMembershipCheck(ctx, chatID, userID)
+	return true, "", nil
 }
 
 // todo: This needs a refactor/cleanup because it's blowing up in size/complexity
