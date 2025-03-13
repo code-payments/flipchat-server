@@ -2,7 +2,6 @@ package query
 
 import (
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
-	"github.com/code-payments/flipchat-server/database/prisma/db"
 )
 
 type Option func(*Options)
@@ -76,13 +75,4 @@ func FromProtoOptions(protoOptions *commonpb.QueryOptions) []Option {
 	}
 
 	return options
-}
-
-func ToPrismaSortOrder(protoSortOrder commonpb.QueryOptions_Order) db.SortOrder {
-	switch protoSortOrder {
-	case commonpb.QueryOptions_DESC:
-		return db.SortOrderDesc
-	default:
-		return db.SortOrderAsc
-	}
 }

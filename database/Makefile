@@ -32,8 +32,8 @@ studio:
 #   go run github.com/steebchen/prisma-client-go studio
 
 # Generate the Prisma Go client
-generate:
-	go run github.com/steebchen/prisma-client-go generate
+# generate:
+#	go run github.com/steebchen/prisma-client-go generate
 
 # Sync database with schema (development)
 # push:
