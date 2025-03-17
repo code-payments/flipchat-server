@@ -9,6 +9,7 @@ import (
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 
+	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/messaging"
@@ -16,14 +17,16 @@ import (
 
 // todo: this needs more extensive testing
 type MessagingAuthorizer struct {
+	accounts account.Store
 	chats    chat.Store
 	intents  intent.Store
 	messages messaging.MessageStore
 	codeData codedata.Provider
 }
 
-func NewMessagingRpcAuthorizer(chats chat.Store, intents intent.Store, messages messaging.MessageStore, codeData codedata.Provider) *MessagingAuthorizer {
+func NewMessagingRpcAuthorizer(accounts account.Store, chats chat.Store, intents intent.Store, messages messaging.MessageStore, codeData codedata.Provider) *MessagingAuthorizer {
 	return &MessagingAuthorizer{
+		accounts: accounts,
 		chats:    chats,
 		intents:  intents,
 		messages: messages,
@@ -50,6 +53,24 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 		return false, "chat not found", nil
 	} else if err != nil {
 		return false, "", err
+	}
+
+	isRegistered, err := a.accounts.IsRegistered(ctx, userID)
+	if err != nil {
+		return false, "", err
+	} else if !isRegistered {
+		return false, "user is not registered", nil
+	}
+
+	member, err := a.chats.GetMember(ctx, chatID, userID)
+	if err == chat.ErrMemberNotFound {
+		return false, "not a chat member", nil
+	} else if err != nil {
+		return false, "", err
+	}
+
+	if member.IsMuted {
+		return false, "chat member is muted", nil
 	}
 
 	isOwner := chatMd.Owner != nil && bytes.Equal(chatMd.Owner.Value, userID.Value)
@@ -195,17 +216,6 @@ func (a *MessagingAuthorizer) CanSendMessage(ctx context.Context, chatID *common
 
 	if !canSendWhenClosed && !isOwner && chatMd.OpenStatus != nil && !chatMd.OpenStatus.IsCurrentlyOpen {
 		return false, "chat is closed", nil
-	}
-
-	member, err := a.chats.GetMember(ctx, chatID, userID)
-	if err == chat.ErrMemberNotFound {
-		return false, "not a chat member", nil
-	} else if err != nil {
-		return false, "", err
-	}
-
-	if member.IsMuted {
-		return false, "chat member is muted", nil
 	}
 
 	if !isOwner && !member.HasSendPermission && requiresListenerPayment {

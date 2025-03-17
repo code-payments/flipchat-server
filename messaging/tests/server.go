@@ -78,7 +78,7 @@ func testServerHappy(
 	serv := messaging.NewServer(
 		log,
 		authz,
-		auth_rpc.NewMessagingRpcAuthorizer(chatsDB, intents, messageDB, codeData),
+		auth_rpc.NewMessagingRpcAuthorizer(accountStore, chatsDB, intents, messageDB, codeData),
 		accountStore,
 		intents,
 		messageDB,
@@ -103,6 +103,8 @@ func testServerHappy(
 	otherKeyPair := model.MustGenerateKeyPair()
 	_, _ = accountStore.Bind(ctx, ownerUserID, ownerKeyPair.Proto())
 	_, _ = accountStore.Bind(ctx, otherUserID, otherKeyPair.Proto())
+	require.NoError(t, accountStore.SetRegistrationFlag(ctx, ownerUserID, true))
+	require.NoError(t, accountStore.SetRegistrationFlag(ctx, otherUserID, true))
 	_, err := chatsDB.CreateChat(ctx, &chatpb.Metadata{
 		ChatId: chatID,
 		Type:   chatpb.Metadata_GROUP,
@@ -658,6 +660,7 @@ func testServerHappy(
 			listenerUserID := model.MustGenerateUserID()
 			listenerKeyPair := model.MustGenerateKeyPair()
 			_, _ = accountStore.Bind(ctx, listenerUserID, listenerKeyPair.Proto())
+			require.NoError(t, accountStore.SetRegistrationFlag(ctx, listenerUserID, true))
 			require.NoError(t, chatsDB.AddMember(ctx, chatID, chat.Member{
 				UserID:            listenerUserID,
 				HasSendPermission: false,
@@ -902,7 +905,7 @@ func testServerDuplicateStreams(
 	serv := messaging.NewServer(
 		log,
 		authz,
-		auth_rpc.NewMessagingRpcAuthorizer(chatsDB, intents, messageDB, codeData),
+		auth_rpc.NewMessagingRpcAuthorizer(accountStore, chatsDB, intents, messageDB, codeData),
 		accountStore,
 		intents,
 		messageDB,
