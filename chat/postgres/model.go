@@ -19,7 +19,7 @@ import (
 
 const (
 	chatsTableName = "flipchat_chats"
-	allChatFields  = `"id", "displayName", "roomNumber", "coverCharge", "type", "isOpen", "createdBy", "createdAt", "updatedAt", "lastActivityAt"`
+	allChatFields  = `"id", "displayName", "roomNumber", "coverCharge", "type", "isOpen", "description", "createdBy", "createdAt", "updatedAt", "lastActivityAt"`
 
 	membersTableName = "flipchat_members"
 	allMemberFields  = `"chatId", "userId", "addedById", "isMuted", "isPushEnabled", "hasModPermission", "hasSendPermission", "isSoftDeleted", "createdAt", "updatedAt"`
@@ -32,6 +32,7 @@ type chatModel struct {
 	CoverCharge    uint64    `db:"coverCharge"`
 	Type           int       `db:"type"`
 	IsOpen         bool      `db:"isOpen"`
+	Descripton     *string   `db:"description"`
 	CreatedBy      string    `db:"createdBy"`
 	CreatedAt      time.Time `db:"createdAt"`
 	UpdatedAt      time.Time `db:"updatedAt"`
@@ -68,6 +69,12 @@ func toChatModel(obj *chatpb.Metadata) (*chatModel, error) {
 		isOpen = obj.OpenStatus.IsCurrentlyOpen
 	}
 
+	var description *string
+	if len(obj.Description) > 0 {
+		value := obj.Description
+		description = &value
+	}
+
 	var createdBy string
 	if obj.Owner != nil {
 		createdBy = pg.Encode(obj.Owner.Value)
@@ -80,6 +87,7 @@ func toChatModel(obj *chatpb.Metadata) (*chatModel, error) {
 		CoverCharge:    coverCharge,
 		Type:           int(obj.Type),
 		IsOpen:         isOpen,
+		Descripton:     description,
 		CreatedBy:      createdBy,
 		LastActivityAt: obj.LastActivity.AsTime().UTC(),
 	}, nil
@@ -112,6 +120,7 @@ func fromChatModel(m *chatModel) (*chatpb.Metadata, error) {
 		MessagingFee: messagingFee,
 		Type:         chatpb.Metadata_ChatType(m.Type),
 		OpenStatus:   &chatpb.OpenStatus{IsCurrentlyOpen: m.IsOpen},
+		Description:  *pointer.StringOrDefault(m.Descripton, ""),
 		Owner:        owner,
 		LastActivity: timestamppb.New(m.LastActivityAt),
 	}, nil
@@ -179,7 +188,7 @@ func (m *chatModel) dbPut(ctx context.Context, pool *pgxpool.Pool) error {
 		return err
 	}
 
-	putQuery := `INSERT INTO ` + chatsTableName + `(` + allChatFields + `) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8) RETURNING ` + allChatFields
+	putQuery := `INSERT INTO ` + chatsTableName + `(` + allChatFields + `) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), $9) RETURNING ` + allChatFields
 	err = pgxscan.Get(
 		ctx,
 		pool,
@@ -191,6 +200,7 @@ func (m *chatModel) dbPut(ctx context.Context, pool *pgxpool.Pool) error {
 		m.CoverCharge,
 		m.Type,
 		m.IsOpen,
+		m.Descripton,
 		m.CreatedBy,
 		m.LastActivityAt,
 	)
@@ -423,6 +433,27 @@ func dbSetDisplayName(ctx context.Context, pool *pgxpool.Pool, chatID *commonpb.
 	queryParameters := []any{displayName, pg.Encode(chatID.Value)}
 	if len(displayName) == 0 {
 		query = `UPDATE ` + chatsTableName + ` SET "displayName" = NULL, "updatedAt" = NOW() WHERE "id" = $1`
+		queryParameters = []any{pg.Encode(chatID.Value)}
+	}
+	res, err := pool.Exec(
+		ctx,
+		query,
+		queryParameters...,
+	)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return chat.ErrChatNotFound
+	}
+	return nil
+}
+
+func dbSetDescription(ctx context.Context, pool *pgxpool.Pool, chatID *commonpb.ChatId, description string) error {
+	query := `UPDATE ` + chatsTableName + ` SET "description" = $1, "updatedAt" = NOW() WHERE "id" = $2`
+	queryParameters := []any{description, pg.Encode(chatID.Value)}
+	if len(description) == 0 {
+		query = `UPDATE ` + chatsTableName + ` SET "description" = NULL, "updatedAt" = NOW() WHERE "id" = $1`
 		queryParameters = []any{pg.Encode(chatID.Value)}
 	}
 	res, err := pool.Exec(

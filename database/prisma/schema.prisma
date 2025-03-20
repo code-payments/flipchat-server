@@ -101,6 +101,7 @@ model Chat {
   coverCharge BigInt  @default(0) // todo: rename to messaging fee
   type        Int     @default(0) // ChatType enum: Unknown: 0, TwoWay: 1, Group: 2
   isOpen      Boolean @default(true)
+  description String?
 
   createdBy      String   @default("")
   createdAt      DateTime @default(now())
