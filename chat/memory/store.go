@@ -262,6 +262,20 @@ func (s *InMemoryStore) SetDisplayName(ctx context.Context, chatID *commonpb.Cha
 	return nil
 }
 
+func (s *InMemoryStore) SetDescription(ctx context.Context, chatID *commonpb.ChatId, description string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	md, ok := s.chats[string(chatID.Value)]
+	if !ok {
+		return chat.ErrChatNotFound
+	}
+
+	md.Description = description
+
+	return nil
+}
+
 func (s *InMemoryStore) SetMessagingFee(ctx context.Context, chatID *commonpb.ChatId, messagingFee *commonpb.PaymentAmount) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

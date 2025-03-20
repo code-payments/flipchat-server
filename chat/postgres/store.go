@@ -153,6 +153,10 @@ func (s *store) SetDisplayName(ctx context.Context, chatID *commonpb.ChatId, dis
 	return dbSetDisplayName(ctx, s.pool, chatID, displayName)
 }
 
+func (s *store) SetDescription(ctx context.Context, chatID *commonpb.ChatId, description string) error {
+	return dbSetDescription(ctx, s.pool, chatID, description)
+}
+
 func (s *store) SetMessagingFee(ctx context.Context, chatID *commonpb.ChatId, messagingFee *commonpb.PaymentAmount) error {
 	return dbSetMessagingFee(ctx, s.pool, chatID, messagingFee)
 }

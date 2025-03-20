@@ -33,6 +33,7 @@ func RunStoreTests(t *testing.T, s chat.Store, teardown func()) {
 		testChatStore_JoinLeaveWithPermissions,
 		testChatStore_AddRemove,
 		testChatStore_SetDisplayName,
+		testChatStore_SetDescription,
 		testChatStore_SetMessagingFee,
 		testChatStore_AdvanceLastChatActivity,
 	} {
@@ -53,6 +54,7 @@ func testChatStore_Metadata(t *testing.T, store chat.Store) {
 		NumUnread:    0,
 		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 		OpenStatus:   &chatpb.OpenStatus{IsCurrentlyOpen: true},
+		Description:  "Chat With Description",
 	}
 
 	chatID2 := model.MustGenerateChatID()
@@ -512,6 +514,35 @@ func testChatStore_SetDisplayName(t *testing.T, store chat.Store) {
 	result, err = store.GetChatMetadata(context.Background(), chatID)
 	require.NoError(t, err)
 	require.Equal(t, "", result.DisplayName)
+}
+
+func testChatStore_SetDescription(t *testing.T, store chat.Store) {
+	chatID := model.MustGenerateChatID()
+
+	require.Equal(t, chat.ErrChatNotFound, store.SetDescription(context.Background(), chatID, "Description"))
+
+	_, err := store.CreateChat(context.Background(), &chatpb.Metadata{
+		ChatId:       chatID,
+		Type:         chatpb.Metadata_GROUP,
+		LastActivity: &timestamppb.Timestamp{Seconds: time.Now().Unix()},
+	})
+	require.NoError(t, err)
+
+	result, err := store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Empty(t, result.Description)
+
+	require.NoError(t, store.SetDescription(context.Background(), chatID, "Description"))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, "Description", result.Description)
+
+	require.NoError(t, store.SetDescription(context.Background(), chatID, ""))
+
+	result, err = store.GetChatMetadata(context.Background(), chatID)
+	require.NoError(t, err)
+	require.Equal(t, "", result.Description)
 }
 
 func testChatStore_SetMessagingFee(t *testing.T, store chat.Store) {

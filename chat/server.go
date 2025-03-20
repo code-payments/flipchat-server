@@ -941,6 +941,58 @@ func (s *Server) SetDisplayName(ctx context.Context, req *chatpb.SetDisplayNameR
 	return &chatpb.SetDisplayNameResponse{}, nil
 }
 
+func (s *Server) SetDescription(ctx context.Context, req *chatpb.SetDescriptionRequest) (*chatpb.SetDescriptionResponse, error) {
+	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
+	if err != nil {
+		return nil, err
+	}
+
+	log := s.log.With(
+		zap.String("user_id", model.UserIDString(userID)),
+		zap.String("chat_id", base64.StdEncoding.EncodeToString(req.ChatId.Value)),
+	)
+
+	md, err := s.getMetadata(ctx, req.ChatId, nil)
+	if err == ErrChatNotFound {
+		return &chatpb.SetDescriptionResponse{Result: chatpb.SetDescriptionResponse_DENIED}, nil
+	} else if err != nil {
+		log.Warn("Failed to get chat", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to get chat")
+	}
+
+	if md.Type != chatpb.Metadata_GROUP {
+		return &chatpb.SetDescriptionResponse{Result: chatpb.SetDescriptionResponse_DENIED}, nil
+	}
+	if md.Owner == nil || !bytes.Equal(md.Owner.Value, userID.Value) {
+		return &chatpb.SetDescriptionResponse{Result: chatpb.SetDescriptionResponse_DENIED}, nil
+	}
+
+	if md.Description == req.Description {
+		return &chatpb.SetDescriptionResponse{}, nil
+	}
+
+	err = s.chats.SetDescription(ctx, req.ChatId, req.Description)
+	if err != nil {
+		log.Warn("Failed to set description", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to set description")
+	}
+
+	err = s.eventBus.OnEvent(req.ChatId, &event.ChatEvent{ChatID: md.ChatId, MetadataUpdates: []*chatpb.MetadataUpdate{
+		{
+			Kind: &chatpb.MetadataUpdate_DescriptionChanged_{
+				DescriptionChanged: &chatpb.MetadataUpdate_DescriptionChanged{
+					NewDescription: req.Description,
+				},
+			},
+		},
+	}})
+	if err != nil {
+		s.log.Warn("Failed to notify description changed", zap.Error(err))
+	}
+
+	return &chatpb.SetDescriptionResponse{}, nil
+}
+
 func (s *Server) SetMessagingFee(ctx context.Context, req *chatpb.SetMessagingFeeRequest) (*chatpb.SetMessagingFeeResponse, error) {
 	userID, err := s.authz.Authorize(ctx, req, &req.Auth)
 	if err != nil {

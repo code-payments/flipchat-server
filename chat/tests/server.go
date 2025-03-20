@@ -599,6 +599,40 @@ func testServer(
 			require.Equal(t, setDisplayName.DisplayName, get.Metadata.DisplayName)
 		})
 
+		t.Run("Set description", func(t *testing.T) {
+			setDescription := &chatpb.SetDescriptionRequest{
+				ChatId:      created.Chat.ChatId,
+				Description: "Description",
+			}
+			require.NoError(t, keyPair.Auth(setDescription, &setDescription.Auth))
+
+			setDescriptionResp, err := client.SetDescription(context.Background(), setDescription)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.SetDescriptionResponse_OK, setDescriptionResp.Result)
+
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.Equal(t, setDescription.Description, get.Metadata.Description)
+		})
+
+		t.Run("Remove description", func(t *testing.T) {
+			setDescription := &chatpb.SetDescriptionRequest{
+				ChatId:      created.Chat.ChatId,
+				Description: "",
+			}
+			require.NoError(t, keyPair.Auth(setDescription, &setDescription.Auth))
+
+			setDescriptionResp, err := client.SetDescription(context.Background(), setDescription)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.SetDescriptionResponse_OK, setDescriptionResp.Result)
+
+			get, err := client.GetChat(context.Background(), getByID)
+			require.NoError(t, err)
+			require.Equal(t, chatpb.GetChatResponse_OK, get.Result)
+			require.Empty(t, get.Metadata.Description)
+		})
+
 		t.Run("Close and open room", func(t *testing.T) {
 			close := &chatpb.CloseChatRequest{
 				ChatId: created.Chat.ChatId,
@@ -874,6 +908,21 @@ func testServer(
 		require.Len(t, u.MetadataUpdates, 1)
 		require.Empty(t, u.MemberUpdates, 0)
 		require.Equal(t, u.MetadataUpdates[0].GetDisplayNameChanged().NewDisplayName, setDisplayName.DisplayName)
+
+		// Other user updates chat description
+		setDescription := &chatpb.SetDescriptionRequest{
+			ChatId:      startedOther.Chat.ChatId,
+			Description: "Description",
+		}
+		require.NoError(t, keyPair.Auth(setDescription, &setDescription.Auth))
+		_, err = client.SetDescription(ctx, setDescription)
+		require.NoError(t, err)
+
+		u = <-updateCh
+		require.NoError(t, protoutil.ProtoEqualError(joined.Metadata.ChatId, u.ChatId))
+		require.Len(t, u.MetadataUpdates, 1)
+		require.Empty(t, u.MemberUpdates, 0)
+		require.Equal(t, u.MetadataUpdates[0].GetDescriptionChanged().NewDescription, setDescription.Description)
 
 		// Other user sends messages in the chat
 		//
