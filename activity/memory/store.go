@@ -76,7 +76,7 @@ func (m *InMemoryStore) GetLatestNotifications(ctx context.Context, activityFeed
 	res := protoutil.SliceClone(m.notifications[string(userID.Value)])
 
 	sorted := NotificationsByTimestamp(res)
-	sort.Sort(sorted)
+	sort.Sort(sort.Reverse(sorted))
 
 	if len(sorted) > limit {
 		sorted = sorted[:limit]

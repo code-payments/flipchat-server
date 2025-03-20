@@ -10,6 +10,7 @@ import (
 
 	activitypb "github.com/code-payments/flipchat-protobuf-api/generated/go/activity/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+
 	"github.com/code-payments/flipchat-server/activity"
 	pg "github.com/code-payments/flipchat-server/database/postgres"
 )
@@ -99,7 +100,7 @@ func fromModel(m *model) (*activitypb.Notification, error) {
 }
 
 func (m *model) dbSave(ctx context.Context, pool *pgxpool.Pool) error {
-	query := `INSERT INTO ` + activityFeedsTableName + `(` + allActivityFeedFields + `) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) ON CONFLICT ("id") DO NOTHING RETURNING ` + allActivityFeedFields
+	query := `INSERT INTO ` + activityFeedsTableName + `(` + allActivityFeedFields + `) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) ON CONFLICT ("id") DO UPDATE SET "updatedAt" = NOW() WHERE ` + activityFeedsTableName + `."id" = $1 RETURNING ` + allActivityFeedFields
 	return pgxscan.Get(
 		ctx,
 		pool,

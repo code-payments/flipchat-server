@@ -121,7 +121,7 @@ func (i *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecomm
 	}
 
 	for _, userID := range userIDs {
-		err := activity.SendNotification(
+		_, err := activity.SendNotification(
 			ctx,
 			i.activityFeeds,
 			activitypb.ActivityFeedType_TRANSACTION_HISTORY,

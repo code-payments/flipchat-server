@@ -127,7 +127,7 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	}
 
 	// todo: Need a hook into the Code Airdrop RPC, so for now this is the best place
-	err = activity.SendNotification(
+	_, err = activity.SendNotification(
 		ctx,
 		s.activityFeeds,
 		activitypb.ActivityFeedType_TRANSACTION_HISTORY,

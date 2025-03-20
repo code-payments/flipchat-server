@@ -16,28 +16,27 @@ import (
 type NotificationBuilder func() (*activitypb.Notification, error)
 
 // SendNotification sends a notification to a user's activity feed
-func SendNotification(ctx context.Context, activityFeeds Store, activityFeedType activitypb.ActivityFeedType, userID *commonpb.UserId, builder NotificationBuilder) error {
+func SendNotification(ctx context.Context, activityFeeds Store, activityFeedType activitypb.ActivityFeedType, userID *commonpb.UserId, builder NotificationBuilder) (*activitypb.Notification, error) {
 	if activityFeedType != activitypb.ActivityFeedType_TRANSACTION_HISTORY {
-		return errors.New("unsupported activity feed type")
+		return nil, errors.New("unsupported activity feed type")
 	}
 
 	notification, err := builder()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(notification.LocalizedText) > 0 {
-		return errors.New("cannot set localized text")
+		return nil, errors.New("cannot set localized text")
 	}
 
 	notification.LocalizedText = "placeholder" // To pass proto validation
 	if err := notification.Validate(); err != nil {
-		return err
+		return nil, err
 	}
 	notification.LocalizedText = ""
 
-	_, err = activityFeeds.SaveNotification(ctx, activityFeedType, userID, notification)
-	return err
+	return activityFeeds.SaveNotification(ctx, activityFeedType, userID, notification)
 }
 
 func NewWelcomeBonusNotificationBuilder(ctx context.Context, userID *commonpb.UserId, quarks uint64, ts time.Time) NotificationBuilder {
