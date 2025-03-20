@@ -11,9 +11,11 @@ import (
 	codecommon "github.com/code-payments/code-server/pkg/code/common"
 	codekin "github.com/code-payments/code-server/pkg/kin"
 
+	activitypb "github.com/code-payments/flipchat-protobuf-api/generated/go/activity/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/activity"
 	"github.com/code-payments/flipchat-server/push"
 )
 
@@ -25,16 +27,18 @@ var (
 
 // todo: needs tests
 type FlipchatIntegration struct {
-	log      *zap.Logger
-	accounts account.Store
-	pusher   push.Pusher
+	log           *zap.Logger
+	accounts      account.Store
+	activityFeeds activity.Store
+	pusher        push.Pusher
 }
 
-func NewFlipchatAirdropIntegration(log *zap.Logger, accounts account.Store, pusher push.Pusher) codeairdrop.Integration {
+func NewFlipchatAirdropIntegration(log *zap.Logger, accounts account.Store, activityFeeds activity.Store, pusher push.Pusher) codeairdrop.Integration {
 	return &FlipchatIntegration{
-		log:      log,
-		accounts: accounts,
-		pusher:   pusher,
+		log:           log,
+		accounts:      accounts,
+		activityFeeds: activityFeeds,
+		pusher:        pusher,
 	}
 }
 
@@ -93,6 +97,9 @@ func (i *FlipchatIntegration) GetOwnersToAirdropNow(ctx context.Context) ([]*cod
 }
 
 func (i *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecommon.Account) error {
+	// todo: Use the blockcahin transaction timestamp?
+	ts := time.Now()
+
 	var userIDs []*commonpb.UserId
 	for _, owner := range owners {
 		userID, err := i.accounts.GetUserId(ctx, &commonpb.PublicKey{Value: owner.PublicKey().ToBytes()})
@@ -113,7 +120,29 @@ func (i *FlipchatIntegration) OnSuccess(ctx context.Context, owners ...*codecomm
 		return err
 	}
 
-	go push.SendWeeklyAirdropPush(context.Background(), i.pusher, Amount, userIDs...)
+	for _, userID := range userIDs {
+		err := activity.SendNotification(
+			ctx,
+			i.activityFeeds,
+			activitypb.ActivityFeedType_TRANSACTION_HISTORY,
+			userID,
+			activity.NewWeeklyBonusNotificationBuilder(
+				ctx,
+				userID,
+				Amount,
+				ts,
+			),
+		)
+		if err != nil {
+			i.log.Warn(
+				"Failed to send activity feed notification",
+				zap.String("user_id", base64.StdEncoding.EncodeToString(userID.Value)),
+				zap.Error(err),
+			)
+		}
+	}
+
+	go push.SendWeeklyAirdropPush(ctx, i.pusher, Amount, userIDs...)
 
 	i.log.Debug("Airdropped users", zap.Int("count", len(owners)))
 

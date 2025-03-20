@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v0.17.0
 	github.com/code-payments/code-protobuf-api v1.18.1-0.20241113145645-72417e3e3c84
 	github.com/code-payments/code-server v1.10.20-0.20250227175955-b835606637cb
-	github.com/code-payments/flipchat-protobuf-api v1.3.2
+	github.com/code-payments/flipchat-protobuf-api v1.4.1
 	github.com/georgysavva/scany/v2 v2.1.3
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
@@ -21,8 +21,8 @@ require (
 	github.com/ory/dockertest/v3 v3.11.0
 	github.com/pkg/errors v0.9.1
 	github.com/shopspring/decimal v1.4.0
-	github.com/steebchen/prisma-client-go v0.43.0
-	github.com/stretchr/testify v1.9.0
+	github.com/steebchen/prisma-client-go v0.47.0
+	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.35.2
@@ -37,6 +37,7 @@ require (
 	github.com/jackc/pgx/v4 v4.18.3 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
+	go.mongodb.org/mongo-driver/v2 v2.0.1 // indirect
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352 // indirect
 )
 

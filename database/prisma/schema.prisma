@@ -246,3 +246,26 @@ model PromotedChat {
   @@id([chatId, topic])
   @@map("flipchat_promotedchats")
 }
+
+model ActivityFeed {
+  // Fields
+
+  id               String   @id
+  userId           String
+  activityFeedType Int      @default(0) @db.SmallInt
+  notificationType Int      @default(0)
+  count            BigInt   @default(0)
+  chatId           String?
+  messageId        String?
+  ts               DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  // Constraints
+
+  @@index([userId, activityFeedType, ts(sort: Desc)])
+  @@map("flipchat_activity_feeds")
+}
