@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	activitypb "github.com/code-payments/flipchat-protobuf-api/generated/go/activity/v1"
 	chatpb "github.com/code-payments/flipchat-protobuf-api/generated/go/chat/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
@@ -27,8 +28,10 @@ import (
 	codekin "github.com/code-payments/code-server/pkg/kin"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/activity"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
+	"github.com/code-payments/flipchat-server/flags"
 	"github.com/code-payments/flipchat-server/intent"
 	"github.com/code-payments/flipchat-server/logging"
 	"github.com/code-payments/flipchat-server/messaging"
@@ -59,13 +62,14 @@ type Server struct {
 	authz    auth.Authorizer
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent]
 
-	accounts account.Store
-	chats    Store
-	intents  intent.Store
-	messages messaging.MessageStore
-	pointers messaging.PointerStore
-	profiles profile.Store
-	codeData codedata.Provider
+	accounts      account.Store
+	activityFeeds activity.Store
+	chats         Store
+	intents       intent.Store
+	messages      messaging.MessageStore
+	pointers      messaging.PointerStore
+	profiles      profile.Store
+	codeData      codedata.Provider
 
 	messenger messaging.Messenger
 
@@ -81,6 +85,7 @@ func NewServer(
 	log *zap.Logger,
 	authz auth.Authorizer,
 	accounts account.Store,
+	activityFeeds activity.Store,
 	chats Store,
 	intents intent.Store,
 	messages messaging.MessageStore,
@@ -96,13 +101,14 @@ func NewServer(
 		authz:    authz,
 		eventBus: eventBus,
 
-		accounts: accounts,
-		chats:    chats,
-		intents:  intents,
-		messages: messages,
-		pointers: pointers,
-		profiles: profiles,
-		codeData: codeData,
+		accounts:      accounts,
+		activityFeeds: activityFeeds,
+		chats:         chats,
+		intents:       intents,
+		messages:      messages,
+		pointers:      pointers,
+		profiles:      profiles,
+		codeData:      codeData,
 
 		messenger: messenger,
 
@@ -446,6 +452,8 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		return nil, err
 	}
 
+	log := s.log.With(zap.String("user_id", model.UserIDString(userID)))
+
 	var md *chatpb.Metadata
 	var users []*commonpb.UserId
 
@@ -467,7 +475,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 
 		isFulfilled, err := s.intents.IsFulfilled(ctx, paymentIntent)
 		if err != nil {
-			s.log.Warn("Failed to check if intent is already fulfilled", zap.Error(err))
+			log.Warn("Failed to check if intent is already fulfilled", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to check if intent is already fulfilled")
 		} else if isFulfilled {
 			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
@@ -478,7 +486,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		if err == intent.ErrNoPaymentMetadata {
 			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
 		} else if err != nil {
-			s.log.Warn("Failed to get payment metadata", zap.Error(err))
+			log.Warn("Failed to get payment metadata", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to lookup payment metadata")
 		}
 
@@ -499,7 +507,7 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 			// todo: remember the display name moderation result from the check RPC
 			moderationResult, err := s.moderationClient.ClassifyText(ctx, t.GroupChat.DisplayName)
 			if err != nil {
-				s.log.Warn("Failed to moderate display name", zap.Error(err))
+				log.Warn("Failed to moderate display name", zap.Error(err))
 				return nil, status.Errorf(codes.Internal, "failed to moderate display name")
 			}
 
@@ -523,9 +531,11 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 
 	md, err = s.chats.CreateChat(ctx, md)
 	if err != nil && !errors.Is(err, ErrChatExists) {
-		s.log.Warn("Failed to put chat metadata", zap.Error(err))
+		log.Warn("Failed to put chat metadata", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to put chat")
 	}
+
+	log = log.With(zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)))
 
 	// Push state is not persisted in the chat metadata
 	md.IsPushEnabled = true
@@ -537,15 +547,29 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		if err == intent.ErrAlreadyFulfilled {
 			return &chatpb.StartChatResponse{Result: chatpb.StartChatResponse_DENIED}, nil
 		} else if err != nil {
-			s.log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
+			log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
 		}
-	}
 
-	log := s.log.With(
-		zap.String("chat_id", base64.StdEncoding.EncodeToString(md.ChatId.Value)),
-		zap.String("user_id", model.UserIDString(userID)),
-	)
+		if md.Type == chatpb.Metadata_GROUP {
+			_, err = activity.SendNotification(
+				ctx,
+				s.activityFeeds,
+				activitypb.ActivityFeedType_TRANSACTION_HISTORY,
+				userID,
+				activity.NewCreateGroupNotificationBuilder(
+					ctx,
+					userID,
+					md.ChatId,
+					flags.StartGroupFee,
+					time.Now(),
+				),
+			)
+			if err != nil {
+				s.log.Warn("Failed to send activity feed notification", zap.Error(err))
+			}
+		}
+	}
 
 	var memberProtos []*chatpb.Member
 	for _, m := range users {

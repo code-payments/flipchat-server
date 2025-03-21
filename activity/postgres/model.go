@@ -8,8 +8,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/code-payments/code-server/pkg/pointer"
 	activitypb "github.com/code-payments/flipchat-protobuf-api/generated/go/activity/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
+	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
 	"github.com/code-payments/flipchat-server/activity"
 	pg "github.com/code-payments/flipchat-server/database/postgres"
@@ -50,6 +52,15 @@ func toModel(activityFeedType activitypb.ActivityFeedType, userID *commonpb.User
 	case *activitypb.Notification_WeeklyBonus:
 		notificationType = activity.NotificationTypeWeeklyBonus
 		count = int64(typed.WeeklyBonus.QuarksReceived)
+	case *activitypb.Notification_CreateGroup:
+		notificationType = activity.NotificationTypeCreateGroup
+		count = int64(typed.CreateGroup.QuarksSpent)
+		chatID = pointer.String(pg.Encode(typed.CreateGroup.ChatId.Value))
+	case *activitypb.Notification_SendListenerMessage:
+		notificationType = activity.NotificationTypeSendListenerMessage
+		count = int64(typed.SendListenerMessage.QuarksSpent)
+		chatID = pointer.String(pg.Encode(typed.SendListenerMessage.ChatId.Value))
+		messageID = pointer.String(pg.Encode(typed.SendListenerMessage.MessageId.Value))
 	default:
 		return nil, activity.ErrInvalidNotificationType
 	}
@@ -67,14 +78,14 @@ func toModel(activityFeedType activitypb.ActivityFeedType, userID *commonpb.User
 }
 
 func fromModel(m *model) (*activitypb.Notification, error) {
-	decodedId, err := pg.Decode(m.ID)
+	decodedID, err := pg.Decode(m.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	baseNotification := &activitypb.Notification{
 		Id: &activitypb.NotificationId{
-			Value: decodedId,
+			Value: decodedID,
 		},
 		Ts: timestamppb.New(m.Ts),
 	}
@@ -90,6 +101,36 @@ func fromModel(m *model) (*activitypb.Notification, error) {
 		baseNotification.AdditionalMetadata = &activitypb.Notification_WeeklyBonus{
 			WeeklyBonus: &activitypb.WeeklyBonusNotificationMetadata{
 				QuarksReceived: uint64(m.Count),
+			},
+		}
+	case activity.NotificationTypeCreateGroup:
+		decodedChatID, err := pg.Decode(*m.ChatID)
+		if err != nil {
+			return nil, err
+		}
+
+		baseNotification.AdditionalMetadata = &activitypb.Notification_CreateGroup{
+			CreateGroup: &activitypb.CreateGroupNotificationMetadata{
+				ChatId:      &commonpb.ChatId{Value: decodedChatID},
+				QuarksSpent: uint64(m.Count),
+			},
+		}
+	case activity.NotificationTypeSendListenerMessage:
+		decodedChatID, err := pg.Decode(*m.ChatID)
+		if err != nil {
+			return nil, err
+		}
+
+		decodedMessageID, err := pg.Decode(*m.MessageID)
+		if err != nil {
+			return nil, err
+		}
+
+		baseNotification.AdditionalMetadata = &activitypb.Notification_SendListenerMessage{
+			SendListenerMessage: &activitypb.SendListenerMessageNotificationMetadata{
+				ChatId:      &commonpb.ChatId{Value: decodedChatID},
+				MessageId:   &messagingpb.MessageId{Value: decodedMessageID},
+				QuarksSpent: uint64(m.Count),
 			},
 		}
 	default:

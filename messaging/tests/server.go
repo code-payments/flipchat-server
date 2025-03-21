@@ -21,6 +21,7 @@ import (
 	codekin "github.com/code-payments/code-server/pkg/kin"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/activity"
 	"github.com/code-payments/flipchat-server/auth"
 	auth_rpc "github.com/code-payments/flipchat-server/auth/rpc"
 	"github.com/code-payments/flipchat-server/chat"
@@ -36,6 +37,7 @@ import (
 func RunServerTests(
 	t *testing.T,
 	accounts account.Store,
+	activityFeeds activity.Store,
 	intents intent.Store,
 	messages messaging.MessageStore,
 	pointers messaging.PointerStore,
@@ -46,6 +48,7 @@ func RunServerTests(
 	for _, tf := range []func(
 		t *testing.T,
 		accounts account.Store,
+		activityFeeds activity.Store,
 		intents intent.Store,
 		messages messaging.MessageStore,
 		pointers messaging.PointerStore,
@@ -54,7 +57,7 @@ func RunServerTests(
 		testServerHappy,
 		testServerDuplicateStreams,
 	} {
-		tf(t, accounts, intents, messages, pointers, chats)
+		tf(t, accounts, activityFeeds, intents, messages, pointers, chats)
 		teardown()
 	}
 }
@@ -62,6 +65,7 @@ func RunServerTests(
 func testServerHappy(
 	t *testing.T,
 	accountStore account.Store,
+	activityFeeds activity.Store,
 	intents intent.Store,
 	messageDB messaging.MessageStore,
 	pointerDB messaging.PointerStore,
@@ -80,6 +84,7 @@ func testServerHappy(
 		authz,
 		auth_rpc.NewMessagingRpcAuthorizer(accountStore, chatsDB, intents, messageDB, codeData),
 		accountStore,
+		activityFeeds,
 		intents,
 		messageDB,
 		pointerDB,
@@ -890,6 +895,7 @@ func testServerHappy(
 func testServerDuplicateStreams(
 	t *testing.T,
 	accountStore account.Store,
+	activityFeeds activity.Store,
 	intents intent.Store,
 	messageDB messaging.MessageStore,
 	pointerDB messaging.PointerStore,
@@ -907,6 +913,7 @@ func testServerDuplicateStreams(
 		authz,
 		auth_rpc.NewMessagingRpcAuthorizer(accountStore, chatsDB, intents, messageDB, codeData),
 		accountStore,
+		activityFeeds,
 		intents,
 		messageDB,
 		pointerDB,

@@ -17,12 +17,14 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	activitypb "github.com/code-payments/flipchat-protobuf-api/generated/go/activity/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	messagingpb "github.com/code-payments/flipchat-protobuf-api/generated/go/messaging/v1"
 
 	codedata "github.com/code-payments/code-server/pkg/code/data"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/activity"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/event"
 	"github.com/code-payments/flipchat-server/flags"
@@ -47,11 +49,12 @@ type Server struct {
 	authz    auth.Authorizer
 	rpcAuthz auth.Messaging
 
-	accounts account.Store
-	intents  intent.Store
-	messages MessageStore
-	pointers PointerStore
-	codeData codedata.Provider
+	accounts      account.Store
+	activityFeeds activity.Store
+	intents       intent.Store
+	messages      MessageStore
+	pointers      PointerStore
+	codeData      codedata.Provider
 
 	eventBus *event.Bus[*commonpb.ChatId, *event.ChatEvent]
 
@@ -69,6 +72,7 @@ func NewServer(
 	authz auth.Authorizer,
 	rpcAuthz auth.Messaging,
 	accounts account.Store,
+	activityFeeds activity.Store,
 	intents intent.Store,
 	messages MessageStore,
 	pointers PointerStore,
@@ -80,11 +84,12 @@ func NewServer(
 		authz:    authz,
 		rpcAuthz: rpcAuthz,
 
-		accounts: accounts,
-		intents:  intents,
-		messages: messages,
-		pointers: pointers,
-		codeData: codeData,
+		accounts:      accounts,
+		activityFeeds: activityFeeds,
+		intents:       intents,
+		messages:      messages,
+		pointers:      pointers,
+		codeData:      codeData,
 
 		eventBus: eventBus,
 
@@ -445,6 +450,24 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 		} else if err != nil {
 			log.Warn("Failed to mark intent as fulfilled", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
+		}
+
+		_, err = activity.SendNotification(
+			ctx,
+			s.activityFeeds,
+			activitypb.ActivityFeedType_TRANSACTION_HISTORY,
+			userID,
+			activity.NewSendListenerMessageNotificationBuilder(
+				ctx,
+				userID,
+				req.ChatId,
+				sent.MessageId,
+				flags.StartGroupFee,
+				sent.Ts.AsTime(),
+			),
+		)
+		if err != nil {
+			log.Warn("Failed to send activity feed notification", zap.Error(err))
 		}
 	}
 

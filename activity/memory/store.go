@@ -41,9 +41,9 @@ func (m *InMemoryStore) SaveNotification(ctx context.Context, activityFeedType a
 	switch notification.AdditionalMetadata.(type) {
 	case
 		*activitypb.Notification_WelcomeBonus,
-		*activitypb.Notification_WeeklyBonus:
-		//*activitypb.Notification_CreateGroup,
-		//*activitypb.Notification_SendListenerMessage,
+		*activitypb.Notification_WeeklyBonus,
+		*activitypb.Notification_CreateGroup,
+		*activitypb.Notification_SendListenerMessage:
 		//*activitypb.Notification_SendTip,
 		//*activitypb.Notification_ReceivedTip,
 		//*activitypb.Notification_PromotedToSpeaker,

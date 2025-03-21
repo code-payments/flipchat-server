@@ -83,7 +83,7 @@ func NewWeeklyBonusNotificationBuilder(ctx context.Context, userID *commonpb.Use
 	}
 }
 
-func NewCreateGroupsNotificationBuilder(ctx context.Context, userID *commonpb.UserId, chatID *commonpb.ChatId, quarks uint64, ts time.Time) NotificationBuilder {
+func NewCreateGroupNotificationBuilder(ctx context.Context, userID *commonpb.UserId, chatID *commonpb.ChatId, quarks uint64, ts time.Time) NotificationBuilder {
 	return func() (*activitypb.Notification, error) {
 		id, err := GetNotificationID(NotificationTypeCreateGroup, userID, chatID.Value)
 		if err != nil {

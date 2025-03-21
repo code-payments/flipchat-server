@@ -10,9 +10,7 @@ import (
 	activitypb "github.com/code-payments/flipchat-protobuf-api/generated/go/activity/v1"
 
 	"github.com/code-payments/flipchat-server/auth"
-	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/model"
-	"github.com/code-payments/flipchat-server/profile"
 )
 
 const (
@@ -23,8 +21,6 @@ type Server struct {
 	log           *zap.Logger
 	authz         auth.Authorizer
 	activityFeeds Store
-	chats         chat.Store
-	profiles      profile.Store
 
 	activitypb.UnimplementedActivityFeedServer
 }
@@ -33,15 +29,11 @@ func NewServer(
 	log *zap.Logger,
 	authz auth.Authorizer,
 	activityFeeds Store,
-	chats chat.Store,
-	profiles profile.Store,
 ) *Server {
 	return &Server{
 		log:           log,
 		authz:         authz,
 		activityFeeds: activityFeeds,
-		chats:         chats,
-		profiles:      profiles,
 	}
 }
 
@@ -71,7 +63,7 @@ func (s *Server) GetLatestNotifications(ctx context.Context, req *activitypb.Get
 	for _, notification := range notifications {
 		log = log.With(zap.String("notification_id", NotificationIDString(notification.Id)))
 
-		err = InjectLocalizedText(ctx, s.chats, s.profiles, notification)
+		err = InjectLocalizedText(ctx, notification)
 		if err != nil {
 			log.Warn("Failed to inject localized notification text", zap.Error(err))
 			continue

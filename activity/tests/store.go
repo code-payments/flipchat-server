@@ -11,6 +11,7 @@ import (
 	activitypb "github.com/code-payments/flipchat-protobuf-api/generated/go/activity/v1"
 
 	"github.com/code-payments/flipchat-server/activity"
+	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
 	"github.com/code-payments/flipchat-server/protoutil"
 )
@@ -48,7 +49,7 @@ func testActivityStore_HappyPath(t *testing.T, store activity.Store) {
 		require.Len(t, allActual, 1)
 		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
 
-		other, err := activity.NewWelcomeBonusNotificationBuilder(context.Background(), userID, 42, time.Unix(123456789, 0))()
+		other, err := activity.NewWelcomeBonusNotificationBuilder(context.Background(), userID, 99999, time.Unix(123456789, 0))()
 		require.NoError(t, err)
 
 		actual, err = store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, other)
@@ -75,7 +76,61 @@ func testActivityStore_HappyPath(t *testing.T, store activity.Store) {
 		require.Len(t, allActual, 1)
 		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
 
-		other, err := activity.NewWeeklyBonusNotificationBuilder(context.Background(), userID, 42, time.Unix(3, 0))()
+		other, err := activity.NewWeeklyBonusNotificationBuilder(context.Background(), userID, 99999, expected.Ts.AsTime().Add(time.Second))()
+		require.NoError(t, err)
+
+		actual, err = store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, other)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, actual))
+
+		allActual, err = store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 1)
+		require.NoError(t, err)
+		require.Len(t, allActual, 1)
+		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
+	})
+
+	t.Run("Create Group", func(t *testing.T) {
+		expected, err := activity.NewCreateGroupNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), 789, time.Unix(3, 0))()
+		require.NoError(t, err)
+		allExpected = append([]*activitypb.Notification{expected}, allExpected...)
+
+		actual, err := store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, expected)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, actual))
+
+		allActual, err := store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 1)
+		require.NoError(t, err)
+		require.Len(t, allActual, 1)
+		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
+
+		other, err := activity.NewCreateGroupNotificationBuilder(context.Background(), userID, expected.GetCreateGroup().ChatId, 99999, time.Unix(123456789, 0))()
+		require.NoError(t, err)
+
+		actual, err = store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, other)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, actual))
+
+		allActual, err = store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 1)
+		require.NoError(t, err)
+		require.Len(t, allActual, 1)
+		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
+	})
+
+	t.Run("Send Listener Message", func(t *testing.T) {
+		expected, err := activity.NewSendListenerMessageNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), messaging.MustGenerateMessageID(), 42, time.Unix(4, 0))()
+		require.NoError(t, err)
+		allExpected = append([]*activitypb.Notification{expected}, allExpected...)
+
+		actual, err := store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, expected)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, actual))
+
+		allActual, err := store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 1)
+		require.NoError(t, err)
+		require.Len(t, allActual, 1)
+		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
+
+		other, err := activity.NewSendListenerMessageNotificationBuilder(context.Background(), userID, expected.GetSendListenerMessage().ChatId, expected.GetSendListenerMessage().GetMessageId(), 99999, time.Unix(123456789, 0))()
 		require.NoError(t, err)
 
 		actual, err = store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, other)

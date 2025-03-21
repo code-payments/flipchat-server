@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	account "github.com/code-payments/flipchat-server/account/postgres"
+	activity "github.com/code-payments/flipchat-server/activity/postgres"
 	chat "github.com/code-payments/flipchat-server/chat/postgres"
 	intent "github.com/code-payments/flipchat-server/intent/postgres"
 
@@ -24,6 +25,7 @@ func TestMessaging_PostgresServer(t *testing.T) {
 	defer pool.Close()
 
 	accounts := account.NewInPostgres(pool)
+	activityFeeds := activity.NewInPostgres(pool)
 	chats := chat.NewInPostgres(pool)
 	intents := intent.NewInPostgres(pool)
 	messages := NewInPostgresMessages(pool)
@@ -33,5 +35,5 @@ func TestMessaging_PostgresServer(t *testing.T) {
 		messages.(*store).reset()
 	}
 
-	tests.RunServerTests(t, accounts, intents, messages, pointers, chats, teardown)
+	tests.RunServerTests(t, accounts, activityFeeds, intents, messages, pointers, chats, teardown)
 }

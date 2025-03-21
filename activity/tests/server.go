@@ -16,23 +16,22 @@ import (
 	"github.com/code-payments/flipchat-server/account"
 	"github.com/code-payments/flipchat-server/activity"
 	"github.com/code-payments/flipchat-server/auth"
-	"github.com/code-payments/flipchat-server/chat"
+	"github.com/code-payments/flipchat-server/messaging"
 	"github.com/code-payments/flipchat-server/model"
-	"github.com/code-payments/flipchat-server/profile"
 	"github.com/code-payments/flipchat-server/protoutil"
 	"github.com/code-payments/flipchat-server/testutil"
 )
 
-func RunServerTests(t *testing.T, accounts account.Store, activityFeeds activity.Store, chats chat.Store, profiles profile.Store, teardown func()) {
-	for _, tf := range []func(t *testing.T, accounts account.Store, activityFeeds activity.Store, chats chat.Store, profiles profile.Store){
+func RunServerTests(t *testing.T, accounts account.Store, activityFeeds activity.Store, teardown func()) {
+	for _, tf := range []func(t *testing.T, accounts account.Store, activityFeeds activity.Store){
 		testActivityServer_HappyPath,
 	} {
-		tf(t, accounts, activityFeeds, chats, profiles)
+		tf(t, accounts, activityFeeds)
 		teardown()
 	}
 }
 
-func testActivityServer_HappyPath(t *testing.T, accounts account.Store, activityFeeds activity.Store, chats chat.Store, profiles profile.Store) {
+func testActivityServer_HappyPath(t *testing.T, accounts account.Store, activityFeeds activity.Store) {
 	log := zap.Must(zap.NewDevelopment())
 
 	userID := model.MustGenerateUserID()
@@ -44,8 +43,6 @@ func testActivityServer_HappyPath(t *testing.T, accounts account.Store, activity
 		log,
 		account.NewAuthorizer(log, accounts, auth.NewKeyPairAuthenticator()),
 		activityFeeds,
-		chats,
-		profiles,
 	)
 
 	cc := testutil.RunGRPCServer(t, testutil.WithService(func(s *grpc.Server) {
@@ -79,6 +76,14 @@ func testActivityServer_HappyPath(t *testing.T, accounts account.Store, activity
 			{
 				builder:       activity.NewWeeklyBonusNotificationBuilder(context.Background(), userID, codekin.ToQuarks(456), time.Unix(2, 0)),
 				localizedText: "You received ⬢\u00A0456\u00A0Kin weekly bonus",
+			},
+			{
+				builder:       activity.NewCreateGroupNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), codekin.ToQuarks(789), time.Unix(3, 0)),
+				localizedText: "You paid ⬢\u00A0789\u00A0Kin to create a new Flipchat",
+			},
+			{
+				builder:       activity.NewSendListenerMessageNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), messaging.MustGenerateMessageID(), codekin.ToQuarks(42), time.Unix(4, 0)),
+				localizedText: "You paid ⬢\u00A042\u00A0Kin",
 			},
 		} {
 			notification, err := activity.SendNotification(context.Background(), activityFeeds, activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, tc.builder)
