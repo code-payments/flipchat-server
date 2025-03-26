@@ -38,31 +38,40 @@ func (m *InMemoryStore) SaveNotification(ctx context.Context, activityFeedType a
 		return nil, activity.ErrInvalidActivityFeedType
 	}
 
-	switch notification.AdditionalMetadata.(type) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var existing *activitypb.Notification
+	for _, n := range m.notifications[string(userID.Value)] {
+		if bytes.Equal(notification.Id.Value, n.Id.Value) {
+			existing = n
+			break
+		}
+	}
+
+	switch typed := notification.AdditionalMetadata.(type) {
 	case
 		*activitypb.Notification_WelcomeBonus,
 		*activitypb.Notification_WeeklyBonus,
 		*activitypb.Notification_CreateGroup,
 		*activitypb.Notification_SendListenerMessage:
-		//*activitypb.Notification_SendTip,
-		//*activitypb.Notification_ReceivedTip,
-		//*activitypb.Notification_PromotedToSpeaker,
+	case *activitypb.Notification_SendTip:
+		if existing != nil {
+			existing.GetSendTip().TotalQuarksSent += typed.SendTip.TotalQuarksSent
+		}
+	case *activitypb.Notification_ReceivedTip:
+		if existing != nil {
+			existing.GetReceivedTip().TotalQuarksReceived += typed.ReceivedTip.TotalQuarksReceived
+		}
 	default:
 		return nil, activity.ErrInvalidNotificationType
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for _, existing := range m.notifications[string(userID.Value)] {
-		if bytes.Equal(notification.Id.Value, existing.Id.Value) {
-			return proto.Clone(existing).(*activitypb.Notification), nil
-		}
+	if existing == nil {
+		existing = proto.Clone(notification).(*activitypb.Notification)
+		m.notifications[string(userID.Value)] = append(m.notifications[string(userID.Value)], proto.Clone(notification).(*activitypb.Notification))
 	}
-
-	m.notifications[string(userID.Value)] = append(m.notifications[string(userID.Value)], proto.Clone(notification).(*activitypb.Notification))
-
-	return proto.Clone(notification).(*activitypb.Notification), nil
+	return proto.Clone(existing).(*activitypb.Notification), nil
 }
 
 func (m *InMemoryStore) GetLatestNotifications(ctx context.Context, activityFeedType activitypb.ActivityFeedType, userID *commonpb.UserId, limit int) ([]*activitypb.Notification, error) {

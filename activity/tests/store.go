@@ -143,6 +143,64 @@ func testActivityStore_HappyPath(t *testing.T, store activity.Store) {
 		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
 	})
 
+	t.Run("Send Tip", func(t *testing.T) {
+		expected, err := activity.NewSendTipNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), messaging.MustGenerateMessageID(), 5, time.Unix(5, 0))()
+		require.NoError(t, err)
+		allExpected = append([]*activitypb.Notification{expected}, allExpected...)
+
+		actual, err := store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, expected)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, actual))
+
+		allActual, err := store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 1)
+		require.NoError(t, err)
+		require.Len(t, allActual, 1)
+		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
+
+		other, err := activity.NewSendTipNotificationBuilder(context.Background(), userID, expected.GetSendTip().ChatId, expected.GetSendTip().GetMessageId(), 10, time.Unix(123456789, 0))()
+		require.NoError(t, err)
+
+		expected.GetSendTip().TotalQuarksSent += other.GetSendTip().TotalQuarksSent
+
+		actual, err = store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, other)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, actual))
+
+		allActual, err = store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 1)
+		require.NoError(t, err)
+		require.Len(t, allActual, 1)
+		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
+	})
+
+	t.Run("Received Tip", func(t *testing.T) {
+		expected, err := activity.NewReceivedTipNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), messaging.MustGenerateMessageID(), 100, time.Unix(6, 0))()
+		require.NoError(t, err)
+		allExpected = append([]*activitypb.Notification{expected}, allExpected...)
+
+		actual, err := store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, expected)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, actual))
+
+		allActual, err := store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 1)
+		require.NoError(t, err)
+		require.Len(t, allActual, 1)
+		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
+
+		other, err := activity.NewReceivedTipNotificationBuilder(context.Background(), userID, expected.GetReceivedTip().ChatId, expected.GetReceivedTip().GetMessageId(), 5, time.Unix(123456789, 0))()
+		require.NoError(t, err)
+
+		expected.GetReceivedTip().TotalQuarksReceived += other.GetReceivedTip().TotalQuarksReceived
+
+		actual, err = store.SaveNotification(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, other)
+		require.NoError(t, err)
+		require.NoError(t, protoutil.ProtoEqualError(expected, actual))
+
+		allActual, err = store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 1)
+		require.NoError(t, err)
+		require.Len(t, allActual, 1)
+		require.NoError(t, protoutil.ProtoEqualError(expected, allActual[0]))
+	})
+
 	t.Run("Get Latest Notifications", func(t *testing.T) {
 		allActual, err := store.GetLatestNotifications(context.Background(), activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, 100)
 		require.NoError(t, err)

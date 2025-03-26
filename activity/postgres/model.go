@@ -61,6 +61,16 @@ func toModel(activityFeedType activitypb.ActivityFeedType, userID *commonpb.User
 		count = int64(typed.SendListenerMessage.QuarksSpent)
 		chatID = pointer.String(pg.Encode(typed.SendListenerMessage.ChatId.Value))
 		messageID = pointer.String(pg.Encode(typed.SendListenerMessage.MessageId.Value))
+	case *activitypb.Notification_SendTip:
+		notificationType = activity.NotificationTypeSendTip
+		count = int64(typed.SendTip.TotalQuarksSent)
+		chatID = pointer.String(pg.Encode(typed.SendTip.ChatId.Value))
+		messageID = pointer.String(pg.Encode(typed.SendTip.MessageId.Value))
+	case *activitypb.Notification_ReceivedTip:
+		notificationType = activity.NotificationTypeReceivedTip
+		count = int64(typed.ReceivedTip.TotalQuarksReceived)
+		chatID = pointer.String(pg.Encode(typed.ReceivedTip.ChatId.Value))
+		messageID = pointer.String(pg.Encode(typed.ReceivedTip.MessageId.Value))
 	default:
 		return nil, activity.ErrInvalidNotificationType
 	}
@@ -133,6 +143,42 @@ func fromModel(m *model) (*activitypb.Notification, error) {
 				QuarksSpent: uint64(m.Count),
 			},
 		}
+	case activity.NotificationTypeSendTip:
+		decodedChatID, err := pg.Decode(*m.ChatID)
+		if err != nil {
+			return nil, err
+		}
+
+		decodedMessageID, err := pg.Decode(*m.MessageID)
+		if err != nil {
+			return nil, err
+		}
+
+		baseNotification.AdditionalMetadata = &activitypb.Notification_SendTip{
+			SendTip: &activitypb.SendTipNotificationMetadata{
+				ChatId:          &commonpb.ChatId{Value: decodedChatID},
+				MessageId:       &messagingpb.MessageId{Value: decodedMessageID},
+				TotalQuarksSent: uint64(m.Count),
+			},
+		}
+	case activity.NotificationTypeReceivedTip:
+		decodedChatID, err := pg.Decode(*m.ChatID)
+		if err != nil {
+			return nil, err
+		}
+
+		decodedMessageID, err := pg.Decode(*m.MessageID)
+		if err != nil {
+			return nil, err
+		}
+
+		baseNotification.AdditionalMetadata = &activitypb.Notification_ReceivedTip{
+			ReceivedTip: &activitypb.ReceivedTipNotificationMetadata{
+				ChatId:              &commonpb.ChatId{Value: decodedChatID},
+				MessageId:           &messagingpb.MessageId{Value: decodedMessageID},
+				TotalQuarksReceived: uint64(m.Count),
+			},
+		}
 	default:
 		return nil, activity.ErrInvalidNotificationType
 	}
@@ -140,8 +186,16 @@ func fromModel(m *model) (*activitypb.Notification, error) {
 	return baseNotification, nil
 }
 
+func (m *model) updatesCount() bool {
+	return m.NotificationType == activity.NotificationTypeSendTip || m.NotificationType == activity.NotificationTypeReceivedTip
+}
+
 func (m *model) dbSave(ctx context.Context, pool *pgxpool.Pool) error {
-	query := `INSERT INTO ` + activityFeedsTableName + `(` + allActivityFeedFields + `) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) ON CONFLICT ("id") DO UPDATE SET "updatedAt" = NOW() WHERE ` + activityFeedsTableName + `."id" = $1 RETURNING ` + allActivityFeedFields
+	query := `INSERT INTO ` + activityFeedsTableName + `(` + allActivityFeedFields + `) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) ON CONFLICT ("id") DO UPDATE SET "updatedAt" = NOW()`
+	if m.updatesCount() {
+		query += `, "count" = ` + activityFeedsTableName + `."count" + $5`
+	}
+	query += ` WHERE ` + activityFeedsTableName + `."id" = $1 RETURNING ` + allActivityFeedFields
 	return pgxscan.Get(
 		ctx,
 		pool,

@@ -85,6 +85,14 @@ func testActivityServer_HappyPath(t *testing.T, accounts account.Store, activity
 				builder:       activity.NewSendListenerMessageNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), messaging.MustGenerateMessageID(), codekin.ToQuarks(42), time.Unix(4, 0)),
 				localizedText: "You paid ⬢\u00A042\u00A0Kin",
 			},
+			{
+				builder:       activity.NewSendTipNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), messaging.MustGenerateMessageID(), codekin.ToQuarks(5), time.Unix(5, 0)),
+				localizedText: "You tipped ⬢\u00A05\u00A0Kin",
+			},
+			{
+				builder:       activity.NewReceivedTipNotificationBuilder(context.Background(), userID, model.MustGenerateChatID(), messaging.MustGenerateMessageID(), codekin.ToQuarks(100), time.Unix(6, 0)),
+				localizedText: "You received ⬢\u00A0100\u00A0Kin",
+			},
 		} {
 			notification, err := activity.SendNotification(context.Background(), activityFeeds, activitypb.ActivityFeedType_TRANSACTION_HISTORY, userID, tc.builder)
 			require.NoError(t, err)
