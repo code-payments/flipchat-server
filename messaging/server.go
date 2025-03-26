@@ -452,22 +452,44 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
 		}
 
-		_, err = activity.SendNotification(
-			ctx,
-			s.activityFeeds,
-			activitypb.ActivityFeedType_TRANSACTION_HISTORY,
-			userID,
-			activity.NewSendListenerMessageNotificationBuilder(
+		paymentAmount, err := intent.GetPaymentAmount(ctx, s.codeData, req.PaymentIntent)
+		if err != nil {
+			log.Warn("Failed to get payment amount", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to get payment amount")
+		}
+
+		var notificationBuilder activity.NotificationBuilder
+		switch req.Content[0].Type.(type) {
+		case *messagingpb.Content_Text, *messagingpb.Content_Reply:
+			notificationBuilder = activity.NewSendListenerMessageNotificationBuilder(
 				ctx,
 				userID,
 				req.ChatId,
 				sent.MessageId,
-				flags.StartGroupFee,
+				paymentAmount,
 				sent.Ts.AsTime(),
-			),
-		)
-		if err != nil {
-			log.Warn("Failed to send activity feed notification", zap.Error(err))
+			)
+		case *messagingpb.Content_Tip:
+			notificationBuilder = activity.NewSendTipNotificationBuilder(
+				ctx,
+				userID,
+				req.ChatId,
+				sent.MessageId,
+				paymentAmount,
+				sent.Ts.AsTime(),
+			)
+		}
+		if notificationBuilder != nil {
+			_, err = activity.SendNotification(
+				ctx,
+				s.activityFeeds,
+				activitypb.ActivityFeedType_TRANSACTION_HISTORY,
+				userID,
+				notificationBuilder,
+			)
+			if err != nil {
+				log.Warn("Failed to send activity feed notification", zap.Error(err))
+			}
 		}
 	}
 
