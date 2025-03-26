@@ -452,62 +452,65 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 			return nil, status.Errorf(codes.Internal, "failed to mark intent as fulfilled")
 		}
 
-		paymentAmount, err := intent.GetPaymentAmount(ctx, s.codeData, req.PaymentIntent)
-		if err != nil {
-			log.Warn("Failed to get payment amount", zap.Error(err))
-			return nil, status.Errorf(codes.Internal, "failed to get payment amount")
-		}
+		go func() {
+			ctx := context.Background()
 
-		var notificationBuilders []activity.NotificationBuilder
-		switch typed := req.Content[0].Type.(type) {
-		case *messagingpb.Content_Text, *messagingpb.Content_Reply:
-			notificationBuilders = []activity.NotificationBuilder{
-				activity.NewSendListenerMessageNotificationBuilder(
-					ctx,
-					userID,
-					req.ChatId,
-					sent.MessageId,
-					paymentAmount,
-					sent.Ts.AsTime(),
-				),
-			}
-		case *messagingpb.Content_Tip:
-			referenceMessage, err := s.messages.GetMessage(ctx, req.ChatId, typed.Tip.OriginalMessageId)
+			paymentAmount, err := intent.GetPaymentAmount(ctx, s.codeData, req.PaymentIntent)
 			if err != nil {
-				log.Warn("Failed to get reference message", zap.Error(err))
-			} else {
+				log.Warn("Failed to get payment amount for activity feed notification", zap.Error(err))
+			}
+
+			var notificationBuilders []activity.NotificationBuilder
+			switch typed := req.Content[0].Type.(type) {
+			case *messagingpb.Content_Text, *messagingpb.Content_Reply:
 				notificationBuilders = []activity.NotificationBuilder{
-					activity.NewSendTipNotificationBuilder(
+					activity.NewSendListenerMessageNotificationBuilder(
 						ctx,
 						userID,
 						req.ChatId,
-						referenceMessage.MessageId,
-						paymentAmount,
-						sent.Ts.AsTime(),
-					),
-					activity.NewReceivedTipNotificationBuilder(
-						ctx,
-						referenceMessage.SenderId,
-						req.ChatId,
-						referenceMessage.MessageId,
+						sent.MessageId,
 						paymentAmount,
 						sent.Ts.AsTime(),
 					),
 				}
+			case *messagingpb.Content_Tip:
+				referenceMessage, err := s.messages.GetMessage(ctx, req.ChatId, typed.Tip.OriginalMessageId)
+				if err != nil {
+					log.Warn("Failed to get reference message", zap.Error(err))
+				} else {
+					notificationBuilders = []activity.NotificationBuilder{
+						activity.NewSendTipNotificationBuilder(
+							ctx,
+							userID,
+							req.ChatId,
+							referenceMessage.MessageId,
+							paymentAmount,
+							sent.Ts.AsTime(),
+						),
+						activity.NewReceivedTipNotificationBuilder(
+							ctx,
+							referenceMessage.SenderId,
+							req.ChatId,
+							referenceMessage.MessageId,
+							paymentAmount,
+							sent.Ts.AsTime(),
+						),
+					}
+				}
 			}
-		}
-		for _, notificationBuilder := range notificationBuilders {
-			_, err = activity.SendNotification(
-				ctx,
-				s.activityFeeds,
-				activitypb.ActivityFeedType_TRANSACTION_HISTORY,
-				userID,
-				notificationBuilder,
-			)
-			if err != nil {
-				log.Warn("Failed to send activity feed notification", zap.Error(err))
+			for _, notificationBuilder := range notificationBuilders {
+				_, err = activity.SendNotification(
+					ctx,
+					s.activityFeeds,
+					activitypb.ActivityFeedType_TRANSACTION_HISTORY,
+					userID,
+					notificationBuilder,
+				)
+				if err != nil {
+					log.Warn("Failed to send activity feed notification", zap.Error(err))
+				}
 			}
-		}
+		}()
 	}
 
 	return &messagingpb.SendMessageResponse{

@@ -552,22 +552,24 @@ func (s *Server) StartChat(ctx context.Context, req *chatpb.StartChatRequest) (*
 		}
 
 		if md.Type == chatpb.Metadata_GROUP {
-			_, err = activity.SendNotification(
-				ctx,
-				s.activityFeeds,
-				activitypb.ActivityFeedType_TRANSACTION_HISTORY,
-				userID,
-				activity.NewCreateGroupNotificationBuilder(
+			go func() {
+				_, err = activity.SendNotification(
 					ctx,
+					s.activityFeeds,
+					activitypb.ActivityFeedType_TRANSACTION_HISTORY,
 					userID,
-					md.ChatId,
-					flags.StartGroupFee,
-					time.Now(),
-				),
-			)
-			if err != nil {
-				s.log.Warn("Failed to send activity feed notification", zap.Error(err))
-			}
+					activity.NewCreateGroupNotificationBuilder(
+						ctx,
+						userID,
+						md.ChatId,
+						flags.StartGroupFee,
+						time.Now(),
+					),
+				)
+				if err != nil {
+					s.log.Warn("Failed to send activity feed notification", zap.Error(err))
+				}
+			}()
 		}
 	}
 
