@@ -460,10 +460,13 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 				log.Warn("Failed to get payment amount for activity feed notification", zap.Error(err))
 			}
 
-			var notificationBuilders []activity.NotificationBuilder
 			switch typed := req.Content[0].Type.(type) {
 			case *messagingpb.Content_Text, *messagingpb.Content_Reply:
-				notificationBuilders = []activity.NotificationBuilder{
+				_, err = activity.SendNotification(
+					ctx,
+					s.activityFeeds,
+					activitypb.ActivityFeedType_TRANSACTION_HISTORY,
+					userID,
 					activity.NewSendListenerMessageNotificationBuilder(
 						ctx,
 						userID,
@@ -472,42 +475,49 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 						paymentAmount,
 						sent.Ts.AsTime(),
 					),
+				)
+				if err != nil {
+					log.Warn("Failed to send activity feed notification for listener message", zap.Error(err))
 				}
 			case *messagingpb.Content_Tip:
 				referenceMessage, err := s.messages.GetMessage(ctx, req.ChatId, typed.Tip.OriginalMessageId)
 				if err != nil {
 					log.Warn("Failed to get reference message", zap.Error(err))
-				} else {
-					notificationBuilders = []activity.NotificationBuilder{
-						activity.NewSendTipNotificationBuilder(
-							ctx,
-							userID,
-							req.ChatId,
-							referenceMessage.MessageId,
-							paymentAmount,
-							sent.Ts.AsTime(),
-						),
-						activity.NewReceivedTipNotificationBuilder(
-							ctx,
-							referenceMessage.SenderId,
-							req.ChatId,
-							referenceMessage.MessageId,
-							paymentAmount,
-							sent.Ts.AsTime(),
-						),
-					}
+					return
 				}
-			}
-			for _, notificationBuilder := range notificationBuilders {
 				_, err = activity.SendNotification(
 					ctx,
 					s.activityFeeds,
 					activitypb.ActivityFeedType_TRANSACTION_HISTORY,
 					userID,
-					notificationBuilder,
+					activity.NewSendTipNotificationBuilder(
+						ctx,
+						userID,
+						req.ChatId,
+						referenceMessage.MessageId,
+						paymentAmount,
+						sent.Ts.AsTime(),
+					),
 				)
 				if err != nil {
-					log.Warn("Failed to send activity feed notification", zap.Error(err))
+					log.Warn("Failed to send activity feed notification for tip sent", zap.Error(err))
+				}
+				_, err = activity.SendNotification(
+					ctx,
+					s.activityFeeds,
+					activitypb.ActivityFeedType_TRANSACTION_HISTORY,
+					referenceMessage.SenderId,
+					activity.NewReceivedTipNotificationBuilder(
+						ctx,
+						referenceMessage.SenderId,
+						req.ChatId,
+						referenceMessage.MessageId,
+						paymentAmount,
+						sent.Ts.AsTime(),
+					),
+				)
+				if err != nil {
+					log.Warn("Failed to send activity feed notification for tip received", zap.Error(err))
 				}
 			}
 		}()
