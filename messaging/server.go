@@ -432,7 +432,7 @@ func (s *Server) SendMessage(ctx context.Context, req *messagingpb.SendMessageRe
 
 	msg := &messagingpb.Message{
 		SenderId:          userID,
-		Content:           req.Content,
+		Content:           []*messagingpb.Content{ApplyTransforms(req.Content[0])},
 		WasSenderOffStage: wasSenderOffStage,
 	}
 
