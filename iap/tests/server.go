@@ -13,6 +13,7 @@ import (
 	iappb "github.com/code-payments/flipchat-protobuf-api/generated/go/iap/v1"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/activity"
 	"github.com/code-payments/flipchat-server/airdrop"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/iap"
@@ -21,20 +22,20 @@ import (
 )
 
 // RunServerTests runs a set of tests against the iap.Server.
-func RunServerTests(t *testing.T, accounts account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string, teardown func()) {
-	for _, tf := range []func(t *testing.T, accountStore account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string){
+func RunServerTests(t *testing.T, accounts account.Store, activityFeeds activity.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string, teardown func()) {
+	for _, tf := range []func(t *testing.T, accountStore account.Store, activityFeeds activity.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string){
 		testOnPurchaseCompleted,
 	} {
-		tf(t, accounts, iaps, verifer, validReceiptFunc)
+		tf(t, accounts, activityFeeds, iaps, verifer, validReceiptFunc)
 		teardown()
 	}
 }
 
-func testOnPurchaseCompleted(t *testing.T, accounts account.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string) {
+func testOnPurchaseCompleted(t *testing.T, accounts account.Store, activityFeeds activity.Store, iaps iap.Store, verifer iap.Verifier, validReceiptFunc func(msg string) string) {
 	log := zap.Must(zap.NewDevelopment())
 	authn := auth.NewKeyPairAuthenticator()
 	authz := account.NewAuthorizer(log, accounts, authn)
-	server := iap.NewServer(log, authz, accounts, iaps, verifer, verifer)
+	server := iap.NewServer(log, authz, accounts, activityFeeds, iaps, verifer, verifer)
 
 	signer := model.MustGenerateKeyPair()
 

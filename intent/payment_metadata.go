@@ -20,6 +20,16 @@ var (
 	ErrInvalidPaymentMetadata = errors.New("invalid payment metadata")
 )
 
+func GetPaymentAmount(ctx context.Context, codeData codedata.Provider, intentID *commonpb.IntentId) (uint64, error) {
+	intentRecord, err := codeData.GetIntent(ctx, model.IntentIDString(intentID))
+	if err == codeintent.ErrIntentNotFound {
+		return 0, ErrNoPaymentMetadata
+	} else if err != nil {
+		return 0, err
+	}
+	return intentRecord.SendPublicPaymentMetadata.Quantity, nil
+}
+
 func LoadPaymentMetadata(ctx context.Context, codeData codedata.Provider, intentID *commonpb.IntentId, dst proto.Message) (*codeintent.Record, error) {
 	intentRecord, err := codeData.GetIntent(ctx, model.IntentIDString(intentID))
 	if err == codeintent.ErrIntentNotFound {

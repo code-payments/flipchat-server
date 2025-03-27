@@ -25,6 +25,7 @@ import (
 	codekin "github.com/code-payments/code-server/pkg/kin"
 
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/activity"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/chat"
 	"github.com/code-payments/flipchat-server/event"
@@ -41,6 +42,7 @@ import (
 func RunServerTests(
 	t *testing.T,
 	accounts account.Store,
+	activityFeeds activity.Store,
 	profiles profile.Store,
 	chats chat.Store,
 	messages messaging.MessageStore,
@@ -52,6 +54,7 @@ func RunServerTests(
 	for _, tf := range []func(
 		t *testing.T,
 		accounts account.Store,
+		activityFeeds activity.Store,
 		profiles profile.Store,
 		chats chat.Store,
 		messages messaging.MessageStore,
@@ -60,7 +63,7 @@ func RunServerTests(
 	){
 		testServer,
 	} {
-		tf(t, accounts, profiles, chats, messages, pointers, intents)
+		tf(t, accounts, activityFeeds, profiles, chats, messages, pointers, intents)
 		teardown()
 	}
 }
@@ -68,6 +71,7 @@ func RunServerTests(
 func testServer(
 	t *testing.T,
 	accounts account.Store,
+	activityFeeds activity.Store,
 	profiles profile.Store,
 	chats chat.Store,
 	messageDB messaging.MessageStore,
@@ -91,6 +95,7 @@ func testServer(
 		log,
 		account.NewAuthorizer(log, accounts, auth.NewKeyPairAuthenticator()),
 		accounts,
+		activityFeeds,
 		chats,
 		intents,
 		messageDB,

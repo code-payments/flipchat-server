@@ -10,10 +10,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	activitypb "github.com/code-payments/flipchat-protobuf-api/generated/go/activity/v1"
 	commonpb "github.com/code-payments/flipchat-protobuf-api/generated/go/common/v1"
 	iappb "github.com/code-payments/flipchat-protobuf-api/generated/go/iap/v1"
 
+	codekin "github.com/code-payments/code-server/pkg/kin"
+
 	"github.com/code-payments/flipchat-server/account"
+	"github.com/code-payments/flipchat-server/activity"
 	"github.com/code-payments/flipchat-server/airdrop"
 	"github.com/code-payments/flipchat-server/auth"
 	"github.com/code-payments/flipchat-server/model"
@@ -23,6 +27,7 @@ type Server struct {
 	log            *zap.Logger
 	authz          auth.Authorizer
 	accounts       account.Store
+	activityFeeds  activity.Store
 	iaps           Store
 	appleVerifier  Verifier
 	googleVerifier Verifier
@@ -34,6 +39,7 @@ func NewServer(
 	log *zap.Logger,
 	authz auth.Authorizer,
 	accounts account.Store,
+	activityFeeds activity.Store,
 	iaps Store,
 	appleVerifier Verifier,
 	googleVerifier Verifier,
@@ -42,6 +48,7 @@ func NewServer(
 		log:            log,
 		authz:          authz,
 		accounts:       accounts,
+		activityFeeds:  activityFeeds,
 		iaps:           iaps,
 		appleVerifier:  appleVerifier,
 		googleVerifier: googleVerifier,
@@ -117,6 +124,24 @@ func (s *Server) OnPurchaseCompleted(ctx context.Context, req *iappb.OnPurchaseC
 	if err != nil {
 		log.Warn("Failed to set registration flag", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to set registration flag")
+	}
+
+	// todo: Need a hook into the Code Airdrop RPC, so for now this is the best place
+	_, err = activity.SendNotification(
+		ctx,
+		s.activityFeeds,
+		activitypb.ActivityFeedType_TRANSACTION_HISTORY,
+		userID,
+		activity.NewWelcomeBonusNotificationBuilder(
+			ctx,
+			userID,
+			codekin.ToQuarks(1_000),
+			time.Now(),
+		),
+	)
+	if err != nil {
+		log.Warn("Failed to send activity feed notification", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to send activity feed notification")
 	}
 
 	err = s.iaps.CreatePurchase(ctx, &Purchase{
